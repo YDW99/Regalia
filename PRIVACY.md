@@ -850,11 +850,11 @@ v1.0.8 introduces personified haptic feedback — each of the six piece types (p
 
 ## Engine Binary Integrity
 
-The Stockfish 18 engine binary (`libstockfish.so`) is shipped as an arm64-v8a native library inside the APK. On first launch, `StockfishNative.java` validates the binary:
+The Stockfish 19 engine binary (`libstockfish.so`, arm64-v8a universal build) is shipped as a native ARM64 library inside the APK. On first launch, `StockfishNative.java` validates the binary:
 
 - **ELF magic check** (first 4 bytes = `\x7fELF`) — guards against corrupted or non-ELF files.
-- **Minimum-size check** (5 MB; lowered from 50 MB in round-44, A16) — the genuine Stockfish 18 binary is ~114 MB; truncated or stub files are rejected.
-- **SHA-256 integrity check** (round-56, SEC-09/SEC-011) — the known-good digest `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5` is pinned in code as `EXPECTED_ENGINE_SHA256` and verified at runtime: **every fresh extraction is always hashed**, and a **cached copy is re-hashed on reuse only on rooted devices** (via `RootDetector`; on non-rooted devices the app-private `filesDir` copy can only have been written by our own process, so the ELF + size gate is sufficient and the 114 MB re-hash is skipped as wasted work). All checks are purely local — no data leaves the device.
+- **Minimum-size check** (5 MB; lowered from 50 MB in round-44, A16) — the genuine Stockfish 19 binary is ~100 MB; truncated or stub files are rejected.
+- **SHA-256 integrity check** (round-56, SEC-09/SEC-011; digest updated in round-65 for the sf_19 engine) — the known-good digest `ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8` is pinned in code as `EXPECTED_ENGINE_SHA256` and verified at runtime: **every fresh extraction is always hashed**, and a **cached copy is re-hashed on reuse only on rooted devices** (via `RootDetector`; on non-rooted devices the app-private `filesDir` copy can only have been written by our own process, so the ELF + size gate is sufficient and the ~100 MB re-hash is skipped as wasted work). All checks are purely local — no data leaves the device.
 
 If any check fails, the engine refuses to start (a tampered/mismatched cached copy is deleted and falls through to a fresh, always-verified extraction) and reports the error to the user via the UI. The binary is never downloaded at runtime; it is statically embedded in the APK.
 
@@ -919,7 +919,7 @@ The eighth-pass refinement fixes a critical white-screen bug in `state-store.js`
 - **TDZ (Temporal Dead Zone) bug fix**: The round-7 `_deepClone()` hardening added a `const DEEP_CLONE_MAX_DEPTH = 64;` declaration at a position in the IIFE that came AFTER the IIFE-top initialization call `let _state = _deepClone(_initialState);`. Because `const` declarations do NOT hoist (they are in TDZ until their declaration line executes), the function body's reference to `DEEP_CLONE_MAX_DEPTH` triggered `ReferenceError: Cannot access 'DEEP_CLONE_MAX_DEPTH' before initialization`, crashing the state-store module initialization, cascading to all dependent modules (ui.js, ai-bridge.js, etc.), and leaving the WebView showing only the background color. The fix moves the `const` declaration to IIFE-top, BEFORE the initialization call. This is purely a code-organization fix with no privacy impact.
 - **`build.gradle` alignment**: Two latent build-config mismatches were corrected so the round-8 APK can be assembled cleanly on a fresh environment:
   - Pinned `ndkVersion "27.2.12479018"` (AGP's default 27.0.12077973 was incomplete on fresh install).
-  - Set `useLegacyPackaging true` in `packagingOptions.jniLibs` to match `android:extractNativeLibs="true"` in `AndroidManifest.xml`. This keeps `.so` files uncompressed in the APK so the system can memory-map them at install time — no behavioral or privacy impact (the .so is the same Stockfish 18 arm64-v8a-dotprod binary, just stored differently inside the APK).
+  - Set `useLegacyPackaging true` in `packagingOptions.jniLibs` to match `android:extractNativeLibs="true"` in `AndroidManifest.xml` — no behavioral or privacy impact (the .so is the same Stockfish engine binary — as of round-65 the sf_19 arm64-universal build — just stored differently inside the APK). *(round-66 correction: the original text here claimed this keeps `.so` files uncompressed so the system can memory-map them at install time; the semantics were inverted. `useLegacyPackaging=true` stores `.so` files COMPRESSED in the APK and the installer extracts them to `nativeLibraryDir` — the uncompressed/memory-mapped layout is the `false` behavior. No privacy impact either way.)*
 - **No new logging, no new telemetry, no new file I/O.**
 
 Version: `versionCode=121`, `versionName="1.2.1"` (unchanged).

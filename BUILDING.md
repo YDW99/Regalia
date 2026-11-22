@@ -3,6 +3,47 @@
 > Build guide for the Regalia Android chess app (versionCode=10203, versionName="1.2.3").
 > Round-by-round build notes are appended below (newest first).
 
+## Round-65 build notes (2026-11-21) — ENGINE UPGRADE sf_18 → sf_19
+
+- **Engine upgraded**: Stockfish 18 `arm64-v8a-dotprod` → Stockfish 19
+  `arm64-universal`. The official sf_19 release no longer ships a
+  dedicated android-armv8-dotprod tar — since sf_17 the Android arm64
+  asset is a **universal build** that detects CPU features (dotprod and
+  other ARMv8 extensions) at runtime, which supersedes the per-variant
+  tars. Download (80,233,187-byte tar.gz):
+  `https://github.com/official-stockfish/Stockfish/releases/download/sf_19/stockfish-android-arm64-universal.tar.gz`
+  Extract and place `stockfish/stockfish-android-arm64-universal` at
+  `src/main/jniLibs/arm64-v8a/libstockfish.so`.
+- **New engine identity (verified before use, ELF 64-bit ARM aarch64,
+  statically linked, for Android 29, built by NDK r27c (12479018))**:
+  size **100,695,968 bytes**; SHA-256
+  `ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8`.
+  Cross-file consistency of this digest and size is now guarded by the
+  v3 sentinel **V3-40** (Java `EXPECTED_ENGINE_SHA256` == NOTICE ==
+  this file's topmost digest; Java extraction-progress denominator ==
+  NOTICE byte size).
+- **Code changes tracking the engine**:
+  - `StockfishNative.java` — `EXPECTED_ENGINE_SHA256` updated to the
+    digest above (a stale value would make the app delete and re-extract
+    the new engine forever); the engine-extraction progress denominator
+    updated `114115752L` → `100695968L` (the 12%→25% progress scale
+    must track the bundled engine size).
+  - `chess.src/ai-bridge.js` / `ui.js` / `game-logic.js` — user-facing
+    engine identity strings updated (notification text, SF19 eval badge
+    `sf18`→`sf19` option key + display, engine-config fallback names,
+    About dialog "Stockfish 19 (arm64-v8a universal)"). `chess.html`
+  rebuilt: 24,208 lines / 1,488,720 bytes (round-64: 1,488,718).
+- **Docs synchronized**: README.md (features/build/licensing/attribution),
+  NOTICE, PRIVACY.md (integrity section), LICENSES/README.md,
+  UBIQUITOUS_LANGUAGE.md, `.github/workflows/release-helper.yml` release
+  notes template; per-directory license ledgers got round-65 entries.
+  Build steps below in the older notes that name the sf_18 tar are
+  historical (append-only) — the sf_19 URL above is authoritative.
+- Mirror-strategy environment notes (throttled official sources,
+  parallel ranged downloads, init-script repo swap, memory override)
+  live in the round-64 recovery guide §2.3; this round reused the
+  surviving build environment with only the engine replaced.
+
 ## Round-54b build notes (2026-10-05)
 
 - **SonarCloud follow-up on the round-54 tree** (4 issues → 2 fixed / 2
@@ -883,28 +924,40 @@
 
 ## Engine binary (NOT included in this tar)
 
-Download the official Stockfish 18 arm64-v8a-dotprod binary from:
-https://github.com/official-stockfish/Stockfish/releases/download/sf_18/stockfish-android-armv8-dotprod.tar
+Download the official Stockfish 19 arm64-universal binary from:
+https://github.com/official-stockfish/Stockfish/releases/download/sf_19/stockfish-android-arm64-universal.tar.gz
+
+(sf_19 ships no per-variant Android tars — since sf_17 the arm64 asset is a
+universal build that detects dotprod and other ARMv8 extensions at runtime.)
 
 Extract and copy as `libstockfish.so` (Android packaging convention — the file is the Stockfish ELF executable, renamed to `.so` so `nativeLibraryDir` resolves it):
 ```
 mkdir -p src/main/jniLibs/arm64-v8a
-tar xf stockfish-android-armv8-dotprod.tar
-cp stockfish/stockfish-android-armv8-dotprod src/main/jniLibs/arm64-v8a/libstockfish.so
+tar xzf stockfish-android-arm64-universal.tar.gz
+cp stockfish/stockfish-android-arm64-universal src/main/jniLibs/arm64-v8a/libstockfish.so
 chmod +x src/main/jniLibs/arm64-v8a/libstockfish.so
 ```
 
-Verify the binary after download — it must match the known-good SHA-256
-(verified three-way consistent — source file / deployed jniLibs copy /
-APK-embedded `lib/arm64-v8a/libstockfish.so` — in every release round):
+Verify the binary after download — it must match BOTH the known-good size
+AND the known-good SHA-256. These are the same two values pinned in
+`StockfishNative.java` (`EXPECTED_ENGINE_SIZE_BYTES` /
+`EXPECTED_ENGINE_SHA256`, round-66) and guarded cross-file by the V3-40
+sentinel; they are verified three-way consistent — source file / deployed
+jniLibs copy / APK-embedded `lib/arm64-v8a/libstockfish.so` — in every
+release round:
 ```
+stat -c %s src/main/jniLibs/arm64-v8a/libstockfish.so
+# 100695968
 sha256sum src/main/jniLibs/arm64-v8a/libstockfish.so
-# 8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
+# ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8
 ```
-The same hash is enforced as a CI gate in the `unzip-folder-optimized.yml`
-workflow (round-56), and the app verifies it again at runtime on engine
-extraction (`EXPECTED_ENGINE_SHA256` in `StockfishNative.java`, round-56;
-cached-engine reuse is re-verified on rooted devices).
+There is NO CI hash gate for the engine (round-66, R-7: the
+`unzip-folder-optimized.yml` workflow only auto-unzips web-uploaded files;
+none of the 12 workflows verifies engine digests). The enforcement points
+are: this manual check at build time, and the app's runtime gate on every
+fresh extraction (`EXPECTED_ENGINE_SHA256`, round-56) plus the exact-size
+cached-copy identity check (round-66, F-1) with rooted-device re-hash
+(SEC-09).
 
 ## Build chess.html asset
 ```
@@ -2620,7 +2673,7 @@ This pass fixes a critical white-screen bug introduced in round-7. **Symptom**: 
 While rebuilding the APK in this pass, two latent build-config mismatches were corrected so the round-8 APK can be assembled cleanly on a fresh environment:
 
 - **`build.gradle` — `ndkVersion "27.2.12479018"`**: AGP 8.7.3 defaults to NDK 27.0.12077973 when no version is pinned. On a fresh SDK install, that default NDK was incomplete (no `source.properties`). Uncommented the existing `ndkVersion "27.2.12479018"` line to pin to the verified-installed NDK.
-- **`build.gradle` — `useLegacyPackaging true`**: `AndroidManifest.xml` declares `android:extractNativeLibs="true"`, which requires `useLegacyPackaging=true` in `packagingOptions.jniLibs`. The previous `false` caused `:packageRelease` to emit a 0-byte APK (`Could not find EOCD` error). Switched to `true` to keep `.so` files uncompressed in the APK so the system can memory-map them at install time (the path Stockfish expects for an executable ELF).
+- **`build.gradle` — `useLegacyPackaging true`**: `AndroidManifest.xml` declares `android:extractNativeLibs="true"`, which requires `useLegacyPackaging=true` in `packagingOptions.jniLibs`. The previous `false` caused `:packageRelease` to emit a 0-byte APK (`Could not find EOCD` error). Switched to `true` to keep `.so` files uncompressed in the APK so the system can memory-map them at install time (the path Stockfish expects for an executable ELF). **(round-66 correction: the semantics in the preceding sentence were recorded inverted — `useLegacyPackaging=true` actually stores `.so` files COMPRESSED in the APK and the installer EXTRACTS them to `nativeLibraryDir` at install time (`extractNativeLibs="true"`); the uncompressed/memory-mapped layout belongs to `useLegacyPackaging=false`, which requires `minSdk 23+` and was what produced the 0-byte EOCD failure on this project's toolchain. The round-8 switch itself was correct; only this explanation was wrong. Release APKs since round-8 carry the engine Deflate-compressed — e.g. round-65: 100,695,968 B engine stored as 79,926,725 B in the APK.)**
 
 ### Verification
 

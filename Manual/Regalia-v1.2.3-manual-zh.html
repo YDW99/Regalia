@@ -500,7 +500,7 @@ details summary:hover { color: var(--accent2); }
   <div class="cover-subtitle">用户说明书</div>
   <div class="cover-platform">支持 Android 6.0 - 15</div>
   <div class="cover-compat">兼容 Xiaomi HyperOS 3</div>
-  <div class="cover-engine">内置 Stockfish 18 引擎</div>
+  <div class="cover-engine">内置 Stockfish 19 引擎</div>
 </div>
 
 <!-- ===== TABLE OF CONTENTS ===== -->
@@ -541,7 +541,7 @@ details summary:hover { color: var(--accent2); }
   </div>
 
 
-  <p>Regalia 是一款<strong>离线优先</strong>的 Android 国际象棋应用：内置 Stockfish 18 引擎（arm64-v8a-dotprod 原生编译），支持人机对弈、完整复盘分析、Chess960、计时赛、ECO 开局库与可选的在线残局库查询，并提供中英双语界面。全部棋局数据保存在本机，除可选的 Lichess 残局库探测外无任何网络出口。下方按版本倒序汇总各轮更新要点，完整细节见附录 A《版本更新日志》。</p>
+  <p>Regalia 是一款<strong>离线优先</strong>的 Android 国际象棋应用：内置 Stockfish 19 引擎（arm64-v8a universal 构建，运行时感知 dotprod），支持人机对弈、完整复盘分析、Chess960、计时赛、ECO 开局库与可选的在线残局库查询，并提供中英双语界面。全部棋局数据保存在本机，除可选的 Lichess 残局库探测外无任何网络出口。下方按版本倒序汇总各轮更新要点，完整细节见附录 A《版本更新日志》。</p>
 
   <div class="card-row">
     <div class="stat-card">
@@ -564,9 +564,9 @@ details summary:hover { color: var(--accent2); }
 
   <h3>核心特性</h3>
   <ul class="feature-list">
-    <li>内置 Stockfish 18 引擎，arm64-v8a-dotprod 原生编译，自动利用 NEON 加速指令集</li>
+    <li>内置 Stockfish 19 引擎，arm64-v8a universal 原生编译，自动利用 NEON／dotprod 等加速指令集（运行时检测）</li>
     <li><strong>菲舍尔任意制象棋（Chess960 / Fischer Random Chess）</strong>：960 种随机起始位置，符合官方 Chess960 王车易位规则，PGN 导入/导出含 <code>[Variant "Chess960"]</code> 头标签与 Shredder-FEN 易位权编码 <span class="new-tag">v1.0.4</span></li>
-    <li><strong>计时赛（Time Control）</strong>：支持 5 种时钟模式——不计时 / 突然死亡制 / 菲舍尔加秒制 / 布朗斯坦延迟制 / 美国延迟制，AI 通过 <code>go wtime/btime/winc/binc</code> UCI 指令由 Stockfish 18 自主管理时间分配 <span class="new-tag">v1.0.4</span></li>
+    <li><strong>计时赛（Time Control）</strong>：支持 5 种时钟模式——不计时 / 突然死亡制 / 菲舍尔加秒制 / 布朗斯坦延迟制 / 美国延迟制，AI 通过 <code>go wtime/btime/winc/binc</code> UCI 指令由 Stockfish 19 自主管理时间分配 <span class="new-tag">v1.0.4</span></li>
     <li><strong>规范化 PGN 处理</strong>：导出含七标签阵容（Seven Tag Roster）、~78 列换行、<code>[%eval]</code> 与 <code>[%clk]</code> 内嵌标签、<code>[%csl]</code>/<code>[%cal]</code> 视觉注解、NAG 数字注解（$1-$6 走法质量，$10-$18 局面评估） <span class="new-tag">v1.0.4</span></li>
     <li><strong>Seldepth（选深 / SD）显示</strong>：评估栏与 AI 对手栏现在显示 <code>D15 SD22</code> 格式（主迭代深度 + 选择性搜索深度），完整反映引擎战术搜索深度 <span class="new-tag">v1.0.4</span></li>
     <li><strong>热力图统计</strong>：统计页面新增"热力图控制统计"区块，遍历对局每个实际局面计算每格双方攻击子数，渲染 8×8 平均控制热力图与最强/最弱格统计 <span class="new-tag">v1.0.4</span></li>
@@ -584,7 +584,7 @@ details summary:hover { color: var(--accent2); }
     <li>ECO 开局库，含搜索、开局推荐与家族筛选</li>
     <li>Syzygy 在线残局库查询（7子及以下残局必胜/和棋/必败判定）</li>
     <li>WDL 胜和负概率显示（默认开启），直观了解局面优劣</li>
-    <li>评估分数含 <span style="font-size:.6rem;color:#d4a017;border:1px solid rgba(212,160,23,.3);padding:0 3px;border-radius:2px;background:rgba(212,160,23,.08)">SF18</span> 引擎标识徽章、搜索深度 D 标识、Seldepth SD 标识、节点与速度信息</li>
+    <li>评估分数含 <span style="font-size:.6rem;color:#d4a017;border:1px solid rgba(212,160,23,.3);padding:0 3px;border-radius:2px;background:rgba(212,160,23,.08)">SF19</span> 引擎标识徽章、搜索深度 D 标识、Seldepth SD 标识、节点与速度信息</li>
     <li>格子控制范围热力图（🌈/🌗 切换），含箭头指示与格子控制信息面板</li>
     <li>AI 提示多线展示，显示所有推荐走法及评分（SAN 格式）</li>
     <li>棋理提示面板，实时提供十大棋理原则提醒（中英双语）</li>
@@ -732,7 +732,7 @@ with open("chess.html","w",encoding="utf-8") as f:
     <tr><th>组件</th><th>许可</th><th>许可文件</th></tr>
     <tr><td>原创应用代码（UI、WebView、服务、构建脚本）</td><td>AGPL v3</td><td>LICENSE-AGPL v3</td></tr>
     <tr><td>DroidFish 衍生代码（引擎管理、棋理逻辑、PGN 解析、UI 模式）</td><td>GPL v3</td><td>LICENSE-GPL v3</td></tr>
-    <tr><td>Stockfish 18 引擎二进制</td><td>GPL v3</td><td>LICENSE-GPL v3</td></tr>
+    <tr><td>Stockfish 19 引擎二进制</td><td>GPL v3</td><td>LICENSE-GPL v3</td></tr>
     <tr><td>ECO 开局数据</td><td>CC0（数据）/ AGPL v3（代码）</td><td>—</td></tr>
     <tr><td>应用图标</td><td>AI 生成 / AGPL v3</td><td>—</td></tr>
   </table>
@@ -784,7 +784,7 @@ along with this program. If not, see &lt;https://www.gnu.org/licenses/&gt;.</div
   <table>
     <tr><th>组件</th><th>许可</th><th>用途</th></tr>
     <tr><td>DroidFish</td><td>GPL v3</td><td>引擎管理、棋理逻辑、PGN 解析、UI 模式（Copyright © Peter Österlund）</td></tr>
-    <tr><td>Stockfish 18</td><td>GPL v3</td><td>国际象棋引擎（arm64-v8a-dotprod 原生编译）（Copyright © T. Romstad, M. Costalba, J. Kiiski, G. Linscott）</td></tr>
+    <tr><td>Stockfish 19</td><td>GPL v3</td><td>国际象棋引擎（arm64-v8a universal 原生编译，运行时检测 dotprod）（Copyright © T. Romstad, M. Costalba, J. Kiiski, G. Linscott）</td></tr>
     <tr><td>Lichess Tablebase API</td><td>公开 API</td><td>Syzygy 在线残局库查询（需网络）</td></tr>
     <tr><td>lichess-org/chess-openings</td><td>CC0</td><td>ECO 开局分类数据</td></tr>
     <tr><td>Gradle</td><td>Apache 2.0</td><td>构建工具</td></tr>
@@ -802,7 +802,7 @@ along with this program. If not, see &lt;https://www.gnu.org/licenses/&gt;.</div
   <p>"Regalia" 仅作为本开源国际象棋应用的项目名称使用，不主张任何商标权利。任何人都可以自由 fork 并重命名自己的版本。Stockfish 是 Stockfish 开源社区的商标。Android 是 Google LLC 的商标。Xiaomi HyperOS 是小米公司的商标。本应用与上述商标持有人无任何从属或认可关系。</p>
 
   <h3>免责声明</h3>
-  <p>本应用按"现状"提供，不附带任何明示或暗示的担保。在适用法律允许的最大范围内，作者不对因使用本应用而产生的任何直接、间接、附带、特殊或后果性损害承担责任。本应用内置的 Stockfish 18 引擎按 GPLv3 许可分发，其性能与准确性由 Stockfish 开源社区维护。</p>
+  <p>本应用按"现状"提供，不附带任何明示或暗示的担保。在适用法律允许的最大范围内，作者不对因使用本应用而产生的任何直接、间接、附带、特殊或后果性损害承担责任。本应用内置的 Stockfish 19 引擎按 GPLv3 许可分发，其性能与准确性由 Stockfish 开源社区维护。</p>
 
   <h3>开源贡献</h3>
   <p>Regalia 欢迎社区贡献。源代码仓库地址、issue tracker 与 pull request 流程详见项目 README。提交贡献即表示您同意将您的贡献按 AGPL v3 许可发布。</p>
@@ -931,7 +931,7 @@ function onEngineReady(){
       <span style="font-size:.55rem;color:#d4a017;background:rgba(212,160,23,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(212,160,23,.3);cursor:pointer;flex-shrink:0">↔️中</span>
       <div style="font-size:.8rem;color:var(--text)">
         <span style="color:#27ae60">😊</span> 你占优 <span style="color:#a08050">(+0.85)</span>
-        <span style="font-size:.5rem;color:#d4a017;border:1px solid rgba(212,160,23,.3);padding:0 3px;border-radius:2px;background:rgba(212,160,23,.08);margin-left:3px">SF18</span>
+        <span style="font-size:.5rem;color:#d4a017;border:1px solid rgba(212,160,23,.3);padding:0 3px;border-radius:2px;background:rgba(212,160,23,.08);margin-left:3px">SF19</span>
         <span style="font-size:.6rem;color:#a08050;margin-left:3px">D15</span>
         <span style="font-size:.6rem;color:#7eb8da;margin-left:2px">SD22</span>
         <span style="font-size:.55rem;color:#a08050;margin-left:2px">4.5M 1.2M/s</span>
@@ -1358,7 +1358,7 @@ function makeMvInPlace(state, move){
   <div class="wireframe">
     <div class="wireframe-title">评估显示完整格式（含 D15 SD22 seldepth）</div>
     <div class="wf-box">
-      😊 你占优 (+0.85) <span style="font-size:.5rem;color:#d4a017;border:1px solid rgba(212,160,23,.3);padding:0 2px;border-radius:2px;background:rgba(212,160,23,.08)">SF18</span> D15 SD22 4.5M 1.2M/s (62%W/28%D/10%L)
+      😊 你占优 (+0.85) <span style="font-size:.5rem;color:#d4a017;border:1px solid rgba(212,160,23,.3);padding:0 2px;border-radius:2px;background:rgba(212,160,23,.08)">SF19</span> D15 SD22 4.5M 1.2M/s (62%W/28%D/10%L)
     </div>
     <p style="font-size:.7rem;color:#887860;text-align:center;margin-top:6px">D15 为主迭代深度 (depth)，SD22 为选择性搜索深度 (seldepth)；SD 仅在 &gt; 0 且 &gt; depth 时显示，否则省略</p>
   </div>
@@ -1484,7 +1484,7 @@ let searchInfo = 'D' + _sfDepth + ' ' + seldepthLabel + ':' + _sfSeldepth
   <table>
     <tr><th>参数</th><th>默认值</th><th>范围</th><th>说明</th></tr>
     <tr><td>Threads <span class="new-tag">v1.2.0 Phase 69</span></td><td>2</td><td>1-(2×CPU核心数)</td><td>CPU 线程数，默认配置自动设定；Phase 69 起上限收紧为 2×CPU 核心（原 512），避免线程争用降低 NPS</td></tr>
-    <tr><td>Hash <span class="new-tag">v1.2.0 Phase 69</span></td><td>128 MB</td><td>1 MB - 50% JVM 堆</td><td>置换表大小，默认配置自动设定（Stockfish 18 最佳实践：hashfull &lt; 30% 时强度最优）；Phase 69 起上限收紧为 JVM 堆的 50%（原 32TB），避免虚拟内存交换</td></tr>
+    <tr><td>Hash <span class="new-tag">v1.2.0 Phase 69</span></td><td>128 MB</td><td>1 MB - 50% JVM 堆</td><td>置换表大小，默认配置自动设定（Stockfish 18 最佳实践，SF19 沿用：hashfull &lt; 30% 时强度最优）；Phase 69 起上限收紧为 JVM 堆的 50%（原 32TB），避免虚拟内存交换</td></tr>
     <tr><td>MultiPV <span class="new-tag">v1.2.0 Phase 69</span></td><td>1</td><td>1-8</td><td>多线分析，对局建议1，分析建议2-5；Phase 69 起上限收紧为 8（原 500），复盘推荐 3-5</td></tr>
     <tr><td>Move Overhead <span class="new-tag">v1.2.0 Phase 69</span></td><td>60 ms</td><td>0-1000 ms</td><td>通信延迟补偿（Android JNI 开销约 10-20ms）；Phase 69 起上限收紧为 1000ms（原 5000ms），本地对弈推荐 10-30ms，网络对弈 50-150ms</td></tr>
     <tr><td>Ponder</td><td>关闭</td><td>开/关</td><td>对手回合继续思考</td></tr>
@@ -2233,8 +2233,8 @@ function isChess960CastlingLegal(state, kingFrom, kingTo) {
     <p style="font-size:.7rem;color:#887860;text-align:center;margin-top:6px">剩余时间 &lt; 30 秒时变红警告；超时判负（FIDE 6.9 例外：胜方以任何合法走子序列均无法将杀时判和）</p>
   </div>
 
-  <h3>Stockfish 18 时间管理 UCI 指令 <span class="new-tag">v1.0.4 Rev35</span></h3>
-  <p>计时赛模式下，AI 走棋现使用 <code>go wtime &lt;ms&gt; btime &lt;ms&gt; winc &lt;ms&gt; binc &lt;ms&gt;</code> UCI 指令，让 Stockfish 18 自主管理时间分配（关键局面多思考、简单局面少思考），而非固定 movetime。新增 <code>AndroidBridge.engineGoTimed()</code> 桥接方法。</p>
+  <h3>Stockfish 19 时间管理 UCI 指令 <span class="new-tag">v1.0.4 Rev35</span></h3>
+  <p>计时赛模式下，AI 走棋现使用 <code>go wtime &lt;ms&gt; btime &lt;ms&gt; winc &lt;ms&gt; binc &lt;ms&gt;</code> UCI 指令，让 Stockfish 19 自主管理时间分配（关键局面多思考、简单局面少思考），而非固定 movetime。新增 <code>AndroidBridge.engineGoTimed()</code> 桥接方法。</p>
 
   <div class="impl-section">
     <h4>实现原理：5 种计时模式的扣时规则</h4>
@@ -2903,7 +2903,14 @@ function moveRookForCastling(state, kingFrom, kingTo) {
     </div>
 
   <!-- ============================== -->                    <!-- v1.2.3 round-13 CMake re-enablement + code review -->
-  <p style="font-size:.82rem;color:#c8b888;line-height:1.6;margin:10px 0 4px">下列 v1.2.3 第六十一轮至第十八轮（2026.7.17 ~ 2026.11.21）为同版本内逐轮精化记录，原载于第一章应用简介，round-56b 起按版本倒序迁入本附录，完整细节与各轮验证结论一并保留。</p>
+  <p style="font-size:.82rem;color:#c8b888;line-height:1.6;margin:10px 0 4px">下列 v1.2.3 第六十八轮至第十八轮（2026.7.17 ~ 2026.11.22）为同版本内逐轮精化记录，原载于第一章应用简介，round-56b 起按版本倒序迁入本附录，完整细节与各轮验证结论一并保留。</p>
+  <p>v1.2.3 第六十八轮（同版本内修订，2026.11.22）消化对 round-67 交付的三封评审邮件（CodeRabbit 6 条、PMD 风格 5 条、mobsfscan 日志 12 条）与 SonarCloud 16 项问题，核心是"守护者的守护者"——给守门基准自身补完整性。<strong>（一）基准完整性</strong>——上一轮引入的线性基准门里，一个敌意用例的输入字面量把换行写成了反斜杠加字母 n（求值后不含任何真实换行），该用例一直在空转、门却显示绿灯：现已修复，且每个用例声明自身输入类不变量（真实换行、含标签括号、无闭合括号等），执行前先经输入元断言校验；同时基准改为逐用例子进程执行，父进程带三秒硬超时——解析器若回归到二次方形态，门在数秒内点名失败而不是数分钟后才醒、更不会永远挂起。四枚新负例把"旧形态必被门抓到、事故字面量必被元断言抓到、死循环用例必被点名杀掉"变成常设回归项。<strong>（二）残局库网络健壮性</strong>——五秒超时此前只罩住响应头，服务器"发完头再停住正文"可让查询永久挂起：现罩住头到正文解析的全程，正文阶段超时按网络失败计入既有三击离线语义（坏 JSON 仍不计入）；手动查询回调加身份校验——局面已变时，过期回调不再把旧局面推荐自动选到新棋盘上，也不再误清新查询的加载状态（共享加载旗新增归属令牌，只清偿自己武装的那一份）。<strong>（三）Sonar 清零</strong>——15 项全部结构性修复（两份同构分卷器统一改 let/const、抽空白行追踪助手降认知复杂度、Math.max 化三处、引擎提取拒绝路径收敛为单一助手等，合计 16.2 万例差分模糊测试零差异），1 项平台豁免（建议的 .at() 写法需 Chrome 92，低于本项目 WebView 84 底线，不予采纳）。<strong>（四）平台侧豁免治本</strong>——PMD 花括号风格与 mobsfscan 日志类告警改为仓库内一次性豁免配置（顺带查明 PMD 工作流另两个规则集引用自始解析失败、从未生效），终止逐轮重报；另对 Gradle 属性优先级完成官方文档对照加沙箱实测的权威收口（实测推翻文档列表第 3/4 位次，分歧如实记录）。验证：三件套本地 44/27/51 中 50 绿（worker-pool.js 的删除按计划留待合并后手动执行、其哨兵保持可见红灯），负例门十三项全绿，元负例九场景全数红灯。</p>
+<p>v1.2.3 第六十七轮（同版本内修订，2026.11.21）消化 CodeRabbit 对 round-66 交付的 9 条评审与 SonarCloud 质量门报警（新代码重复率 13.2% 超过 3% 上限），并查处交付完整性缺口四处。<strong>（一）消孪生</strong>——round-66 修复把引擎缓存校验与原子提交逻辑写成了两份逐行相同的拷贝，直接推高重复率：现收敛为共享助手（cachedEngineAcceptable / commitExtractedEngine）＋两条提取路径的调用点，Sonar 四项问题（重复字符串字面量·严重、可合并嵌套条件、可选链、indexOf 存在性检查）全部结构性清除。<strong>（二）两处解析器的"线性"声明被证伪后根治</strong>——多局分卷正则的负向后行断言只挡住"前一字符是换行"的起点，空格空白行内每个换行仍可发起完整匹配尝试（二次方复杂度、主线程卡死面）；统计页扫描器的闭合方括号查找在无闭合时逐候选扫到文末。分卷改为单遍行扫描（两文件字节一致的同构双实现），扫描器改用单调缓存（下一个 ] 连带其前置空白段起点、下一个换行，先查缓存后切片），合计 128,069 例差分模糊测试零差异，敌意输入实测全部低于 300 毫秒且时间上界断言进入交付门——"线性"从注释声明升级为可执行断言。<strong>（三）负例脚本加工作区互斥锁</strong>——并发两个实例可能把对方的故意变异当作备份写回源码树：现首次备份前取锁、持有到进程退出（中断恢复也在锁内），被占用的并发实例零触碰快速失败。<strong>（四）哨兵诚实化</strong>——"行锚定＝活语句"的表述作废：文本哨兵证明不了可达性/顺序/线性，是绊线不是证明；方法论升格第五级并固化三条硬规则（文本哨兵是绊线不是证明、对称面修复必须单一实现、复杂度声明必须附敌意基准实测）。<strong>（五）交付完整性</strong>——查明自动解包工作流按设计剥离 .github/workflows 保护路径、且覆盖式上传无法删除文件，round-66 的发版模板修正与 worker-pool 删除因此未达远端：新增两枚哨兵使缺口可见化，"交付后对远端快照复跑验证"升格为硬性流程。验证：三件套新基线 44/27/49，负例门九项全绿，元负例 17 场景全数红灯。</p>
+  <p>v1.2.3 第六十六轮（同版本内修订，2026.11.21）消化用户委托的全量审查报告（23 项属实发现）与实施中新查出的 4 项缺陷。<strong>（一）引擎升级静默失效根治</strong>——升级安装后，走 filesDir 回退路径的非 root 设备会因旧引擎缓存（114,115,752 字节）通过"大于 5MB＋ELF 头"缓存门而继续运行 SF18、界面却显示 SF19：新增精确尺寸等值门（100,695,968 字节常量，六处解析/缓存路径统一）＋提取原子提交（先写临时文件、SHA 校验通过后原子改名），进程中途被杀再也不可能留下半写缓存。<strong>（二）两处解析器回溯根治</strong>——统计页头部提取正则在畸形输入上实测超 120 秒（页面冻结），审查报告推荐的行锚定方案实测仍超 90 秒，改用确定性扫描器（343,010 例差分模糊测试零差异，同样输入 24 毫秒）；另查出主页导入分卷正则是 round-49 漏修的第四处副本（同类回溯面），一并换用线性形态。<strong>（三）活文档引擎身份清零</strong>——构建指南活区整章 SF19 化（照旧指南构建会产出引擎无法启动的 APK）、发版模板/手册活章节九处/隐私声明同步，并以新哨兵 V3-40b 钉死全部活文档区。<strong>（四）注释与死代码真实化</strong>——删除 732 行 worker-pool.js（round-56 台账早已声称删除）、模块头打包顺序改回真实顺序、useLegacyPackaging 语义反转表述三处勘误、Gradle 属性优先级错误"更正"的勘误。<strong>（五）哨兵纪律升格</strong>——V3-39 第三轮加固（"提及 restore"≠"调用 restore"，备份校验实现行全部钉死），验证器新增六哨兵（基线 44/27/47），元负例 21 场景全数红灯验证，过程中自抓并闭合第四级"死守卫"绕过：字面存在→实现行→行为形状→<strong>活语句</strong>四级谱系全部配绕过负例。</p>
+  <p>v1.2.3 第六十五轮（同版本内修订，2026.11.21）引擎升级至 Stockfish 19——官方 sf_19 发布不再提供 armv8-dotprod 专项包，Android arm64 资产改为 universal 构建（运行时检测 dotprod 等 CPU 特性，取代按变体发包；不支持 ARMv8.6-A DOTPROD 的旧设备不再于启动时崩溃，自动退回基础路径——这是升级带来的真实兼容性收益）。<strong>（一）引擎身份三处同步</strong>：运行时防篡改指纹（EXPECTED_ENGINE_SHA256）更新为 sf_19 arm64-universal 摘要（ffd8fc20…cf1daf8，100,695,968 字节——指纹若滞留旧值，App 会永远删除并重抽新引擎）；引擎提取进度分母 114,115,752 → 100,695,968（进度刻度必须随捆绑引擎大小）；构建下载源更新为 sf_19 官方 tar.gz（80,233,187 字节）。<strong>（二）界面与文档全量同步</strong>：引擎通知文本、评估徽标（SF18→SF19）、引擎配置回退名、关于页「Stockfish 19 (arm64-v8a universal)」；README／NOTICE／PRIVACY／许可说明／术语表／release 说明模板与五本目录台账同步更新。<strong>（三）防回潮哨兵 V3-40</strong>：引擎身份散布多文件（Java 指纹／NOTICE／BUILDING 顶部／进度分母），升级正是「改一处漏一处」的高危场景——新哨兵钉死跨文件一致性（Java 摘要 == NOTICE == BUILDING 顶部；进度分母 == NOTICE 字节数），本轮双变异 RED 验证（NOTICE 摘要翻一位十六进制位 → 红；分母回退旧引擎尺寸 → 红）。三件套基线升至 44/27/41。验证：chess.html 确定性重打包（24,208 行 / 1,488,720 字节）；APK 全量重建六连验通过（新引擎三方逐字节一致：官方 tar = 磁盘 = APK）。</p>
+      <p>v1.2.3 第六十四轮（同版本内修订，2026.11.21）消化 PR #57 CodeRabbit 第二轮评审三条意见与用户自查发现的一处活体绕过（CodeRabbit 未抓到）——四条全部指向 round-63 对负例脚本的加固本身，逐条核实属实。<strong>（一）数据丢失路径双修</strong>：①初始备份复制原先未检查——临时文件系统满或源不可读会留下空/残缺备份，后续所有恢复（逐项与退出陷阱）都会用坏备份覆盖 ai-bridge.js，运行前内容连同未提交修改永久丢失；现备份经 cp+cmp 逐字节复核，失败在变异开始前中止（陷阱尚未武装，工作区未被触碰）。②恢复函数原先无条件删除备份——复制失败仍删唯一副本、诊断被吞、退出陷阱不传播失败（恢复失败仍报成功）；现幂等恢复（备份不存在=已恢复，信号→退出双调用不误报）、成功才删、失败保留备份并打印路径、以非零退出；逐项恢复同加检查，失败即中止变异序列交退出陷阱兜底。<strong>（二）元哨兵 V3-39 升级为「实现行存在性」</strong>：includes 字面量检查可被脚本自己的注释满足（删掉 mktemp 实现行只留注释，哨兵照绿——活体绕过）、trap 正则可被空处理器满足（trap 空串照样匹配）；现全部子句行锚定（注释行永不匹配）、trap 处理器必须真正调用 restore。<strong>（三）元负例套件与语义坑</strong>：五场景二十五断言全过（备份失败变异前中止/恢复失败保留备份/SIGINT 130 双调用不误报/空处理器变红/删实现留注释变红＋旧检查 A/B 绕过现场复现）；入档新坑——非交互 shell 后台作业按 POSIX 被设 SIGINT=SIG_IGN 且 bash 拒绝 trap 启动时被忽略的信号（信号测试须 set -m 开作业控制；SIGTERM 不受此限）。验证：六项负例全部按预期变红、三件套 44/27/40 全绿、退出码 0；APK 全量重建六连验通过（构建成功、签名 v1/v2/v3 齐全、证书指纹一致、chess.html 与引擎逐字节一致）。</p>
+      <p>v1.2.3 第六十三轮（同版本内修订，2026.11.21）消化 PR #57 CodeRabbit 评审四条意见——全部指向 round-62 新增的哨兵负例测试脚本，逐条核实属实。<strong>（一）负例脚本 fail-open 四连修</strong>：①路径自解析——脚本原先硬编码沙箱绝对路径，异机运行备份失败、他机同名路径下会变异并验证另一个检出，现由脚本自身位置解析仓库根；②变异可恢复——原先无任何中断保护，SIGTERM 中断后工作区会留下故意注入的回归、固定 /tmp 备份路径并发互踩，现为每次运行独占 mktemp 备份并在首次变异前布置退出/信号陷阱（中断即恢复、以 143 退出）；③失败必累计——原先变异失配（mutated=no）或哨兵未红只打印不计数，未来任何源码微调让表达式失配后脚本会以 0 宣布通过、六哨兵从此裸奔无人知晓，现任何无效负例都以非零退出；④退出码真实——原先终检的退出码取自 tail 而非验证器，现管道失败穿透（pipefail）、v3 纳入终检。<strong>（二）元哨兵 V3-39 与元负例三连测</strong>：v3 新增结构哨兵把四条纪律永久化（无绝对路径/自解析根/陷阱恢复/失败累计/台账指向实物），三件套基线升至 44/27/40；元负例实测——故意改坏一个 perl 表达式，修复版脚本以 1 退出、原版脚本 A/B 对照以 0 通过（旧缺陷现场完整复现）；SIGTERM 中断实测工作区逐字节干净恢复、退出码 143。<strong>（三）台账与文档</strong>：round-62 台账条目两处就地更正（脚本路径指向已提交位置、ai-bridge.js 文件名笔误），round-63 条目置顶；方法论新增「守护者的守护者也要过军规」实例化——负例脚本是证明哨兵会红的工具，它自身 fail-open 比哨兵缺失更隐蔽。验证：三件套 44/27/40 全绿；六项负例全部按预期变红（mutated=yes sentinel=RED）且终检全绿、退出码 0；chess.html 零变化（24,208 行 / 1,488,718 字节，本轮 JS 模块零改动）；版本号不变（versionCode=10203，versionName="1.2.3"）；无新权限、无新网络出口、无新数据收集。</p>
+  <p>v1.2.3 第六十二轮（同版本内修订，2026.11.21）补齐 58b 六 bug 专项哨兵、完成首轮实体消重、并清偿 APK 交付欠账。<strong>（一）58b 六哨兵补盲</strong>：复盘手动单步分析的六项修复（round-58b）此前只有修复没有哨兵——本轮 v1 新增场景 S58（行为级 10 断言：同局面在飞去重不重复派发、非派发路径递增代数后的成果救援与状态清偿、看门狗真静默测量与恰好一次的有界重试），v2 新增 V2-22/23/24（结构级：_manualLive 手动进度门控、引擎重启/就绪/回调三出口的加载状态与看门狗成对清偿、走法列表三处手动完成路径刷新接线）；哨兵负例回归六连测全部按预期变红（把修复改回旧行为即红、恢复即绿），三件套基线 34/21/39 升至 44/27/39。<strong>（二）首轮实体消重</strong>：SafPickerHelper 导出/导入选择器两对逐行重复块收敛为单实现薄壳（openCreateDocumentPicker / openOpenDocumentPicker，行为逐字保留），三份 8KB 分块读取循环（设置导入 / PGN 导入 / 统计页 PGN 导入）收敛为 FileIoHelper.readCappedText 单实现（round-46/49/54 的字符硬上限、行数上限、CR/LF/CRLF 折合计数语义逐字保留）；新增防回潮哨兵 V2-25（SAF 启动块各仅一处、分块读循环仅存于 FileIoHelper）与 G7 升级版（唯一实现 + 三调用方接线双守护，调用方回退朴素读取即红）。StockfishNative 五组与 ui.js 两组重复对保留为显式待办（引擎状态机核心，动它必须全套验证，留给专门轮次）。<strong>（三）APK 欠账清偿</strong>：在新构建环境完成 round-62 全量签名构建与六连验——v1/v2/v3 签名全 true、证书指纹 45bc6d36…05a8d8bc 不变、versionCode=10203 / versionName="1.2.3" 锁死、APK 内 chess.html 与源码逐字节一致、引擎 SHA-256 8f7116d3…61b5 三方一致（官方 Stockfish 18 dotprod 构建与原始二进制逐字节相同）。<strong>（四）方法论文档行级扩写</strong>：每条原则补 file + 函数名锚定出处，实例化 round-59/60/61 新维度（阻尼谐振独立复算、装载形态语义差、噪声分诊、哨兵字面量/行锚定、双向哨兵）与 round-62 新维度（负例测试纪律、指标真实化三不、消重防回潮哨兵）。<strong>（五）仓库卫生</strong>：CONTRIBUTING 双语分支表更新（upload 分支 2026-11-21 已删除，main 为唯一权威恢复源）；main 快照与 round-61 工作树的边缘差异（.gitignore / dependabot.yml 缺失、LICENSE&amp;NOTICE.zip 新增）如实记录待用户定夺；GitHub issue #48/#49 无仓库凭据，留待仓库侧处置。验证：node --check 全部改过脚本；三件套 44/27/39 全绿；chess.html 重打包字节确定性复核（24,208 行 / 1,488,718 字节，与 round-61 一致——本轮 JS 模块零改动）；版本号不变；无新权限、无新网络出口、无新数据收集。</p>
   <p>v1.2.3 第六十一轮（同版本内修订，2026.11.21）消化 PR #56 最近批评审中已逐条到源码现场核实属实的四条缺陷。<strong>（一）批量分析「进度不停却永不完成」挂起根治（R61-c）</strong>：180 秒「无步完成」终结检查原先只住在 60 秒静默定时器的触发处理器里，而引擎每报一行进度都会重置该定时器——「持续报进度、却永不回 bestmove、也无任何步完成」时触发处理器永不执行、终结检查永不到达，批量无限挂起（三连击同样依赖步完成事件，兜不住此路径）。修复：检查提取为 _batchWallClockExceeded() 并前移到 _reviewAnalyzeResetSafetyTimer()（进度 tick 必经的漏斗）入口——两个时钟两种含义（每步 60 秒静默 vs 整批 180 秒无进展），活性信号不得否决整批看门狗。<strong>（二）引擎批量中途死亡的通知派发（R61-d）</strong>：engineEvalDeepEndBatch 的 !engineReady 早退会跳过 onEvalDeepBatchEnded 派发——后台分析批中途引擎死亡时，延迟的 webView.onPause() 永不执行，WebView 后台持续空转（耗电泄漏）。修复：Activity 通知移出门控先行派发（通知幂等有守卫，引擎死亡路径派发无害空操作），引擎侧清理原样保留门内。<strong>（三）许可台账三处误标（R61-a）</strong>：round-60/58c 条目把 MainActivity/EngineService/StabilizationHelper（均为 AGPL v3 类）误标 (GPL v3)，漏检根因是台账哨兵只查单方向——三处更正，并新增反向哨兵 H2f（本轮新台账条目自己也一度把 GPL 类 StockfishNative 误标 AGPL，被既有单向哨兵当场抓获——双向哨兵的必要性得到现场验证）。<strong>（四）验证器哨兵 fail-open 收紧（R61-b）</strong>：指南隐私行哨兵原先对「指南在但缺隐私行/读取失败」也静默通过（三类情况混为一谈，哨兵形同虚设）——收紧为仅「指南缺席」跳过，缺行/读失败即 FAIL，且指南路径可经环境变量配置（新沙箱/CI 不再恒跳过）。验证：三件套新基线 34/21/39 全绿（新增进度挂起行为四断言、通知派发结构哨兵、反向许可哨兵），哨兵负例四连测（健康过/缺行败/陈旧败/缺席跳）；chess.html 重打包 24,208 行 / 1,488,718 字节；版本号不变（versionCode=10203，versionName="1.2.3"）；无新权限、无新网络出口、无新数据收集。</p><p>v1.2.3 第六十轮（同版本内修订，2026.10.7）增大王之震屏幅度，并消化 round-59 全量逐行审查报告（排查误报→剔除误报→彻底实施完善方案）。<strong>（一）王之震屏幅度增大</strong>：谐振起振首峰 −5.5px→−7px（58c 重印的 11px 主冲击不变，f=6.5Hz 与 680ms 时长不变）——此前王的振铃首峰低于后的地面砸击（6px），与「全套最重签名」的人格定位相悖；7px 使王重回首位，同时保持「后最复杂、王最锐+最长」的区分。峰值序列 −7/+4.42/−2.79/+1.76/−1.11/+0.70/…（Python 独立复算一致）。<strong>（二）审查报告消化</strong>（报告第 5 章负空间记录已自行完成证伪，复核认可全部六项）：F-1 TDZ 死代码根治——_KING_PIECE_STYLE 从 ui.js（bundle 末模块）上移至 game-logic.js 共享常量区（首模块），根因是 typeof 对 TDZ 中的 const 抛 ReferenceError 而非返回 undefined，ai-bridge.js 顶层加载屏调用每次启动都走抛错-回退路径，去重意图被架空 7+ 轮（v1 告警逐轮打印未被分诊）；修复后告警消失，单一事实源名副其实。F-2 指南 §1 隐私行「无网络权限」与 Manifest 的 INTERNET 权限矛盾，改为「离线优先：除可选的 Lichess 残局库查询外无任何网络出口」。F-4 语言回退统一——showToastLocalized 回退改为 !startsWith(&quot;zh&quot;)→en，与引擎通知同语义，第三 locale 用户不再中英混排。F-3 按先例文档化不动（stop→start 毫秒窗口当前调用图不可达，onEngineReady 自愈）。F-5 _evictIfOverCap 注释机制修正（数组对格式数字键保型，String() 比较系防未来格式漂移）。<strong>（三）验证器扩展</strong>：V1-30 TDZ 告警哨兵（consoleProxy 捕获 bundle 求值期 warn）、V2-20 常量位置哨兵、V3-38 指南隐私行哨兵——新基线 30/20/38 全绿。<strong>（四）方法论闭环</strong>：指南 §5 任务完成——Regalia-bug-hunting-methodology.md 落盘源码树根目录（含第八路侦察「验证器输出噪声分诊」与「装载形态语义差」新维度），§5.5 三项打勾。验证：chess.html 重打包 24,173 行 / 1,486,508 字节；版本号不变（versionCode=10203，versionName="1.2.3"）；无新权限、无新网络出口、无新数据收集。</p><p>v1.2.3 第五十九轮（同版本内修订，2026.10.7）为全部六种震屏签名补充仿真谐振，让震动更加自然。<strong>（一）第一性原理</strong>：真实棋盘被落子撞击后不会在手摆闷响后戛然而止——它会振铃；物理上棋盘是阻尼谐振子 y(τ)=A·e^(−d·τ)·cos(2πf·τ)。此前各棋子的手摆余震尾恰好近似该曲线但衰减比不规则、峰间距凭手感，而人眼对「不自然的衰减」极其敏感。<strong>（二）谐振生成器 _ringKfs</strong>：六种棋子的余震尾全部改为模型生成（打击段人格签名原样保留），四分之一周期采样保证分段缓动下正弦形态保真，峰值衰减至感知阈（0.08px）以下自动收束，48 帧硬上限防御。<strong>（三）逐棋子物理参数</strong>（越重越低频越慢衰减；弹簧弱阻尼、急停强阻尼）：王 6.5Hz/d=6（全套最低频最慢——重物沉吟，58c 的回弹即起振首峰）、后 8Hz/d=8（垂直主轴带方向倾侧）、车 12Hz/d=20（生猛急停速亡）、马 11Hz/d=11（弹簧天然弱阻尼）、象 16Hz/d=24（刀锋一「铮」即逝）、兵 22Hz/d=18（高频颤抖改为真谐波颤振）。模型输出与手摆尾峰高度重合（王：模型 3.5/2.2/1.4/0.9 vs 手摆 3.2/1.9/1.1/0.6），验证设计直觉本就在谐振曲线上。<strong>（四）注释清理</strong>：ui-interactions.js 中 ANIMATION_DEFER_MS 注释仍引用已退役的 SHAKE_HEAVY_DUR/SHAKE_MASSIVE_DUR 常量（round-58 漏改），改为引用 SHAKE_DURATIONS 并说明震屏可安全超越延迟窗口。<strong>（五）说明书修复</strong>：中文说明书检出拼接损坏（文件中部非法 UTF-8 字节、附录 A 整块重复、div 失衡 559/563）——属 round-58c 存量缺陷；已从 58b 干净备份重建并重放 58c/59 两处修订，恢复严格 UTF-8、单一附录、div 配平 365/365。验证：verifier v1 29/29、v2 19/19、v3 37/37 全部通过；六种签名 offset 单调性经 Python 交叉验证；chess.html 重打包 24,159 行 / 1,485,430 字节；版本号不变（versionCode=10203，versionName="1.2.3"）；无新权限、无新网络出口、无新数据收集。</p><p>v1.2.3 第五十八轮c（同版本内修订，2026.10.7）在 58b「玉玺重印」骨架上进一步增强王之震屏的沉重感，并完成全代码库逐行审查。<strong>（一）王之震屏沉重感增强</strong>：主重印位移 7.5px→11px（保持全套最锐单次冲击，方向分量 2.5→3），预备抬升 -1.4px→-2.2px；新增「二次接触闷响」关键帧——重物砸下后重新坐实的一下（响声来自单次冲击，重量感来自二次坐实）；衰减峰间距拉宽呈低频余韵，总时长 560ms→680ms（全套最长签名）；纯 translate3d 合成器动画、零重排、方向感知架构不变。<strong>（二）全量逐行审查</strong>（19 个 Java 文件 + 10 个 JS 模块 + 模板 + 构建脚本，轨迹存 verifier/runs/round58c-audit.md）：修复 state-store.js 三处 reducer 隐患——ENTER_REVIEW/PGN_LOADED 补载荷守卫（Phase-71 先例），SET_CHESS960 的 `payload.spid || -1` 会把合法 SPID 0（BBQNNRKR 起始位）静默映射为「未设置」，改为 != null 判定；eco-data.js 两处注释指向修正（_loadEcoFromCache→_openEcoDB、删除漂移行号引用）；StabilizationHelper.java 一处过时注释修正（节流 16→33ms，round-44 D12 漏改）；chess.src/README.license 三处 round-58b 存量许可证误标修复（GPL 分类的 ai-bridge/ui/game-logic 被误标 AGPL）。<strong>（三）验证</strong>：verifier v1 29/29、v2 19/19、v3 37/37 全绿；chess.html 重打包 24,132 行 / 1,483,663 字节；版本号不变（versionCode=10203，versionName="1.2.3"）；无新权限、无新网络出口、无新数据收集。</p>
   <p>v1.2.3 第五十八轮b（同版本内修订，2026.10.6）根治复盘手动单步分析的"卡死"与刷新缺失，并重铸王之震屏。<strong>（一）单步卡死根因——三条耦合缺陷链</strong>：①重复派发风暴——手动单步分析期间评估栏无任何生命迹象（见②），用户误以为卡住再点同一步，requestEngineEval 便再次派发，Java 侧保险性停止把健康的在途搜索杀掉，其 bestmove 被停止闩吞掉（永不缓存），搜索从深度 1 重来——每点一次杀一次，自我强化的停滞；②实时信息门控缺失——进度回调只在批量在途时刷新复盘评估栏，手动单步的深度/节点/算力全程冻结；③45 秒安全定时器按墙上时钟误杀健康慢搜索，而真沉默时又只清状态不重试。修复：新增同局面在飞去重（同一步同一 fen 已有搜索在飞时，重复点击仅重申"分析中"，不再杀搜索）；手动单步在途且正查看被分析步时，评估栏同步实时显示深度/节点/算力；看门狗改为进度感知（每条进度 tick 重置，只计量真沉默），真沉默触发时对同一局面自动重派一次（有界，杜绝死循环）。<strong>（二）走法列表即时刷新</strong>：手动单步完成的三条路径（正常、两种过期回调缓存）全部补走法列表刷新——此前只有批量推进路径刷新。<strong>（三）已完成成果救援</strong>：点了未分析的 B 再点已缓存的 C 后，B 的回调因代数被非派发路径递增而遭误弃，B 的引擎成果被静默扔掉——现按 fen 身份经派发环定位所属步并缓存；若仍在查看该步则立即回填上屏。<strong>（四）状态泄漏清理</strong>：过期回调缓存路径与引擎错误/重启/就绪路径统一解除手动看门狗并清偿 _evalLoading。<strong>（五）王之震屏重铸"玉玺重印"</strong>：短促抬升预备→一段 7.5px 加速直下重印（专用冲入缓动，全套最锐单次冲击——铿锵感来源）→深沉低频环形衰减（560ms）；其余棋子振幅适度提升约二至三成（后 7.5、车 6.2、马 3.2、象 2.7、兵微幅）。验证：verifier v1 29/29、v2 19/19、v3 37/37 全部通过；版本号不变（versionCode=10203，versionName="1.2.3"）；无新权限、无新网络出口、无新数据收集。</p><p>v1.2.3 第五十八轮（同版本内修订，2026.10.6）根治批量分析开局停滞并重塑震屏设计。<strong>（一）开局停滞根因</strong>：engineEvalDeepBeginBatch 在无搜索运行时虚设 STATE_EVAL，导致第一步 engineEvalDeep 的保险性停止误判"有搜索在途"——向空闲引擎发 stop、等待 1 秒超时、按 round-52 T6 规则武装 bestmove 丢弃标志；引擎实际正常算完的第一步结果被该标志丢弃（round-52 注释预言的失败链逐字应验），JS 侧只能等 60 秒安全定时器跳步。修复：beginBatch 不再虚设状态（engineEvalDeep 在真实发出 go 前一刻自设），endBatch 镜像修复为仅在搜索确可能在途时才执行停止等待。<strong>（二）震屏重塑</strong>：废除 CSS 时代的三档强度模型，改用 WAAPI 运行时关键帧生成，六种棋子各有签名且冲击力沿走棋方向施加（方向感知——静态 CSS 关键帧做不到）：后=方向猛冲+垂直砸地+三段余震；王=单段深沉垂直重击+两拍低频沉淀（铿锵感的来源，无横向抖动）；车=方向冲击+急停回弹；马=弹簧式二段跳；象=轴向细锐一颤；兵=高频小幅颤抖（兵、马、象此前无落地震屏，现全棋子覆盖）。全部纯 transform 合成器动画，零重排。验证：verifier v1 29/29、v2 19/19、v3 37/37 全部通过；版本号不变（versionCode=10203，versionName="1.2.3"）；无新权限、无新网络出口、无新数据收集。</p>
   <p>v1.2.3 第五十七轮（同版本内修订，2026.10.6）修复复盘一键分析的实时性与走棋动画流畅度。<strong>（一）批量分析防空转</strong>：批处理在途期间，每收到一条引擎进度回调即重置该步 60 秒安全定时器——此前定时器只看回调是否返回、不看引擎是否正在工作，慢但健康的 depth-22 步（热降频/内存压力/复杂局面）会被误杀跳过且不写缓存，而三连失败计数因派发成功恒清零、永不触发终止，批处理遂以每步 60 秒空转全程、零结果落盘，表现为「卡住一小时无任何反馈」；现仅当引擎真正静默 60 秒（卡死/崩溃）才跳过该步，慢步照常算完落缓存。<strong>（二）复盘界面实时刷新</strong>：每步分析完成即刻更新步骤列表（新增 _refreshReviewMoveListEvals()，仅重建列表 innerHTML、保留滚动位置，替代原每 10 步一次的全量 render()）与评估栏（分数/emoji/深度）；批量分析期间评估栏的引擎实时搜索深度/节点数/速度恢复逐秒跳动（此前批处理派发不置 _evalLoading，进度更新门被完全挡住）。<strong>（三）动画帧率</strong>：移除 .move-anim 的 drop-shadow 滤镜（等效投影改为字形同通道的第二层 text-shadow，消除滤镜渲染面与逐帧重栅格化风险）；落地震屏由 CSS 类切换改为 WAAPI（关键帧/缓动/时长不变），消除落子瞬间 void offsetWidth 强制同步重排整副棋盘造成的顿挫。<strong>（四）同日补强</strong>：震屏缓动改为逐段作用于关键帧区间（恢复 CSS 时代的铿锵手感）；批量分析新增挂钟式无进展终止——每完成一步即重置 180 秒计时，超时立即明确终止并 Toast 提示（已完成进度保留，重新点击即可从断点续析），彻底封堵「引擎崩溃→恢复→派发→再崩溃」循环重置三连击计数导致的无限静默；超时跳步从仅记日志改为即时 Toast 可见反馈；引擎恢复预算耗尽时批处理立即终止而非继续泊死。验证：verifier v1 29/29、v2 19/19、v3 37/37 全部通过；10 个 JS 模块 node --check 通过；版本号不变（versionCode=10203，versionName="1.2.3"）；无新权限、无新网络出口、无新数据收集。</p>
@@ -6402,7 +6409,7 @@ function moveRookForCastling(state, kingFrom, kingTo) {
 <!-- ===== FOOTER ===== -->
 <div style="text-align: center; padding: 40px 0 20px; color: #6a5a40; font-size: 12px;">
   <p style="margin: 4px 0;">Regalia v1.2.3 用户说明书 (User Manual)</p>
-  <p style="margin: 4px 0;">Built with Stockfish 18 &nbsp;|&nbsp; AGPL v3</p>
+  <p style="margin: 4px 0;">Built with Stockfish 19 &nbsp;|&nbsp; AGPL v3</p>
   <p style="margin: 4px 0;">Compatible with Android 6.0-15 &nbsp;|&nbsp; Xiaomi HyperOS 3</p>
   <p style="margin: 4px 0;">Chess960 &nbsp;|&nbsp; Time Control &nbsp;|&nbsp; Standardized PGN &nbsp;|&nbsp; Seldepth &nbsp;|&nbsp; Web Worker Pool</p>
   <a href="#top" class="back-top">&#9650; 返回顶部</a>

@@ -43,7 +43,8 @@ and a newest-first change ledger (per round/phase):
 
 ## Notes
 
-- `libstockfish.so` (Stockfish 18, arm64-v8a-dotprod) is **not committed**;
+- `libstockfish.so` (Stockfish 19, arm64-v8a universal build with runtime
+  dotprod detection) is **not committed**;
   it is downloaded at build time into `src/main/jniLibs/arm64-v8a/` with a
   SHA-256 check — see `BUILDING.md`. Its runtime integrity is additionally
   verified by the app (`EXPECTED_ENGINE_SHA256` in `StockfishNative`).

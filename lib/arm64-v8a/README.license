@@ -1,3 +1,23 @@
+v1.2.3 round-65 (2026.11.21): ENGINE UPGRADE — bundled binary moved to Stockfish 19 arm64-universal.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - The engine shipped at build time into src/main/jniLibs/ (this
+    directory's build-time destination) is now the official sf_19
+    `stockfish-android-arm64-universal` (80,233,187-byte tar.gz;
+    the sf_19 release no longer ships a dedicated armv8-dotprod tar —
+    since sf_17 the Android arm64 asset is a universal build that
+    detects dotprod and other CPU features at runtime).
+  - New identity, verified before use (ELF 64-bit ARM aarch64,
+    statically linked, for Android 29, NDK r27c 12479018):
+    100,695,968 bytes, SHA-256
+    ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8.
+    (Prior sf_18 armv8-dotprod: 114,115,752 bytes, SHA-256
+    8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5 —
+    historical values preserved in the round-by-round entries below.)
+  - Cross-file consistency of the new digest/size is guarded by the v3
+    sentinel V3-40 (Java EXPECTED_ENGINE_SHA256 == NOTICE == BUILDING.md
+    topmost notes; progress denominator == NOTICE byte size).
+  - License classification: unchanged — Stockfish engine binary, GPL v3.
+
 v1.2.3 round-56 (2026.10.5): no changes to files in this directory.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - License classification: all files unchanged.
@@ -153,8 +173,9 @@ Copyright: (C) Tord Romstad, Marco Costalba, Joona Kiiski, Gary Linscott
 Source   : https://github.com/official-stockfish/Stockfish
 
 Stockfish is a free, open-source UCI chess engine. This build is
-Stockfish 18 compiled for the arm64-v8a architecture with dotprod
-extensions enabled.
+Stockfish 19 for the arm64-v8a architecture — the official universal
+build with runtime CPU-feature detection (dotprod and other ARMv8
+extensions used automatically when available).
 
 Full license text: LICENSE-GPL v3 (at the repository root)
 Full authors list : AUTHORS-stockfish (at the repository root)

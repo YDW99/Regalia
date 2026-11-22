@@ -1,3 +1,40 @@
+v1.2.3 round-68 (2026.11.22): Sonar cleanup + scanner platform exemptions.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - java/.mobsf NEW (AGPL v3, project-original scanner config): mobsfscan
+    project exemptions — the android_logging (CWE-532) rule is suppressed
+    repo-side with the documented round-56 SEC-06 rationale (release builds
+    strip Log.v/d/i/w via proguard; only Log.e survives with exactly two
+    documented path-bearing E-level residuals; offline-first app, no user
+    data logged). Empirically verified: full-tree findings 264 -> 0 with
+    other rules unaffected. Auto-picked-up by the mobsf workflow (first
+    scanned path); dotfile-via-zip channel risk documented in round68-audit
+    §T13 with the web-creation fallback instructions.
+  - assets/chess.html: rebuilt (24,358 lines / 1,498,288 bytes — tablebase
+    deadline/identity changes below; deterministic rebuild verified).
+  - assets/stats.html (AGPL v3 combined-work page): _pgnFirstGameSplit twin
+    rewritten with the tablebase.js twin (var -> let/const, cognitive-
+    complexity helper, Math.max — Sonar S3504/S3776/S7766; behavior
+    differential-fuzzed identical, round68-audit §T7/T8); scanner
+    trailing-ws end now Math.max(_ws,_j) (S7766). The [x.length-1] index
+    form is deliberately KEPT — Array.prototype.at needs Chrome 92+ while
+    the project WebView floor is 84 (Sonar S7755 platform exemption,
+    round68-audit §T9).
+  - java/com/Regalia/StockfishNative.java: see the java ledger entry.
+  - Root note: config/pmd-ruleset.xml NEW (AGPL v3) — see config/README.license.
+
+v1.2.3 round-65 (2026.11.21): engine upgrade sf_18 -> sf_19 — build-time engine placement notes updated.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - src/main/jniLibs/arm64-v8a/ (build-time only, not committed): the
+    bundled engine is now the official sf_19 stockfish-android-arm64-
+    universal binary (100,695,968 bytes, SHA-256
+    ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8,
+    placed as libstockfish.so; the sf_19 release no longer ships a
+    dedicated armv8-dotprod tar — the universal build detects dotprod
+    at runtime). See BUILDING.md round-65 notes and lib/arm64-v8a/
+    README.license for details; cross-file consistency guarded by v3
+    sentinel V3-40.
+  - License classification: all files unchanged.
+
 v1.2.3 round-56 (2026.10.5): no changes to files in this directory.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - License classification: all files unchanged.

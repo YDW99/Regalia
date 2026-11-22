@@ -43,10 +43,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 
@@ -752,63 +749,24 @@ public class StatsActivity extends Activity {
                 // v1.2.1: 不再 takePersistableUriPermission —— 一次性读取不需要持久授权，
                 //   且会无谓占用 SAF 512 上限。transient FLAG_GRANT_READ_URI_PERMISSION
                 //   from ACTION_OPEN_DOCUMENT 已足够读取本次内容。
-                StringBuilder sb = new StringBuilder();
-                // v1.2.3 round-13 (P1): openInputStream may return null (e.g.
-                //   provider unavailable, file deleted between picker and read).
-                //   Mirrors SafPickerHelper.readTextFromUri and the EXPORT path's
-                //   openOutputStream null-check at line ~547.
-                InputStream rawIs = getContentResolver().openInputStream(uri);
-                if (rawIs == null) {
-                    throw new IOException("openInputStream returned null for " + uri);
+                // v1.2.3 round-62 (dedup, guide §5.1 item 3): the bounded chunked
+                //   read loop (8KB chunks, hard char cap, readLine()-compatible
+                //   line counting with CRLF folding) moved to
+                //   FileIoHelper.readCappedText — this was the third
+                //   line-for-line copy (after SafPickerHelper.readTextFromUri /
+                //   readPgnFromUri). Caps and truncation-warning semantics
+                //   preserved verbatim: MAX_LINES=5000 (StockfishNative's limit),
+                //   MAX_CHARS=10_000_000, truncation appends the same warning
+                //   comment the old inline loop appended.
+                final int MAX_LINES = 5000; // Match StockfishNative's limit
+                final int MAX_CHARS = 10_000_000;
+                boolean[] truncated = new boolean[1];
+                String content = FileIoHelper.readCappedText(getContentResolver(), uri,
+                        MAX_CHARS, MAX_LINES, "PGN file", truncated);
+                if (truncated[0]) {
+                    Log.w(TAG, "PGN file truncated at " + MAX_LINES + " lines");
+                    content += "\n{ Warning: file truncated at " + MAX_LINES + " lines by Regalia import guard }\n";
                 }
-                try (InputStream is = rawIs;
-                     BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"))) {
-                    final int MAX_LINES = 5000; // Match StockfishNative's limit
-                    // v1.2.3 round-49 (review-4 P2-1): 8KB 分块读 + 字符硬上限，
-                    //   取代 readLine()（镜像 SafPickerHelper.readTextFromUri/
-                    //   readPgnFromUri 的 round-46 CR#15 写法）。readLine() 会
-                    //   在行数检查执行前把整行物化进内存 —— 单个无换行的超大
-                    //   文件会在主线程（onActivityResult）直接 OOM。
-                    final int MAX_CHARS = 10_000_000;
-                    int lineCount = 0;
-                    // v1.2.3 round-54 (PR56 CR#8): mirror SafPickerHelper —
-                    //   count bare '\r' as a line terminator (readLine()
-                    //   semantics), folding CRLF pairs (even across chunk
-                    //   boundaries) into one line. A CR-only file previously
-                    //   bypassed MAX_LINES entirely.
-                    boolean prevWasCr = false;
-                    // v1.0.8 PHASE 32 ROBUSTNESS: track truncation and append a
-                    //   warning comment (matching StockfishNative's behavior).
-                    boolean truncated = false;
-                    char[] chunk = new char[8192];
-                    int n;
-                    while ((n = reader.read(chunk, 0, chunk.length)) != -1) {
-                        if (lineCount >= MAX_LINES) { truncated = true; break; }
-                        if (sb.length() + n > MAX_CHARS) {
-                            throw new IOException("PGN file too large (>" + MAX_CHARS + " chars)");
-                        }
-                        int appendLen = n;
-                        for (int i = 0; i < n; i++) {
-                            if (chunk[i] == '\n') {
-                                if (!prevWasCr) lineCount++; // LF — count unless it closes a CRLF pair
-                                prevWasCr = false;
-                            } else if (chunk[i] == '\r') {
-                                lineCount++; // CR — always a line end (a following LF is folded above)
-                                prevWasCr = true;
-                            } else {
-                                prevWasCr = false;
-                            }
-                            if (lineCount >= MAX_LINES) { appendLen = i + 1; break; }
-                        }
-                        sb.append(chunk, 0, appendLen);
-                        if (appendLen < n) { truncated = true; break; }
-                    }
-                    if (truncated) {
-                        sb.append("\n{ Warning: file truncated at ").append(MAX_LINES)
-                          .append(" lines by Regalia import guard }\n");
-                    }
-                }
-                String content = sb.toString();
                 // Sanitize control characters (keep \n, \t, \r)
                 content = content.replaceAll("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]", "");
                 // JSON-encode for safe JS string passing

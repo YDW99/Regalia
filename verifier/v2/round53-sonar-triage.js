@@ -149,5 +149,73 @@ const gIdx = eb.search(/\n\s*if \(!engineReady\) return;/);
 ok('V2-21 R61-d: endBatch dispatches onEvalDeepBatchEnded before the !engineReady gate',
    eb.length > 0 && dIdx >= 0 && gIdx > dIdx);
 
+// V2-22 — round-62 (58b Bug A): onEngineProgress must keep the review eval
+//   bar ticking for MANUAL single-step evals too (previously batch-only, so
+//   a manual eval showed a frozen "analyzing" bar for its whole 5-60s search
+//   — the user read that as a hang and re-tapped, restarting the analysis).
+//   Gate shape: _manualLive = !_batchLive && _evalLoading && reviewMode &&
+//   viewed-step match (_reviewEvalRequestedStep===reviewStep); the bar
+//   refresh condition must accept BOTH _batchLive and _manualLive.
+const iOP0 = ab.indexOf('function onEngineProgress(');
+const iOP1 = ab.indexOf('function _cacheStaleReviewEvalByFen(', iOP0);
+const opBody = iOP0 >= 0 && iOP1 > iOP0 ? ab.slice(iOP0, iOP1) : '';
+ok('V2-22 58b Bug A: _manualLive gate present in onEngineProgress (manual eval bar tick)',
+   /const _manualLive=\(!_batchLive&&_evalLoading\s*&&typeof reviewMode!=='undefined'&&reviewMode\s*&&typeof reviewStep!=='undefined'&&typeof _reviewEvalRequestedStep!=='undefined'\s*&&_reviewEvalRequestedStep===reviewStep\);/.test(opBody) &&
+   /if\(_batchLive\|\|_manualLive\)\{try\{_updateReviewEvalUI\(\);\}/.test(opBody));
+
+// V2-23 — round-62 (58b Bug F): every eval settlement path must settle BOTH
+//   the loading flag and the watchdog timer, in pairs — a path that clears
+//   only one leaves either a stuck "analyzing" state or a spurious
+//   "engine silent" reset (with auto-retry, a stale watchdog would even
+//   re-dispatch a search that already completed). Pairs required in:
+//   onEngineRestarting, onEngineReady, and all three onEngineEval outcome
+//   branches (rescue / stale-cache / normal completion).
+const iER0 = ab.indexOf('function onEngineRestarting()');
+const iER1 = ab.indexOf('function onEngineReady()', iER0);
+const erBody = iER0 >= 0 && iER1 > iER0 ? ab.slice(iER0, iER1) : '';
+ok('V2-23a 58b Bug F: onEngineRestarting settles loading AND disarms watchdog',
+   erBody.includes('if(_evalLoading){_evalLoading=false') &&
+   erBody.includes('if(_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}'));
+const iEY0 = ab.indexOf('function onEngineReady()');
+const iEY1 = ab.indexOf('function onEngineProgress(', iEY0);
+const eyBody = iEY0 >= 0 && iEY1 > iEY0 ? ab.slice(iEY0, iEY1) : '';
+ok('V2-23b 58b Bug F: onEngineReady settles loading AND disarms watchdog',
+   eyBody.includes('if(_evalLoading){_evalLoading=false') &&
+   eyBody.includes('if(_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}'));
+const iOE0 = ab.indexOf('function onEngineEval(');
+const iOE1 = ab.indexOf('function onEngineInfo(', iOE0);
+const oeBody = iOE0 >= 0 && iOE1 > iOE0 ? ab.slice(iOE0, iOE1) : '';
+ok('V2-23c 58b Bug F: onEngineEval settles loading+watchdog on all 3 outcome branches',
+   (oeBody.match(/_evalLoading=false/g) || []).length >= 3 &&
+   (oeBody.match(/_evalSafetyTimerId=null/g) || []).length >= 3);
+
+// V2-24 — round-62 (58b Bug B): the review move list's per-step eval
+//   annotations must refresh on every manual completion path — the
+//   ring-rescue cache write, the stale-callback cache write, and the normal
+//   viewed-step completion (round-57b wired only the batch advance path, so
+//   manual step-by-step analysis left stale/empty scores in the list).
+//   All call sites carry the degraded-module typeof guard.
+ok('V2-24 58b Bug B: _refreshReviewMoveListEvals wired on all 3 manual completion paths',
+   (ab.match(/typeof _refreshReviewMoveListEvals==='function'\)_refreshReviewMoveListEvals\(\)/g) || []).length >= 3);
+
+// V2-25 — round-62 (dedup, guide §5.1 item 3): the SAF picker launch blocks
+//   and the bounded chunked text-read loop must each have exactly ONE
+//   implementation. Before round-62 the CREATE_DOCUMENT / OPEN_DOCUMENT
+//   launch blocks were duplicated per export/import flavor, and the 8KB
+//   chunked read loop (hard char cap + readLine()-compatible line counting)
+//   existed in three copies (SafPickerHelper x2 + StatsActivity) — the
+//   duplicate blocks that kept PR #56 at the 3% duplication gate (the merge
+//   turned the gate green only via the "new code" window change, not
+//   because the blocks went away — guide §5.3).
+const saf62 = read('src/main/java/com/Regalia/SafPickerHelper.java');
+const fio62 = read('src/main/java/com/Regalia/FileIoHelper.java');
+const stats62 = read('src/main/java/com/Regalia/StatsActivity.java');
+ok('V2-25 round-62 dedup: SAF launch blocks + chunked read loop single-sourced',
+   (saf62.match(/new Intent\(Intent\.ACTION_CREATE_DOCUMENT\)/g) || []).length === 1 &&
+   (saf62.match(/new Intent\(Intent\.ACTION_OPEN_DOCUMENT\)/g) || []).length === 1 &&
+   (fio62.match(/char\[\] chunk = new char\[8192\]/g) || []).length === 1 &&
+   (saf62.match(/char\[\] chunk = new char\[8192\]/g) || []).length === 0 &&
+   (stats62.match(/char\[\] chunk = new char\[8192\]/g) || []).length === 0);
+
 console.log(`===== RESULT: ${pass} passed, ${fail} failed =====`);
 process.exit(fail ? 1 : 0);

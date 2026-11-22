@@ -268,8 +268,10 @@ android {
 
     packagingOptions {
         // 与 AndroidManifest android:extractNativeLibs="true" 对齐：
-        // useLegacyPackaging=true 时 .so 在 APK 中保持未压缩，
-        // 安装时由系统直接从 APK 映射到 /data/app/.../lib/，
+        // useLegacyPackaging=true 时 .so 在 APK 中压缩存储（round-66 勘误：
+        // 旧注释把语义写反了——未压缩+安装期直接映射是 false 的行为，
+        // 也是 round-8 出现 0 字节 EOCD 打包失败的那条路径），
+        // 安装时由系统解压提取到 /data/app/.../lib/arm64-v8a/，
         // 兼容 Stockfish ELF 可执行文件加载路径。
         jniLibs {
             useLegacyPackaging true

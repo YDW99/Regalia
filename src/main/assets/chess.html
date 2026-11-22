@@ -1301,10 +1301,17 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 // hashing, FEN generation, game status, constants, i18n (T/toggleLang/_i18n),
 // personified move animations (Web Animations API), AI move requests, ECO
 // recommendation logic, and setup-mode validation.
-// Bundled by build-chess.py after chess960.js + pgn-standard.js + worker-pool.js
-// and before ai-bridge.js + tablebase.js + eco-data.js + ui.js. References
-// globals (gameState, playerColor, AndroidBridge, audioEngine, …) defined in
-// ui.js. See README.license for the module merge order.
+// Bundled by build-chess.py as the FIRST module — before chess960.js,
+// pgn-standard.js, state-store.js, ai-bridge.js, tablebase.js, eco-data.js,
+// ui-gameflow.js, ui-interactions.js and ui.js (build-chess.py's modules
+// list is the authoritative order; worker-pool.js has not been bundled since
+// round-56 and was deleted in round-66). Being first is a responsibility:
+// any constant shared across modules MUST live here or in another early
+// module, never in a later one (round-60 F-1). References globals
+// (gameState, playerColor, AndroidBridge, audioEngine, …) defined in ui.js —
+// ui.js is the LAST module, so those globals exist only at runtime (inside
+// function bodies); referencing them during this module's top-level
+// evaluation throws TDZ/ReferenceError. See README.license for the merge order.
 //
 // Copyright (C) 2026 Regalia
 //
@@ -4490,7 +4497,7 @@ if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='fun
 // v1.0.6: Sanitize the FEN before sending to the engine to strip
 // inconsistent castling rights that can cause the engine to hang.
 const fen=(typeof _sanitizeFenForEngine==='function')?_sanitizeFenForEngine(generateFEN(gameState)):generateFEN(gameState);
-// v1.0.4 LATEST: if the game is timed, use engineGoTimed() so Stockfish 18
+// v1.0.4 LATEST: if the game is timed, use engineGoTimed() so Stockfish 19
 // manages its own time allocation via UCI wtime/btime/winc/binc parameters.
 // This is the correct way to play timed games — the engine will think longer
 // in critical positions and shorter in simple ones, just like a human.
@@ -4619,8 +4626,9 @@ if(gameOver||reviewMode||setupMode||gameState.currentTurn===playerColor||!isAITh
 // Level 7: probe tablebase for endgame positions (7 pieces or fewer) before Stockfish
 // v1.2.1 round-11 (review fix): restore the typeof guard around pieceCountLE7.
 //   tablebase.js is loaded AFTER game-logic.js in build-chess.py's module
-//   order, and is also a network-fetched fallback (the worker-pool path may
-//   fail to register on extreme WebView implementations). If pieceCountLE7
+//   order, and its lichess probe is a network-dependent path. (round-66 R-2:
+//   the old parenthetical cited the worker-pool path — a dead reference,
+//   worker-pool.js has not been bundled since round-56.) If pieceCountLE7
 //   is somehow undefined (script load failure, worker error), an unguarded
 //   call would throw ReferenceError and completely halt AI move generation
 //   — the user would see "AI thinking" forever with no recovery path. The
@@ -4628,12 +4636,22 @@ if(gameOver||reviewMode||setupMode||gameState.currentTurn===playerColor||!isAITh
 //   the tablebase probe and fall through to Stockfish (which is always
 //   available once the engine is ready).
 if(aiLevel===7&&typeof pieceCountLE7==='function'&&pieceCountLE7(gameState.board)){
-_tbLoading=true;_aiBarInfo='⏳ '+T('tb_querying');_updateAIThinkDisplay();render();
+_tbLoading=true;_tbLoadingBoard=gameState.board;
+// v1.2.3 round-68 (T5): claim the shared _tbLoading ownership token (see
+//   tablebase.js) — the manual tablebase path lowers the flag only when it
+//   still owns it; without this claim a stale manual callback could lower
+//   THIS probe's flag (and vice versa).
+_aiBarInfo='⏳ '+T('tb_querying');_updateAIThinkDisplay();render();
 // Save board reference BEFORE async call to prevent race condition
 // (gameState may change while tablebase query is in-flight)
 const _tbSavedBoard=gameState.board;
 probeTablebase(gameState).then(function(tbData){
-_tbLoading=false;_tbRetryCount=0;
+// v1.2.3 round-68 (T5): lower the shared loading flag only when this probe
+//   still owns it — the token still pointing at this probe's saved board
+//   proves no NEWER query re-armed the flag while this one was in flight
+//   (see tablebase.js for the ownership protocol).
+if(_tbLoadingBoard===_tbSavedBoard){_tbLoading=false;_tbLoadingBoard=null;}
+_tbRetryCount=0;
 if(tbData){
 const tbMove=bestMoveFromTablebase(tbData);
 if(tbMove){
@@ -4657,7 +4675,7 @@ return;
 // TB data arrived but no valid move — fall back to Stockfish
 _requestStockfishMove();
 }).catch(function(){
-_tbLoading=false;
+if(_tbLoadingBoard===_tbSavedBoard){_tbLoading=false;_tbLoadingBoard=null;}
 _tbRetryCount++;
 if(_tbRetryCount<=2){
 isAIThinking=false;_aiBarInfo='';doAIMove();
@@ -7574,7 +7592,7 @@ function _updateEngineNotification(info){
   },1000);
   try{
     if(typeof AndroidBridge!=='undefined'&&AndroidBridge.updateEngineNotification){
-      AndroidBridge.updateEngineNotification('Stockfish 18 · '+info);
+      AndroidBridge.updateEngineNotification('Stockfish 19 · '+info);
     }
   }catch(e){console.warn('[AIBridge] updateEngineNotification failed:',e.message);}
 }
@@ -10473,7 +10491,7 @@ function renderEngineConfig(){
     // Engine info section — built-in engine only
     h+='<div class="dlg-sec"><h3>'+T('engine_info')+'</h3>';
     h+='<div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:.8rem;line-height:1.6">';
-    h+='<div><span style="color:var(--muted)">'+T('engine_name')+': </span><span style="font-weight:700">'+_esc(info.name||'Stockfish 18')+'</span><span style="color:var(--accent);font-size:.65rem;margin-left:6px">['+T('built_in')+']</span></div>';
+    h+='<div><span style="color:var(--muted)">'+T('engine_name')+': </span><span style="font-weight:700">'+_esc(info.name||'Stockfish 19')+'</span><span style="color:var(--accent);font-size:.65rem;margin-left:6px">['+T('built_in')+']</span></div>';
     h+='<div><span style="color:var(--muted)">'+T('engine_author')+': </span><span>'+_esc(info.author||'--')+'</span></div>';
     if(info.threads!=null)h+='<div><span style="color:var(--muted)">'+T('engine_threads')+': </span><span>'+info.threads+'</span></div>';
     if(info.hash!=null)h+='<div><span style="color:var(--muted)">'+T('engine_hash')+': </span><span>'+info.hash+' MB</span></div>';
@@ -10555,7 +10573,7 @@ function openEngineConfig(){
   engineSettingsData=null;
   // No engine scanning/import — only built-in engine info
   if(typeof AndroidBridge!=='undefined'){
-    try{const info=AndroidBridge.getEngineInfo();if(info)engineConfigData=JSON.parse(info);}catch(e){engineConfigData={name:'Stockfish 18',author:'T. Romstad, M. Costalba, J. Kiiski, G. Linscott'};}
+    try{const info=AndroidBridge.getEngineInfo();if(info)engineConfigData=JSON.parse(info);}catch(e){engineConfigData={name:'Stockfish 19',author:'T. Romstad, M. Costalba, J. Kiiski, G. Linscott'};}
     try{const settings=AndroidBridge.getEngineSettings();if(settings)engineSettingsData=JSON.parse(settings);}catch(e){engineSettingsData=null;}
   }
   if(!engineSettingsData){
@@ -12060,7 +12078,14 @@ function _requestBatchEval(step){
       }
       // On synchronous failure, advance to the next step (don't stall)
       if(typeof _reviewAnalyzeAdvance==='function'){
-        setTimeout(function(){try{_reviewAnalyzeAdvance();}catch(_e){}},100);
+        // v1.2.3 round-66 (F-12): this delayed advance is the recovery path of
+        //   the batch pipeline — the project's most hang-prone path (rounds
+        //   57/57c/58/61). A silently swallowed retry failure destroys the
+        //   diagnostic trail exactly when it is needed.
+        // v1.2.3 round-67 (T5, Sonar S6582): optional chain — same semantics
+        //   (_e?.message||_e === _e&&_e.message?_e.message:_e for every
+        //   _e, incl. falsy throws and empty messages).
+        setTimeout(function(){try{_reviewAnalyzeAdvance();}catch(_e){console.warn('[BATCH] delayed advance failed',_e?.message||_e);}},100);
       }
       return;
     }
@@ -12097,7 +12122,7 @@ let _lastProgressNps=null;
 function _buildEvalHTML(e,opts){
   opts=opts||{};
   let s='<span class="ev-e">'+e.emoji+'</span><span>'+e.desc+'</span><span style="color:var(--muted)">('+e.score+')</span>';
-  if(opts.sf18){s+='<span style="font-size:.55rem;color:var(--accent);margin-left:4px;border:1px solid rgba(212,160,23,.3);padding:1px 4px;border-radius:3px;background:rgba(212,160,23,.08)">SF18</span>';}
+  if(opts.sf19){s+='<span style="font-size:.55rem;color:var(--accent);margin-left:4px;border:1px solid rgba(212,160,23,.3);padding:1px 4px;border-radius:3px;background:rgba(212,160,23,.08)">SF19</span>';}
   const depthStr=_sfDepth>0?'<span style="font-size:.65rem;color:var(--muted);margin-left:4px">D'+_sfDepth+'</span>':'';
   s+=depthStr;
   let progressStr='';
@@ -12146,7 +12171,7 @@ function _updateEvalDisplay(){
   }
   const e=formatEval();
   // P4 SIMPLIFY: Use shared helper for consistent eval display formatting
-  el.innerHTML=_buildEvalHTML(e,{sf18:true});
+  el.innerHTML=_buildEvalHTML(e,{sf19:true});
 }
 
 // Update review mode eval display (lightweight DOM update, no full render)
@@ -12439,6 +12464,50 @@ if(gameState.currentTurn!==playerColor)doAIMove();
 //   - Robust header extraction (handles broken quotes)
 //   - NAG + annotation suffix handling
 //   - Better text normalization for maximum format compatibility
+// v1.2.3 round-67 (T6, CodeRabbit r66-#2/#3): single-pass linear multi-game
+//   split. The round-66 lookbehind split regex (negative lookbehind + blank-
+//   line run + '[' lookahead; exact form preserved in round66-audit.md — old
+//   code is paraphrased here per the V2-21 comment rule) was NOT linear:
+//   the lookbehind only blocks a match start whose preceding char is a
+//   newline, so inside a spaces-only blank-line run every '\n' still started a
+//   full scan of the remaining run — Θ(n²) when no '[' follows (main-thread
+//   ANR vector; the old "restricts match starts to the FIRST '\n'" claim was
+//   wrong). This scanner walks the lines once: a block boundary exists where
+//   ≥1 blank lines (spaces-only or empty) sit between the previous line and a
+//   '['-starting line, and the separator consumes the opener line's '\n' plus
+//   every blank line (spaces included) — the exact old match span. Split
+//   results are byte-identical to the round-66 regex (differential fuzz incl.
+//   spaces-only runs / no-'[' tails / leading blank runs / 10MB single-line
+//   classes; round67-audit.md §T8). Isomorphic twin of stats.html's
+//   _pgnFirstGameSplit — the two files share no bundle, so the algorithm is
+//   necessarily duplicated and kept in shape-sync by V3-45.
+function _pgnFirstGameSplit(text){
+  const _ls=text.split('\n');
+  const _pos=new Array(_ls.length+1);
+  const _cuts=[];
+  let _run=-1;
+  // v1.2.3 round-68 (T7/T8, Sonar S3776/S3504/S7766): the blank-run tracker
+  //   moved into a local helper (function-level cognitive complexity below
+  //   the rule threshold; semantics byte-identical — differential fuzz in
+  //   round68-audit.md), var -> let/const (S3504), and the cut-position
+  //   ternary became Math.max (S7766). Math.max is ES1 — safe on the
+  //   WebView 84 floor (unlike Array.prototype.at, which needs Chrome 92;
+  //   the remaining [x.length-1] index below stays for that reason —
+  //   S7755 platform exemption, round68-audit.md T9).
+  const _blankRunStart=(line,idx,run)=>/^\s*$/.test(line)?(run===-1?idx:run):-1;
+  let _i;
+  _pos[0]=0;
+  for(_i=0;_i<_ls.length;_i++)_pos[_i+1]=_pos[_i]+_ls[_i].length+1;
+  for(_i=0;_i<_ls.length;_i++){
+    if(_ls[_i].charAt(0)==='['&&_run!==-1&&(_run>=1||_i>=2))_cuts.push([_pos[Math.max(_run,1)]-1,_pos[_i]]);
+    _run=_blankRunStart(_ls[_i],_i,_run);
+  }
+  if(!_cuts.length)return [text];
+  const _out=[text.slice(0,_cuts[0][0])];
+  for(_i=1;_i<_cuts.length;_i++)_out.push(text.slice(_cuts[_i-1][1],_cuts[_i][0]));
+  _out.push(text.slice(_cuts[_cuts.length-1][1]));
+  return _out;
+}
 function _parsePGN(pgnText){
   if(!pgnText||typeof pgnText!=='string')return null;
   // Remove BOM (byte order mark)
@@ -12455,8 +12524,17 @@ function _parsePGN(pgnText){
   
   // Handle multiple games: only parse the first game.
   // PGN files with multiple games have header blocks starting with [Event ...].
-  // Split on double-newline followed by a header tag to isolate the first game.
-  const gameBlocks=pgnText.split(/\n\s*\n(?=\[)/);
+  // Split on a blank-line run followed by a header tag to isolate the first game.
+  // v1.2.3 round-66 (F-23): hardened lookbehind form (the pre-round-49
+  //   quadratic split form backtracked O(k²) — the round-49 stats.html fix
+  //   had missed this fourth copy; a 300k-case fuzz proved the swap
+  //   byte-identical, round66-audit.md).
+  // v1.2.3 round-67 (T6, CodeRabbit r66-#2/#3): the lookbehind form was still
+  //   NOT linear on spaces-only blank-line runs (see _pgnFirstGameSplit's
+  //   header comment) — replaced by the single-pass line scanner above.
+  //   Byte-identical results (differential fuzz, round67-audit.md §T8); the
+  //   WebView lookbehind floor concern is gone with the regex.
+  const gameBlocks=_pgnFirstGameSplit(pgnText);
   if(gameBlocks.length>1)pgnText=gameBlocks[0];
   
   // Extract FEN from headers if present (for custom starting positions)
@@ -14317,6 +14395,15 @@ let _tbFailCount=0;
 let _tbOfflineSince=0;
 function isTbOffline(){if(_tbOffline&&Date.now()-_tbOfflineSince>60000){_tbOffline=false;_tbFailCount=0;}return _tbOffline}
 let _tbLoading=false;
+// v1.2.3 round-68 (T5): ownership token for the shared _tbLoading flag —
+//   the board reference the CURRENT in-flight loading was armed for. Two
+//   paths arm _tbLoading (this manual trigger + game-logic's AI tablebase
+//   move, which re-arms without a re-entry check); a callback may only
+//   lower a flag it armed for the board it armed it for (58b Bug F
+//   "settle only your own state"). Reference equality, NOT a generation
+//   counter (military rule 2) — the AI path's _tbSavedBoard precedent,
+//   hoisted to shared scope because two writers share one flag.
+let _tbLoadingBoard=null;
 let _tbRetryCount=0;
 let _tbLastRequestTime=0;
 
@@ -14358,44 +14445,92 @@ if(_cached!==undefined){
 const now=Date.now();const wait=Math.max(0,600-(now-_tbLastRequestTime));
 _tbLastRequestTime=now+wait; // Reserve slot immediately
 if(wait>0)await new Promise(r=>setTimeout(r,wait));
-try{
+// v1.2.3 round-66 (F-11): two gaps on legacy WebViews (no AbortController,
+//   Chrome < 66; minSdk 23 can ship such WebViews unreplaced): (a) the fetch
+//   had NO timeout at all — a stalled network hung the probe forever;
+//   (b) clearTimeout ran only on the success path, so a rejected fetch left
+//   the abort timer armed for its full 5s. (a) is fixed with a 5s
+//   Promise.race wall-clock fallback that rejects into the existing catch
+//   (uniform fail-count semantics; Promise.race attaches handlers to the
+//   losing fetch, so a late network rejection cannot become an unhandled
+//   rejection); (b) by clearing the timer in a finally.
+// v1.2.3 round-68 (T4, CodeRabbit r67 Major, outside-diff :2125): the 5s
+//   deadline now covers the response BODY read too. The round-66/67 form
+//   cleared the abort timer in a finally that ended right after fetch
+//   resolved — i.e. as soon as the response HEADERS arrived — so a server
+//   that sent headers and then stalled the body could hang the probe
+//   forever (the AbortController signal already covers the body stream; it
+//   was being disarmed early). The timer now stays armed through the whole
+//   headers→status→body→parse chain (outer finally below), and an
+//   AbortError raised during the body read is RETHROWN into the existing
+//   catch — a stalled body is a network failure (fail-count semantics),
+//   NOT a malformed payload (PHASE 19 path). The legacy no-AbortController
+//   path gets the same coverage: the 5s wall-clock race wraps the whole
+//   chain, not just the fetch. Semantics otherwise unchanged: 404 does not
+//   count toward _tbFailCount (Rev62), bad JSON does not count (PHASE 19),
+//   5xx/network errors three-strike offline for 60s.
 const ctrl=typeof AbortController!=='undefined'?new AbortController():null;
 const tmr=ctrl?setTimeout(()=>ctrl.abort(),5000):null;
-const resp=await fetch(`https://tablebase.lichess.ovh/standard?fen=${encodeURIComponent(fen)}`,{signal:ctrl?ctrl.signal:undefined});
-if(tmr)clearTimeout(tmr);
-// v1.0.5 Round-6 Rev62 (2026.6.27) FIX: a 404 response means "position not in
-// tablebase", NOT "server is down". (The entry is already defended — v1.2.3
-// round-41 added the pieceCountLE7 guard at the top of probeTablebase — but a
-// 404 can still occur for positions outside the tablebase's coverage, e.g.
-// positions with castling rights.) Previously, 3 consecutive 404s would
-// falsely set _tbOffline=true for 60 seconds, blocking ALL tablebase queries
-// even though the server is healthy. Now only 5xx errors and network errors
-// (caught below) count toward _tbFailCount; 4xx errors return null silently.
-if(!resp.ok){
-  if(resp.status>=500){
-    _tbFailCount++;
-    if(_tbFailCount>=3){_tbOffline=true;_tbOfflineSince=Date.now();}
-  }
-  return null;
-}
-// v1.0.7 PHASE 19 (bug fix): Parse JSON in its own try/catch so a malformed
-// response body (server reachable but bad payload) does NOT count toward
-// _tbFailCount and trip _tbOffline. Previously, a JSON parse error threw into
-// the generic catch below, incrementing the fail count — contradicting the
-// Rev62 fix that excluded 4xx errors for the same reason (server is reachable).
-let data;
 try{
-  data=await resp.json();
-}catch(e){
-  console.warn('probeTablebase: bad JSON response',e);
-  return null;
+const _tbUrl=`https://tablebase.lichess.ovh/standard?fen=${encodeURIComponent(fen)}`;
+// One chain for both paths: headers → status gates → body parse. Returns
+// undefined for the handled non-network outcomes (4xx/5xx gates applied,
+// malformed payload) and the parsed payload otherwise; a deadline abort
+// during fetch OR body read throws into the outer catch.
+const _fetchProbe=async()=>{
+  const r=await fetch(_tbUrl,ctrl?{signal:ctrl.signal}:undefined);
+  // v1.0.5 Round-6 Rev62 (2026.6.27) FIX: a 404 response means "position not in
+  // tablebase", NOT "server is down". (The entry is already defended — v1.2.3
+  //   round-41 added the pieceCountLE7 guard at the top of probeTablebase — but a
+  //   404 can still occur for positions outside the tablebase's coverage, e.g.
+  //   positions with castling rights.) Previously, 3 consecutive 404s would
+  //   falsely set _tbOffline=true for 60 seconds, blocking ALL tablebase queries
+  //   even though the server is healthy. Now only 5xx errors and network errors
+  //   (caught below) count toward _tbFailCount; 4xx errors return null silently.
+  if(!r.ok){
+    if(r.status>=500){
+      _tbFailCount++;
+      if(_tbFailCount>=3){_tbOffline=true;_tbOfflineSince=Date.now();}
+    }
+    return undefined;
+  }
+  // v1.0.7 PHASE 19 (bug fix): Parse JSON in its own try/catch so a malformed
+  //   response body (server reachable but bad payload) does NOT count toward
+  //   _tbFailCount and trip _tbOffline. Previously, a JSON parse error threw into
+  //   the generic catch below, incrementing the fail count — contradicting the
+  //   Rev62 fix that excluded 4xx errors for the same reason (server is reachable).
+  try{
+    return await r.json();
+  }catch(e){
+    // round-68 (T4): a deadline abort during the body read is a NETWORK
+    //   failure — rethrow to the existing catch (fail-count semantics);
+    //   only genuine malformed payloads take the PHASE 19 no-count path.
+    if(ctrl&&e&&e.name==='AbortError')throw e;
+    console.warn('probeTablebase: bad JSON response',e);
+    return undefined;
+  }
+};
+let data;
+if(ctrl){
+  data=await _fetchProbe();
+}else{
+  data=await Promise.race([
+    _fetchProbe(),
+    new Promise((_,rej)=>setTimeout(()=>rej(new Error('tablebase probe: 5s wall-clock timeout (no AbortController)')),5000))
+  ]);
 }
+// undefined = handled outcome (4xx/5xx gates or malformed payload) — the
+// caller gets null. (A literal JSON `null` body — never produced by the
+// tablebase API — is NOT undefined, so it keeps the historical cache+reset
+// semantics instead of being mistaken for a handled failure.)
+if(data===undefined)return null;
 // LRU cache: evict oldest when full
 if(_tbCache.size>=_TB_CACHE_MAX){const firstKey=_tbCache.keys().next().value;_tbCache.delete(firstKey);}
 _tbCache.set(fen,data);
 _tbFailCount=0;
 return data;
 }catch(e){_tbFailCount++;if(_tbFailCount>=3){_tbOffline=true;_tbOfflineSince=Date.now();}return null}
+finally{if(tmr)clearTimeout(tmr);}
 }
 
 // Get best move from tablebase
@@ -14409,17 +14544,32 @@ return data.moves[0];
 // Manual trigger: user clicks to query tablebase for current position
 function _triggerTbQuery(){
 if(_tbLoading||isTbOffline())return;
+// v1.2.3 round-68 (T5, CodeRabbit r67 Minor, outside-diff :2174): manual-path
+//   stale-callback identity check, mirroring the AI path's _tbSavedBoard
+//   precedent (game-logic.js). The probe is async — if the position changed
+//   while it was in flight, the payload describes the OLD position and must
+//   never be autoSelected onto the changed board. The loading flag is
+//   lowered only when this callback still owns it: a newer query (the AI
+//   path can start while a manual query is in flight — it re-arms
+//   _tbLoading without a re-entry check) has re-pointed _tbLoadingBoard at
+//   the new board, and that flag is not ours to lower.
+const _boardAtQuery=gameState.board;
+_tbLoadingBoard=_boardAtQuery;
 _tbLoading=true;render();
 probeTablebase(gameState).then(function(d){
-_tbLoading=false;
+if(_tbLoadingBoard===_boardAtQuery){_tbLoading=false;_tbLoadingBoard=null;}
 // Auto-select piece on tablebase recommendation
+if(gameState.board===_boardAtQuery){
 if(d){const bm=bestMoveFromTablebase(d);if(bm){autoSelectTablebaseMove(bm.uci);}}
+}
 render();
 // v1.2.3 round-13 (P3): log the error so a bug in bestMoveFromTablebase or
 //   autoSelectTablebaseMove is not silently swallowed. probeTablebase itself
 //   has its own internal try/catch that logs and returns null; this catch
 //   covers errors from the downstream callbacks in the promise chain.
-}).catch(function(e){console.warn('probeTablebase callback failed:',e);_tbLoading=false;render();});
+}).catch(function(e){console.warn('probeTablebase callback failed:',e);
+if(_tbLoadingBoard===_boardAtQuery){_tbLoading=false;_tbLoadingBoard=null;}
+render();});
 }
 
 // Auto-select the piece for a tablebase-recommended move
@@ -19379,7 +19529,7 @@ return h;
 function _renderAboutDialog(h){
 let _gplSvgSrc='';
 try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){const b64=AndroidBridge.loadAssetAsBase64('AGPLv3_Logo.svg');if(b64)_gplSvgSrc='data:image/svg+xml;base64,'+b64;}}catch(e){console.warn('[About] AGPL SVG load failed:',e.message);_gplSvgSrc='';}
-h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('about_title')}"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T("app_name")} v1.2.3</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('about_title')}"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T("app_name")} v1.2.3</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 19 (arm64-v8a universal)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;
 return h;
 }
 

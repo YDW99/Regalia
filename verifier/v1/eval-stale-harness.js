@@ -314,6 +314,76 @@ function flushTimers() {
   ok(run(`_reviewAnalyzeStep`) === -1,
      'R61-4: termination path ran (step reset to -1)');
 
+  // ---------- Scenario S58 (round-62): round-58b manual single-step eval
+  //            behaviors — same-position in-flight dedup (Bug C), completed-
+  //            work ring rescue (Bug E), progress-aware bounded watchdog
+  //            retry (Bug D). These shipped in round-58b but never had
+  //            dedicated behavioral sentinels (guide §5.1 item 1; the
+  //            round-60 "done" tick was retracted in round-61).
+  console.log('[S58] round-58b manual eval: in-flight dedup / ring rescue / bounded retry');
+  run(`
+    _reviewEvalCache.clear(); _evalRecentDispatches.length=0;
+    _evalLastDispatchedFen=null; _sfEval=null; _sfEvalReady=false;
+    _evalLoading=false; _manualEvalAutoRetries=0;
+    reviewMode=true; reviewStep=0; _reviewAnalyzeAllActive=false;
+  `);
+  const fenS0 = run(`_sanitizeFenForEngine(generateFEN(reviewStates[0].state))`);
+
+  // --- Bug C: repeat tap on the SAME in-flight position must not re-dispatch
+  //     (a second engineEvalDeep would stopAndWait the HEALTHY search: its
+  //     bestmove is swallowed by the Java stop latch and the restarted
+  //     search begins at depth 1 — the self-reinforcing "hang").
+  run(`requestEngineEval();`);
+  await new Promise(r => setTimeout(r, 400)); // 300ms debounce → dispatch
+  const deepBefore = androidCalls.engineEvalDeep.length;
+  ok(deepBefore >= 1 && run(`_evalLoading`) === true && run(`_evalSafetyTimerId`) !== null,
+     'S58-C0: step-0 manual eval dispatched, loading, watchdog armed');
+  run(`requestEngineEval();`); // same position, search still in flight
+  await new Promise(r => setTimeout(r, 400)); // > 300ms debounce: a regression
+  //   here (dedup gate removed) would have re-dispatched by now and failed C1
+  ok(androidCalls.engineEvalDeep.length === deepBefore,
+     'S58-C1: repeat tap on SAME in-flight position does NOT re-dispatch (58b dedup)');
+  ok(run(`_sfEvalReady`) === false,
+     'S58-C2: dedup path re-asserts the analyzing state, not a stale cached value');
+
+  // --- Bug E: gen bumped by a NON-dispatching path (cache-hit / terminal /
+  //     debounce nav) — the late callback for the last-dispatched fen must be
+  //     rescued into its own step (found via the dispatch ring), settle
+  //     loading + watchdog, and backfill the bar when that step is viewed.
+  run(`_evalStaleGen++; _evalRequestGen=_evalStaleGen;`);
+  run(`onEngineEval(77,null,22,480,300,220,28,${JSON.stringify(fenS0)});`);
+  const resc = run(`_reviewEvalCache.get(0)`);
+  ok(resc && resc.eval === 77,
+     'S58-E1: late callback rescued into its own step, not dropped (58b Bug E)');
+  ok(run(`_evalLoading`) === false && run(`_evalSafetyTimerId`) === null,
+     'S58-E2: rescue settles _evalLoading AND the watchdog (58b Bug F pairing)');
+  ok(run(`_sfEvalReady`) === true && run(`_sfEval`) === 77,
+     'S58-E3: viewed-step result backfilled immediately after rescue');
+
+  // --- Bug D: the manual watchdog measures TRUE engine silence — a progress
+  //     tick re-arms it (healthy-but-slow searches are never cut), and true
+  //     silence auto-re-dispatches the SAME fen exactly ONCE (bounded).
+  run(`reviewStep=1; requestEngineEval();`);
+  await new Promise(r => setTimeout(r, 400)); // dispatch for step 1
+  const armId1 = run(`_evalSafetyTimerId`);
+  run(`onEngineProgress(11, 4000, 900, 25, null, 300, 400, 300, 13);`);
+  const armId2 = run(`_evalSafetyTimerId`);
+  ok(armId1 !== null && armId2 !== null && armId2 !== armId1,
+     'S58-D0: progress tick re-arms the manual watchdog (true-silence semantics)');
+  // Accelerate the sandbox clock so the 45s watchdog fires in milliseconds.
+  const deepAtSilence = androidCalls.engineEvalDeep.length;
+  const hostSetTimeout = sandbox.setTimeout;
+  sandbox.setTimeout = (fn, ms, ...a) => hostSetTimeout(fn, Math.min(Number(ms) || 0, 15), ...a);
+  run(`onEngineProgress(12, 4500, 900, 27, null, 300, 400, 300, 13);`); // re-arm accelerated
+  await new Promise(r => setTimeout(r, 150)); // silence fires → retry once → fires again → settles
+  sandbox.setTimeout = hostSetTimeout;
+  ok(androidCalls.engineEvalDeep.length === deepAtSilence + 1,
+     'S58-D1: true engine silence auto-retried the SAME fen exactly ONCE');
+  ok(run(`_evalLoading`) === false,
+     'S58-D2: second silence settles loading — no infinite retry loop');
+  ok(run(`_manualEvalAutoRetries`) === 1,
+     'S58-D3: retry budget consumed; the retry path does not reset it');
+
   // round-60 (V1-30): no TDZ ReferenceError may have been swallowed during
   //   bundle evaluation or bootstrap. F-1's warn ("Cannot access
   //   '_KING_PIECE_STYLE' before initialization") lived here as untriaged

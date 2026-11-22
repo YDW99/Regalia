@@ -1,3 +1,478 @@
+# Regalia v1.2.3 — round-68 工作日志（2026-11-22 UTC+8）
+
+## 任务来源
+
+用户上传《Regalia-round68任务规划》（基于远端 upload head `414a523b` = round-67 交付树
+＋release-helper.yml web 编辑；三验证器起始实跑 44/44、27/27、47/49——V3-46/47 为规划
+明载的**预期可见缺口**；Sonar 门 OK、重复率 0.0%；PR 未决 Issue 16 条全部属实），指令：
+完成 round-68、交付老三样，过程中保持小心谨慎、避免引入新 bug 或冗余，需用户手动操作
+的部分留下指导。最高优先：**N8 基准完整性**（假绿比没有基准更危险）。
+
+## 沙箱恢复
+
+work/ 为 round-61 回滚态（不可信）→ codeload 快照恢复 `414a523b`（206 条目）＋ 从
+round-67 APK 提取引擎（SHA `ffd8fc20…1daf8`/100,695,968 B 双验通过）→ 首跑三验证器
+**44/44、27/27、47/49（V3-46/47 RED＝T0 预期缺口，非回归）**。构建环境从零重建（腾讯
+镜像全套：platform-35 r02/build-tools 35.0.0/platform-tools r37.0.3/cmake 3.31.6/
+NDK r27c 663,987,688 B/Gradle 8.11.1 + 清华 Temurin 17.0.21；全部存在性验证通过，
+脚本 scripts/r68-env-setup.sh 一段前台完成）。
+
+## 实施纪要（批次①→④，T0-T14 全部落地；细节/数据入 round68-audit.md）
+
+**批次① N8 基准完整性（守护者的守护者）**：T1——round-67 的 case-1 输入是转义事故
+`' \n'`（求值为空格+反斜杠+字母 n，**无真实换行**，用例空转假绿）；修复为 `' 
+'` 且
+**每个用例声明输入类不变量**（真实换行/含 `[`/无 `]`），执行前元断言校验——基准输入
+自身也要被守护。T2——基准改**双层结构**：`--case <name>` 子进程单用例模式（提取逻辑
+不变，只读不写树），父进程串行 spawn＋硬超时（BOUND_MS×3=3s）SIGKILL＋报用例名＋
+门失败——解析器回归不再能把门拖到分钟级或永远挂起；判定＝退出码＋成功标记双证。
+T3——负例自证入负例门：**N8a**（round-66 lookbehind 旧分割器注入**两孪生同体**——孪生
+检查保持可满足，失败必须来自时序界本身：被 3s kill）、**N8b**（扫描器 per-candidate
+`]` 重扫回注：三用例 1.2-2.1s 超界 RED）、**N8c**（`' 
+'`→`' \n'` 事故重注：元断言
+RED）、**N8d**（死循环用例：3s 内 kill＋点名＋exit≠0）。负例脚本扩为**十三门 exit 0**
+（备份集扩至四目标字节复核；bench 调用 9>&- 不继承互斥锁；终检只豁免文档化的
+V3-46/47 过渡 RED，其余任何失败仍拦——哨兵保持红、缺口可见化，不为消红弱化任何东西）。
+
+**批次② tablebase 网络健壮性（码兔 Major/Minor）**：T4——5s 期限现覆盖**响应体读取**：
+旧形 fetch 一返回头就 clearTimeout，"发头后停体"可无限挂起（AbortController 的 signal
+本可覆盖 body 流却被提前缴械）；新形为 `try/catch/finally` 三段式（tmr 声明在 try 外、
+finally 覆盖全程），body 读取中的 AbortError **重抛进既有 catch**（fail-count 语义正确，
+不误入 PHASE 19 bad-JSON 不计数路径）；legacy 无控制器路径的 5s race 同样包裹整条
+fetch→status→body 链。**行为级 fixture 六案全过**（两停体路径 5.005/5.006s 中止＋
+failCount=1；正常/404/5xx 三击/bad-JSON 语义回归不变）。T5——手动查询回调身份门：
+发起时记录 board 引用（AI 路径 `_tbSavedBoard` 先例），过期回调不再 autoSelect 旧推荐；
+**`_tbLoading` 两路共享（手动+AI）⇒ 显式归属令牌 `_tbLoadingBoard`**（引用相等，非 gen
+计数器，军规 2）：每路武装时认领、清偿时校验只降自己的旗（58b Bug F 模式），AI 路径
+武装点补 1 行认领＋两回调臂条件化清偿。**T6 哨兵**：V3-48（期限覆盖：tmr 在 try 外、
+clearTimeout 位于 body 解析后、AbortError 重抛、handled-outcome 哨兵、legacy 全链 race、
+旧早清形禁令——位置锚定）＋ V3-49（身份门：令牌声明、捕获+认领、两臂只清己有、
+autoSelect 板等价门、AI 认领与两臂清偿、旧无门形禁令）；元负例 6 场景全 RED（早清/
+重抛删除/race 降范围/归属删除/autoSelect 门删除/AI 认领删除）。
+
+**批次③ Sonar 15 修＋1 豁免**：T7/T8——孪生分割器 Sonar 清理（S3504 var→let/const ×6、
+S3776 认知复杂度 16→抽 `_blankRunStart` 局部助手、S7766 `Math.max(_run,1)`；扫描器
+S7766 `Math.max(_ws,_j)`）；**两孪生字节一致**（V3-45 同批改钉：Math.max 核心行、
+helper 钉法、扫描器行）；`[x.length-1]` 形**保留不动**（S7755 平台豁免——`.at()` 需
+Chrome 92+ > WebView 底线 84）；**差分 fuzz：分割 112,411 例＋扫描 50,005 例全部零差异**
+（确定性 PRNG 语料可复现）。T9——S7755 平台豁免＋"平台 API 底线对照"清单入方法论
+（minSdk 23／WebView 84／Java 8 无 desugaring；S9412 与 S7755 两例成表）。T10——
+StockfishNative：S3776（复杂度 28）抽 `rejectExtractedEngine(tmp,label,reason)` 共享
+拒绝助手（三拒绝臂一实现）＋S1192（"Extracted engine (" 字面量 ×3→×1，V3-41 钉单源）
+＋S1066（优先级 2 嵌套守卫合并，同 round-67 T4 先例）＋S125（:4836-4840 调用点注释含
+代码式标点链且与助手 javadoc 重复——精简为指针；**现场核实全文件无真正的注释掉的代码
+块**，定性如实入审计）；**编译门 BUILD SUCCESSFUL**（compileReleaseJavaWithJavac，
+41 条既有风格警告）。**T11**——V3-41 补两拒绝分支体 `return null;` 邻接钉法（旧钉法只
+匹配 if 行——`return destFile;` 变异可放行坏缓存而哨兵照绿）＋rejectExtractedEngine
+三调用点/声明/字面量单源钉法；元负例 ×3 全 RED（两分支 return null→destFile、拒绝臂
+内联回退）。
+
+**批次④ 文档收口＋平台豁免**：T12——round64-audit **ERRATUM-3**（补 `-Dorg.gradle.project.*`
+与 `ORG_GRADLE_PROJECT_*` 两来源＋**权威优先级表收口**：对照 Gradle 8.11.1 官方文档
+逐项核实＋沙箱实测 E1-E11 裁决——**实测推翻文档四选项列表第 3/4 位次**（env 实际胜过
+gradle.properties 文件），且**属性文件内 org.gradle.project.* 形态实测完全无效**（E9：
+唯一来源时属性 unset）——分歧如实记录，以实验为准；勘误递归封顶原则入方法论）。
+T13——**平台侧豁免配置入仓**（治本终止每轮重报）：`config/pmd-ruleset.xml`（quickstart
+减 ControlStatementBraces；**实测发现 pmd.yml 的 errorprone/bestpractices 两个 ruleset
+引用在 PMD 7.4.0 根本无法解析**——弃用别名不存在，CI 的 PMD 一直在仅用 quickstart 跑；
+新 ruleset 与现行为**逐规则等价**（diff 仅 braces 194→0）；激活需用户 web 改 pmd.yml
+一行——保护路径 zip 送不进）＋`src/main/java/.mobsf`（android_logging/CWE-532 仓库侧
+豁免：全树 264→0 实证、其余规则不受影响、自动拾取于 workflow 首扫描路径；dotfile 经
+zip 渠道有 .gitignore 前科——README 留 web 兜底指引）。T14——方法论 round-68 入档
+（基准输入守护/勘误递归封顶/平台底线清单/上传管线三先天限制与 git 直推出口）＋§4 基线
+表更新。**T0**——合并后三步 checklist（手动删 worker-pool.js→web 建 .gitignore→远端
+复跑 49/49→51/51 复核）入交付 README＋round68-audit §T0；git 直推方案（沙箱
+commit/push 或 Contents API 逐文件；凭据安全约束：token 不入仓库/文档/交付物）文档化
+入审计；PR stale 大限 2026-12-21 重申。
+
+## 验证与交付
+
+- 三验证器：**本地 44 / 27 / 51 项中 50 PASS**（交付树携带 .gitignore，V3-47 本地绿；
+  唯 V3-46 红——worker-pool.js 删除按用户决定留待合并后手动执行，缺口可见化）。远端
+  上传后预期 50 PASS（zip 携 .gitignore；若 dotfile 再次未落地则 49——V3-47 照红并
+  按 README web 兜底）；合并后 web 删 worker-pool.js 即 51/51。
+- 负例门：**十三门全绿 exit 0**（N1-N7 变异 RED＋N8 基准＋N8a-d 自保护＋N9 互斥零触碰）；
+  元负例 6+3 场景全 RED（T5/T6/T11）；T4 行为 fixture 6/6；fuzz 16.2 万例零差异。
+- 重打包：`build-chess.py` ×2 **cmp 0 差异**，**24,358 行 / 1,498,288 B**（round-67：
+  24,288/1,493,374；增量来自 T4/T5）。
+- APK 全量重建 ×2 ＋六连验（见 round68-audit §构建）；tar 纯净复核 0 命中＋口令扫描 0。
+- 交付：老三样（source-backup.tar.gz / release.apk / 恢复指南 md+zip）＋pr-upload.zip
+  ＋SHA256SUMS＋README（含用户手动操作指导：pmd.yml 一行激活、.gitignore web 兜底、
+  合并后三步、PR 收尾）。
+
+# Regalia v1.2.3 — round-67 工作日志（2026-11-21 UTC+8）
+
+## 任务来源
+
+用户上传《Regalia-round67任务规划与注意事项》（基于远端 upload head `3a083a4a` = round-66
+交付树；CodeRabbit 16:13 评审 9 条已核实全部属实、SonarCloud PR #57 质量门 ERROR：新代码
+重复率 13.2% > 3%、4 个新 Issue 全部属实），指令：完成 round-67、交付老三样。第一目标：
+**PR #57 质量门绿**（消孪生）。
+
+## 沙箱恢复（第六次回滚实录 + 新坑：SDK 掏空）
+
+本地树/worklog 仍在 round-61 态，download/ 有 round-66 全套交付物（含 source-backup 5.67MB）。
+codeload 快照恢复 upload head `3a083a4a`（204 条目）→ 首跑三验证器 **44/27/46——V3-40b RED**，
+T0 现场证实。**新环境坑**：两处遗留 SDK 的 platforms/android-35 与 build-tools/*/ 只剩
+package.xml（回收把大文件掏空而保留目录骨架），NDK/依赖缓存全失——按 r67-sdk-repair.sh 重拉
+（platform-35/build-tools 34+35/platform-tools + NDK r27c 663,987,688 B，腾讯镜像）。
+
+## T0 交付完整性（比规划记载更深一层的根因）
+
+远端 vs 本地 round-66 备份全树 diff 出**四项**差异，逐一定性：
+1. `release-helper.yml`（V3-40b 腿 b RED 的根因）——round-66 zip **明明带了**修复版（7,317B），
+   但 `unzip-folder-optimized.yml` 工作流**按设计剥离 `.github/workflows/` 保护路径**（防工作流
+   注入）后提交——规划"没进 upload zip"的定性**不成立**，真因是**交付渠道无能力**（zip 永远
+   送不进 .github/workflows）。修法：文件在 work 树内已修 + 交付为用户 web 编辑指引（唯一可达
+   通道）。
+2. `.gitignore`——zip 里有（1,086B），bot 提交里没有（stale 上传或解包怪象，无法定案）→
+   round-67 zip 重新携带（该路径不受保护）+ 新哨兵 V3-47 使缺口可见。
+3. `worker-pool.js`——zip 覆盖式上传**结构上不可能删除文件**（cp -a 只增改），round-66 README
+   已指示用户手动删除但尚未执行 → 新哨兵 V3-46 使缺口可见 + 本轮 README 重申。
+4. `LICENSE&NOTICE.zip`——字节差但内容逐字节相同（zip 元数据），良性，无动作。
+**流程硬断言（入指南 §7）**：每轮交付后必须对远端 head 快照复跑三验证器 + bundle 字节核对 +
+改动文件清单对照——本地树全绿不构成交付完成的证明（round-66 的教训升格）。
+
+## 修复实施（批次①→④，T1-T17 全部落地）
+
+**批次① 消孪生（质量门主目标）**：T1 抽 `cachedEngineAcceptable(destFile,label)`（两处逐行相同
+的检查-删除-复用级联 → 一实现两调用）；T2 抽 `commitExtractedEngine(tmp,dest,label)`（两处
+verify-then-commit 级联 → 一实现两调用）；T3 `LOG_DELETE_FAILED` 常量（"Failed to delete: "
+×8 → ×1，**Sonar S1192 CRITICAL 清除**）；T4 优先级 3 嵌套 if 合并（**S1066 MAJOR 清除**）；
+T5 ai-bridge 可选链（**S6582 清除**）。V3-41 **同批重写**（军规 3：重构与哨兵同批）：钉助手实现
+行（早退形）、双调用点、**verify→rename 邻接**（T14/CodeRabbit #8，删验证步/换序均 RED）、
+`if (false`/`if (0)` 字面量死守卫禁令（T15，包裹负例 RED，残余如实声明）。
+
+**批次② 线性化（CodeRabbit #2/#3/#4 全属实）**：T6 多局分割器换**单遍线性扫描**
+`_pgnFirstGameSplit()`（lookbehind 形态的 (?<!\n) 只挡"前字符是换行"的起点——空格空白行内每个
+\n 仍可起点，无 `[` 后随时 Θ(n²)；两文件不共享 bundle 无法单函数共用 → **同构双实现**，字节一致
+由 V3-45 钉）；T7 header 扫描器换**单调缓存**（next-`]`（连带前置空白段起点，消每候选 trim 重扫）
++ next-`\n`，**切片前先查缓存**（拒绝候选零拷贝）；候选值起点 _j 严格递增的证明入审计）；
+T8 **差分 fuzz：分割 64,037 例、扫描头 64,032 例全部零差异**（含空格空白行/无 `[` 尾/前导空白行/
+10MB 单行/引号类）；**敌意基准（新实现）10 项全部 <300ms**（最坏 [FEN+10MB 空格] 293.7ms；旧
+形态同类输入分钟级/外推 3.5s+，对照数据入审计）；T9 V3-45 重写（同构孪生字节等 + 缓存实现行 +
+已知坏形态禁令）+ **N8 基准门**（`verifier/runs/r67-bench.js` 入库，上界 1000ms，线性成为可执行
+断言）；**S7765 随扫描器重写自然清除**。
+
+**批次③ 脚本互斥 + 文档勘误**：T10 r62-negative-tests.sh 加 **flock 工作区互斥**（首备份前取锁、
+持到进程退出——EXIT/INT/TERM 恢复全在锁内；锁文件按 ROOT 哈希入 /tmp 不入库；被占即零触碰
+fail-fast）+ **N9 并发负例**（持锁期间第二实例必须非零退出 + 锁消息 + 树零触碰）；**N9 首版实
+现有 `$` 丢失笔误**（`"_N9H2"` 漏 `$` → 零触碰检查恒假阳性），手动复现 vs 脚本内差分定位后修复；
+T11 round64-audit **ERRATUM-2**（append-only：-P/--project-prop 是项目属性，Gradle 属性
+（org.gradle.*）命令行来源只有 -D；两命名空间各自优先级；沙箱分类实测佐证）；T12 round66-audit
+:44/:46 表格管道符全量转义（未转义管道数复核=5）。
+
+**批次④ 哨兵诚实化 + 方法论升格**：T14 并入批次①；T15 方法论"活语句"表述作废（四级谱系第四级
+改名"行锚定语句形态（仍是文本级）"+ round-67 勘误注记）；T16 方法论新增 **round-67 实例化段
+（第五级封顶）**与三条硬规则（文本哨兵是 tripwire 不是证明 / 对称面修复必须单一实现——"共享助
+手＋调用点"而非"两份相同补丁" / 复杂度声明必须附敌意基准实测）+ 军规 2/5 实例化 + §4 基线表
+44/27/**49** + §5 环境坑（SDK 掏空/flock Linux-only）；T17 V3-39 flock 名实对照（三实现行 +
+"锁先于备份"次序 + N8/N9 接线，对照表入 round67-audit）。
+
+## 验证与交付
+
+- 三验证器新基线 **44 / 27 / 49**（v3 +V3-46/47；V3-39/41/43/45 重写）；负向脚本**九门**全绿
+  （N1-N7 变异 RED + N8 基准 + N9 互斥），exit 0。
+- **元负例 17 场景全 RED**（V3-41 ×7 / V3-43 ×1 / V3-45 ×3 / V3-46 ×1 / V3-47 ×1 / V3-39 ×3
+  / N8 fail-closed ×1——空 harness 假绿缺口当场发现并闭合：N8 现要求退出码**与**成功标记双证）。
+- build-chess.py 确定性重打包 ×2 cmp 0 差异；新 bundle **24,288 行 / 1,493,374 B**；编译门
+  compileReleaseJavaWithJavac BUILD SUCCESSFUL；APK 六连验（见 round67-audit §8）。
+- tar 纯净复核 0 命中（无引擎/密钥/口令/构建产物）；交付老三样 + pr-upload.zip（**含 .gitignore**，
+  不含 .github/workflows——渠道无能力，如实记录）+ 用户 web 手动步骤清单（release-helper 一行
+  编辑 + worker-pool.js 删除——完成前 V3-40b(b)/V3-46 在远端将保持 RED，这是特性不是缺陷）。
+
+## 待办（round-68 候选）
+
+O-1 剩余消重（engineGoInternal/engineGoTimed ~90 行最大组，Sonar 若仍 >3% 则为下一目标）；
+Sonar/PMD/mobsfscan 平台侧 5 类误报 Accept/FP（用户操作）；PR #57 合并收尾（stale 大限
+2026-12-21）。
+
+
+
+# Regalia v1.2.3 — round-66 工作日志（2026-11-21 UTC+8）
+
+## 任务来源
+
+用户上传《Regalia-upload分支全量审查报告（v2·合并外部评审分诊）》（审查 upload 分支 head
+`e33f0add` = round-65 完成态；23 项属实发现：bug 8 / 健壮性 8 / 冗余清理 7 + 机会项 3），
+指令：完成 round-66、交付老三样。实施批次按报告第八章 ①→④（⑤ O-1 判定不做，见下）。
+
+## 沙箱恢复（第四次回滚实录）
+
+本地树再次回滚至 round-61 态。按指南 §2 流程：git ls-remote 核实 upload head = `e33f0add`
+→ git clone 443 超时 → codeload 快照（5.65MB）恢复 → 首跑三验证器 **44/27/41 全绿** 确认树正确
+→ 引擎自 round-65 APK 提取（Deflate 存储，SHA/尺寸三方一致）→ 本地 git 基线（发现并落库
+R-9：远端两分支从未有过 .gitignore）。开工门禁全过才开始改动。
+
+## 修复实施（报告 23 项 + 本轮新发现 4 项）
+
+**批次①（引擎正确性）**：F-1 缓存门升级为精确尺寸等值（新常量 `EXPECTED_ENGINE_SIZE_BYTES
+= 100_695_968L`，两处 `>MIN` → `==EXPECTED`）；F-7 提取原子提交（写 `.tmp` → 验证 →
+`renameTo` 原子替换，失败路径永不触碰旧缓存）；O-2 常量单源化（进度分母/NOTICE/BUILDING
+同源）；O-3 优先级 1-3 全路径尺寸门；F-19 BUILDING 活构建指南整章 SF19 化（URL/命令/双检）
++ R-7 幻影 CI 门句如实改写。**新发现 R-8**：build.gradle/PRIVACY/BUILDING 三处
+useLegacyPackaging 语义写反（实测 APK 引擎为压缩存储），全部勘误。
+
+**批次②（引擎身份活文档）**：F-2 release-helper SF19；F-3 手册活区 9 处身份替换 + 2 处出处
+加注（报告列 8 处，全量扫描多出 en:544）；F-4 PRIVACY:922 SF19 + 语义勘误。
+
+**批次③（注释/死代码/勘误真实化）**：F-5 game-logic 模块头按真实打包顺序重写 + TDZ 警示；
+F-6/R-4 worker-pool.js 整文件删除（732 行，兑现 round-56 台账早已声称的 DELETED）；
+F-21 round64-audit Gradle 优先级 append-only 勘误（正确优先级：命令行 > **用户级** > 项目根）；
+R-1（114MB→~100MB 注释）；R-2（死引用从句）；R-3（stats 镜像源注释改指 tablebase.js）；
+R-5（catch(Throwable) 实测 191，历史记载不动）；R-6（v3 恒等替换删除，CodeQL 属实项）。
+
+**批次④（健壮性边缘 + 元哨兵第三轮）**：F-8 readCappedText 行截断先于字符判定（throw 条件
+`sb+n`→`sb+appendLen`）；F-9 stats.html headerRe 消除回溯——**报告推荐的行锚定形态实测仍
+>90s 不达标，改用确定性扫描器**（343,010 例差分 fuzz 零差异；1M 空格畸形输入 24ms vs 旧
+>120,000ms）；**新发现 F-23**：tablebase.js:155 主页分卷正则仍是 round-49 漏修的第四处副本
+（O(k²) ANR 面），换用 hardened 形态；F-10 SAF null 路径清 pending（与 catch 路径对称）；
+F-11 老 WebView 5s 墙钟兜底 + clearTimeout 入 finally；F-12 批量推进重试 catch 补 warn；
+F-20/F-22 V3-39 第三轮加固（trap 钉命令形状；备份/恢复/每项恢复三处 cp+cmp 全钉）。
+
+**判定不做（如实记录）**：O-1 engineGo 骨架消重——引擎状态机核心路径回归面大，优先级铁律
+下让位四批修复，待办保留（报告批次⑤"视回归面"口径一致）。
+
+## 哨兵与验证体系（新基线 44/27/47）
+
+- v3 新增六哨兵：**V3-40b**（引擎身份活文档全域清扫：BUILDING 活指南摘要+尺寸、
+  release-helper、PRIVACY、手册活区、README 活区——round-65 五处漏网全在旧 V3-40 覆盖面外，
+  哨兵覆盖面自身的对称性审查落到谓词里）；**V3-41**（缓存门/原子提交/常量单源/优先级门）；
+  **V3-42**（模块头真实顺序）；**V3-43**（cap 判定顺序）；**V3-44**（SAF pending 清理）；
+  **V3-45**（双解析器无回溯）。V3-40 (b) 腿改钉常量==NOTICE；V3-39 升级（见上）；R-6 落地。
+- 负例脚本泛化为多目标（mktemp -d 独占目录，ai-bridge.js + stats.html 双目标字节校验备份），
+  新增 **N7**（F-9 扫描器击杀 → V3-45 RED）——报告"负向脚本扩展钉 F-9"落地。过程实录：
+  stats 路径变量命名 `ST` 与 neg() 内部状态变量 `ST=RED` 撞名（N6 残值 "RED" 被当文件名，
+  perl "Can't open RED"），首跑暴露，改名 `STF` 修复——shell 全局变量命名坑入档。
+- **元负例 20+1 场景全 RED**（/tmp fixture 树）：V3-39 六场景（echo restore×2 / 删备份实现 /
+  删恢复 cmp / 空处理器 / 注释满足）、V3-40 两场景、V3-40b 四场景、V3-41 三场景 + rename
+  双变体、V3-42/43/44 各一、V3-45 两场景。**元负例自抓第四级绕过**：`if (false &&
+  !tmpFile.renameTo(...))` 死守卫使子串计数钉法照样绿——V3-41 当场升级为行锚定活语句形态。
+  方法论 §3.10 升格：字面存在 → 实现行 → 行为形状 → **活语句**，四级谱系每级配绕过负例。
+
+## 验证记录
+
+- node --check 全部 10 模块通过（worker-pool 删除后恰 10 个）。
+- 三验证器 **44/27/47 全绿**（v3 +6）；负例脚本 7 RED + 3 绿 + exit 0；元负例 ALL RED。
+- build-chess.py 连续两次重建逐字节一致（24,249 行 / 1,491,174 B；round-65 为 24,208 行 /
+  1,488,720 B，增量全部来自本轮模块编辑）。
+- 手册三检：严格 UTF-8 / 附录锚点 1/1 / div 365/365 双语一致。
+- 台账双向哨兵 H2a/H2f 即时跑 PASS（新条目后不等收尾）。
+- F-9 差分 fuzz 343,010 例零差异 + 畸形输入基准（数据入 round66-audit.md §3）。
+
+## 构建与交付
+
+构建环境从零重建（腾讯镜像 SDK 全家 + Gradle 8.11.1；Azul 8 段并行 Zulu JDK 17.0.13；Maven
+官方源慢而可达 → init-script 摘除由阿里镜像接管；引擎从 round-65 APK 提取，无下载）。
+`assembleRelease` **BUILD SUCCESSFUL in 1m 21s（51 tasks）**。
+
+六连验实测全过：v1/v2/v3 签名 true；证书 SHA-256 `45bc6d36…a8d8bc`；versionCode 10203 /
+versionName 1.2.3 锁定；APK 内 chess.html 与源码逐字节一致（1,491,174 B）；引擎
+`ffd8fc20…cf1daf8` / 100,695,968 B 三方一致；构建后交付门三验证器 **44/27/47** + 负例脚本
+七变异全 RED + exit 0。APK **81,542,436 字节**（round-65：81,548,307）。
+
+F-21 Gradle 优先级三方法实证（构建属性合并 / 真实 daemon jcmd Xmx / 无效值矩阵）：**命令行 >
+GRADLE_USER_HOME > 项目根 > GRADLE_HOME**，round-62 正确、round-64 写反、勘误成立；验证过程
+中自己的无效值矩阵首跑因裸值文件得出反向结论、被 jcmd 交叉检验纠出（元教训入档，详见
+round66-audit.md §4）。
+
+交付老三样（源码备份 tar.gz / APK / 恢复指南 md+zip）+ 辅助（pr-upload.zip 变更文件集 /
+PR #57 标题描述文案 / SHA256SUMS / 交付 README），全部 ASCII 安全文件名。
+
+# Regalia v1.2.3 — round-65 工作日志（2026-11-21 UTC+8）
+
+## 任务来源
+
+用户指令：Stockfish 19 dotprod 已发布，将引擎升级至此版本，并将《恢复指南》BUILDING.md 等文件中的引擎相关信息全部升级为 Stockfish 19，SHA-256 校验同步更新。基线源 = 本地工作树（round-64 完成态，沙箱未回收；GitHub upload 分支 head 仍为 `94efed9e`——round-64 变更尚未上传，本轮 upload 包将涵盖两轮）。
+
+**发布形态核实（重要）**：sf_19 官方 release **不再提供** `stockfish-android-armv8-dotprod.tar` 专项包——自 sf_17 起 Android arm64 资产改为 **universal 构建**（`stockfish-android-arm64-universal.tar.gz`，80,233,187 字节，运行时检测 dotprod 等 CPU 特性）。用户要的"dotprod 能力"由 universal 包满足，且带来真实兼容性收益：不支持 ARMv8.6-A DOTPROD 的旧设备（A53/A55/A72/A75）从"启动即崩溃"变为自动退回基础路径。文档措辞全部按此事实表述。
+
+## 引擎身份（新）
+
+- 官方 sf_19 `stockfish-android-arm64-universal.tar.gz`（gh-proxy 8 段并行下载，分段前先 HEAD 取 tar 真实大小——tar ≠ ELF 大小）
+- ELF：`stockfish-android-arm64-universal`，**100,695,968 字节**，SHA-256 `ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8`，file 验证 "ELF 64-bit LSB executable, ARM aarch64, statically linked, for Android 29, built by NDK r27c (12479018)"（加载目标与 sf_18 相同，运行时兼容）
+- 旧值（历史）：sf_18 armv8-dotprod，114,115,752 字节，`8f7116d3…23b61b5`
+
+## 实施
+
+1. **Java 活代码两处**：`StockfishNative.java` 的 `EXPECTED_ENGINE_SHA256` 更新为新摘要（指纹滞留旧值 ⇒ App 运行时防篡改门永远删除并重抽新引擎——最关键的同步点）；引擎提取进度分母 `114115752L → 100695968L`（12%→25% 进度刻度必须随捆绑引擎大小，Rev61 截断修复的乘法优先次序保留）。
+2. **JS 六处（用户可见引擎身份）**：ai-bridge.js 通知文本 `'Stockfish 19 · '`、评估徽标键名 `sf18→sf19` + 显示 `SF19`（`_buildEvalHTML` + 调用点）、引擎配置两处回退名 `'Stockfish 19'`；ui.js 关于页 "Stockfish 19 (arm64-v8a universal)"；game-logic.js 计时赛注释。历史出处注释（"Per SF18 eval best-practices doc"）按出处引用原则保留。chess.html 确定性重打包：**24,208 行 / 1,488,720 字节**（round-64：1,488,718）。
+3. **防回潮哨兵 V3-40（新）**：引擎身份散布多文件（Java 指纹 / NOTICE / BUILDING 顶部 / 进度分母），升级正是"改一处漏一处"高危场景——钉死跨文件一致性：Java 摘要 == NOTICE 摘要 == BUILDING.md 顶部摘要；进度分母 == NOTICE 声明字节数。v3 基线 40 → **41**，三件套 **44/27/41**。
+4. **活文档就地更新**：README.md 顶部主体（简介/特性/构建步骤含 sf_19 下载 URL/目录树注记/许可表/第三方组件；顺带移除目录树中不存在的 About_v18.x.x_.md 失真条目）、NOTICE（引擎声明段）、PRIVACY.md（完整性校验节）、LICENSES/README.md、UBIQUITOUS_LANGUAGE.md、`.github/workflows/release-helper.yml` release 说明模板。
+5. **BUILDING.md**：round-65 build notes 置顶（新引擎 URL/身份/V3-40/代码同步清单 + 指明下方旧轮次中 sf_18 指引为历史）；历史轮次段 append-only 保留。
+6. **台账五本置顶**：lib/arm64-v8a（含活目录描述段更新）、java/（StockfishNative 两处）、src/main/（jniLibs 注记）、assets/（chess.html 重建）、chess.src/（三模块明细）。**H2a 当场抓获本条目一处同向误标**（ai-bridge.js 被我写成 AGPL，实为 GPL）——双向哨兵第三次现场立功（round-61 H2b、round-62 之后又一次），立即更正后 41/41 全绿。
+7. **手册双语**：活章节九处替换（封面/特性/许可表/组件表/免责/时间管理章标题与正文/页脚，功能章与历史段同文处以 h3+正文组合锚精确定位）；附录 A round-65 段置顶，导语"第六十五轮至第十八轮"，三检通过（div 365/365 双语）。
+
+## RED-verified（军规 §3.10：新哨兵当轮验证）
+
+- 变异 1（NOTICE 摘要翻一位十六进制）→ V3-40 **FAIL**（40 passed 1 failed）
+- 变异 2（进度分母回退旧值 114115752L）→ V3-40 **FAIL**
+- 干净对照 → 41/41 全绿
+- 全部在 /tmp fixture 树注入（磁盘 98% 满的教训：fixture 必须排除 build/.cxx/jniLibs 再复制）
+
+## 验证结论
+
+- node --check：ai-bridge.js / game-logic.js / ui.js / v3 全过；三件套 **44/27/41 全绿**（V3-40 加入）。
+- chess.html：24,208 行 / 1,488,720 字节，确定性重建。
+- 版本号 10203/"1.2.3" 不变；无新权限/网络出口/数据收集（UCI 集成零改动）。
+- APK：新引擎全量重建 + 六连验（结果见 round65-audit.md）。
+- 环境事件：构建前磁盘 98% 满（仅剩 226MB）——清理 round-64 构建产物（416MB）、已安装组件的安装包（~1GB）、旧 SF18 引擎解包后恢复 2.0GB 可用。
+
+---
+
+# Regalia v1.2.3 — round-64 工作日志（2026-11-21 UTC+8）
+
+## 任务来源
+
+消化 PR #57（upload → main，head `94efed9e` = round-63 树）CodeRabbit 第二轮评审 3 条意见（邮件 2026-11-21 12:58）+ 用户自查发现的 1 处活体绕过（CodeRabbit 未抓到）。四条全部指向 round-63 对 `verifier/runs/r62-negative-tests.sh` 的加固本身及其 v3 哨兵 V3-39，逐条到源码现场核实**全部属实，无误报**。基线源 = GitHub upload 分支 head `94efed9e`。
+
+**环境事件**：本轮开工时沙箱文件系统已回滚至 round-61 态（round-62/63 本地文件全部丢失）——GitHub upload 分支再次证明是唯一权威恢复源，重新克隆后三件套 44/27/40 复核全绿，零差异。此教训入指南避坑清单。
+
+## 现场核实（逐条）
+
+| # | 级别 | 意见 | 现场核实 |
+|---|---|---|---|
+| 1 | Major | 初始备份 cp 未检查 | `BAK=$(mktemp) \|\| exit 1` 后 `cp "$AB" "$BAK"` 裸跑——tmpfs 满或源不可读时备份为空/残缺，脚本照常变异；随后逐项恢复与 EXIT trap 都会用坏备份覆盖 ai-bridge.js，**运行前内容（含未提交修改）永久丢失** |
+| 2 | Major | restore() 无条件删备份 + EXIT 不传播失败 | 第 33 行 cp 失败后第 34 行 `rm -f` 照删（无 set -e）→ 唯一备份销毁、目标停留变异态，不可恢复；`2>/dev/null` 吞掉诊断；EXIT trap `restore` 失败不改退出码 → 恢复失败仍 exit 0；信号路径先 restore（删 BAK）再 exit，EXIT 二次调用时 BAK 已不存在——"cp 失败即非零"的朴素修法会把正常幂等清理误报为失败，幂等性要求是真实的 |
+| 3 | Minor | V3-39 trap 正则可被空处理器满足 | `/trap\s+'[^']*'\s+EXIT/` 对 `trap '' EXIT` 照样匹配（`[^']*` 允许零字符）——三个 handler 全删空，V3-39 仍绿 |
+| 4 | 活体（用户发现） | V3-39 includes() 可被注释满足 | `s.includes('mktemp')` 命中脚本头注释 "exclusive mktemp backup"（第 9 行）——删掉 `BAK=$(mktemp)` 实现行只留注释，V3-39 照样绿，**现成绕过路径而非假设**；§6.2 #17（哨兵被注释引文抢先命中）第三次重演，这次在元哨兵身上；BASH_SOURCE/pipefail/FAILED 各子句同构脆弱（当前注释无完整字面量，但离被绕过只差一行注释） |
+
+**定性（如实定级）**：第 1/2 条是**数据丢失路径**，不是一般风格问题——为"变异可恢复"而建的备份/恢复机制，自身成了销毁它所保护文件的最可靠向量（方法论 §1.2"防御机制自身的副作用"的 shell 版实例，入档）。第 3/4 条与 round-63 呈**同构递归**：脚本 fail-open → 修 → 加元哨兵 → 元哨兵被空处理器/注释绕过 → 行锚定 + handler 内容检查 + 当轮 RED-verified。三轮教训升格为硬约束写入指南 §7：任何新增哨兵（含守护脚本的元哨兵）当轮必须 RED-verified，负向用例必须覆盖"声明存在但实现为空/被注释替代"（军规 4 对称性审查的完整闭环）。
+
+## 实施（一个 fixup 变更面：守护脚本 + v3 哨兵；不触碰哨兵本体与 v1/v2；基线 44/27/40 不变）
+
+1. **[CR#5] 备份字节复核、变异前中止**：`if ! cp "$AB" "$BAK" || ! cmp -s "$AB" "$BAK"; then rm -f "$BAK"; echo "backup failed, aborting before any mutation" >&2; exit 1; fi`——cmp 逐字节复核符合项目字节纪律；中止发生在 trap 武装之前，工作区未被触碰。
+2. **[CR#6] restore 幂等 + 成功才删 + 失败传播**：BAK 不存在 → return 0（信号→EXIT 双调用不误报）；`cp && cmp -s` 通过才 `rm -f`；失败保留备份、stderr 打印 `RESTORE FAILED — backup kept at: $BAK`、return 1；三 trap 改为 `trap 'restore || exit 1' EXIT`（INT/TERM 追加 `exit 130/143`）——恢复失败不再可能 exit 0。neg() 内逐项恢复同加 `cp + cmp -s` 检查：失败即打印 + FAILED++ + 中止变异序列，交给 EXIT trap 兜底重试。
+3. **V3-39 从"字面量存在性"升级为"实现行存在性"**：全部子句行锚定——`^ROOT=.*BASH_SOURCE/m`、`^BAK=\$\(mktemp\)/m`、`^set -o pipefail/m`、`^[^#\n]*FAILED=\$\(\(FAILED\+1\)\)/m`、`^[^#\n]*\[ "\$FAILED" -gt 0 \]/m`（`[^#\n]*` 前缀允许缩进但永不匹配注释行），trap 正则要求 handler 体内含 restore：`^trap\s+'[^']*\brestore\b[^']*'\s+(EXIT|INT|TERM)/m`。ok() 标题标注 "line-anchored … restore-calling trap handlers" 以便后人识别检查代际。断言数不变（40），无新哨兵编号。
+
+## 实跑自证（军规 8：禁止"改完就算"）——全部在 /tmp fixture 树注入，真实工作树零触碰
+
+- **元负例 A（备份 cp 失败注入）**：fixture 树 ai-bridge.js chmod 000 → **exit 1**、stderr "backup failed, aborting before any mutation"、源文件 sha256 前后一致（未被触碰）、专设 TMPDIR 无残留（坏备份被 rm）。
+- **元负例 B（restore 失败注入）**：fixture 脚本在 N1 变异+哨兵之后、逐项恢复之前插桩 `chmod 555 "$AB"`（目标变只读）→ **exit 1**、两段失败信息齐全（"per-item restore failed after NEG[N1-dedup]" + "RESTORE FAILED — backup kept at: <路径>"）、**备份保留在盘且内容 == 运行前内容**（可手工恢复）、目标诚实停留变异态（无假成功、无静默覆盖）。
+- **元负例 C（SIGINT 双调用不误报）**：t=2.5s（首项哨兵在途）kill -INT → **exit 130**、EXIT 重入无 "RESTORE FAILED" 误报、工作树逐字节恢复、BAK 清理、0/6 项完成（真实中断）。
+- **元负例 D1（空处理器变异）**：三 trap 改 `trap '' EXIT/INT/TERM` → v3 **V3-39 FAIL**、RESULT 39 passed 1 failed、exit 1。
+- **元负例 D2（删实现留注释变异）**：删 `BAK=$(mktemp)`/`set -o pipefail`/`ROOT=` 三实现行（注释 "mktemp backup" 仍在）→ v3 **V3-39 FAIL**、exit 1。**A/B 现场对照**：旧 `includes('mktemp')` 对该变异树返回 TRUE（活体绕过复现），新行锚定返回 false——CodeRabbit 漏掉的正是这一差距。
+- **守护脚本真实树全量实跑**：六项全部 `mutated=yes sentinel=RED`，终检 v1/v2/v3 全绿（44/27/40），退出码 0；跑后 `git status` 仅两个预期修改文件，变异系列零残留。
+- 25 项元测试断言全 PASS。
+
+## bash/POSIX 信号语义坑（测试 C 两次失败定位出的新坑，入指南）
+
+非交互 shell 以 `&` 后台启动且 job control 关闭时，**父 shell 按 POSIX 异步列表规则给子进程设 SIGINT=SIG_IGN**，而 bash 拒绝 trap "启动时被忽略的信号"——`script & kill -INT` 永远到不了 INT trap（脚本安静跑完、退出 0，工作树干净是正常完成而非信号恢复——一个会静默通过的测试陷阱）。setsid 无效（ignored disposition 穿透 exec）。SIGTERM 不在 POSIX 忽略集——round-63 的 TERM 元测试因此成功。修法：`&` 启动前后 `set -m`/`set +m`（作业控制开启 → 后台作业独立进程组 + 保留默认 SIGINT 处置）。推论：守护脚本作为真后台作业运行时 INT trap 按 POSIX 设计天然失效，EXIT/TERM 才是有效恢复路径；INT trap 服务于前台 Ctrl-C 场景。
+
+## 验证结论
+
+- node --check：v3 改动通过（v1/v2 零改动，哨兵本体未触碰）。
+- chess.html：零变化（本轮 JS 模块零改动，构建输入与 round-63 逐字节一致）。
+- 版本号 10203/"1.2.3" 不变；无新权限、无新网络出口、无新数据收集（本轮不触碰 Manifest/Java/JS）。
+- 台账：verifier/README.license round-64 条目置顶；H2b/H2f 双向哨兵随 v3 复跑全绿（新条目写完立即跑，§6.2 #18）。
+- 三件套基线 **44 / 27 / 40 全绿**（V3-39 升级后仍 40 项）。
+- APK：构建输入与 round-63 逐字节一致，全新环境重建后全量签名构建 + 六连验（结果见 round64-audit.md §6）。
+
+---
+
+# Regalia v1.2.3 — round-63 工作日志（2026-11-21 UTC+8）
+
+## 任务来源
+
+消化 PR #57（upload → main，head `e4f8f43e` = round-62 树，今晨 11:31 创建）CodeRabbit 评审 4 条意见（邮件 2026-11-21 11:39）+ 用户逐条核实与修法清单。四条全部指向 round-62 新增的负向测试脚本 `verifier/runs/r62-negative-tests.sh`（41 行）及其台账引用，逐条到源码现场核实**全部属实，无误报**。基线源 = GitHub upload 分支 head `e4f8f43e`（与 round-62 交付树一致；本地克隆后三件套 44/27/39 复核全绿）。
+
+## 现场核实（逐条）
+
+| # | 级别 | 意见 | 现场核实 |
+|---|---|---|---|
+| 1 | Minor | 台账引用路径不存在 | `verifier/README.license:22` 引用 `scripts/r62-negative-tests.sh` "(sandbox tree)"——仓库内不存在该路径，实际提交于 `verifier/runs/`；同段第 21 行 ai-bridge.java 系笔误（应为 .js） |
+| 2 | Major | 硬编码绝对路径 | 脚本第 4 行 `AB=/home/z/my-project/regalia/…`，第 8/9/41 行同根——异机运行备份失败；该路径若存在则会变异并验证另一个检出 |
+| 3 | Minor | 变异前无退出恢复 | 全脚本无 trap；第 12 行 perl 变异后若收 SIGTERM，第 17/39 行恢复不执行，工作区留下故意注入的回归；BAK 固定 /tmp 路径，并发运行互踩备份 |
+| 4 | Major | 无效负向测试静默通过 | 第 13/15 行 mutated=no / NOT-RED 只 echo 不累计；第 41 行 `node … \| tail -1` 的退出码是 tail 的，node 真实失败被管道吞掉——perl 失配或哨兵标签改名后脚本以 0 宣布通过，六哨兵裸奔无人知晓 |
+
+**定性**：该脚本的职责是证明哨兵真的会红——"守护者的守护者"。第 4 条是 round-61 R61-b 刚修掉的 V3-38 fail-open（§6.2 #13：fail-open 验证器等于没有验证器）在元层的重演；第 2 条对应 V3-38 的路径硬编码教训；第 3 条对应 Bug F 状态清偿/编辑铁律；第 1 条对应"文档指向失真"。事件整体写入方法论 §2.7 round-63 实例化。
+
+## 实施（一个脚本 + 台账 + v3 新哨兵；不触碰哨兵本体与 v1/v2）
+
+1. **`r62-negative-tests.sh` 四条全修**：ROOT 由 `BASH_SOURCE` 自解析（脚本在 verifier/runs/，上两级即仓库根），AB / run_v1 / run_v2 / 终检全部改用 ROOT；`mktemp` 独占备份 + `trap … EXIT/INT/TERM` 于首次变异前置位（信号路径恢复后以 130/143 退出；逐项恢复保留）；FAILED 累计器——任一项 mutated≠yes 或 ST≠RED 即 +1；`set -o pipefail`——终检穿透 node 真实退出码，v3 纳入终检（v3 亦读 ai-bridge.js，恢复失败无处藏身）；FAILED>0 → exit 1。
+2. **台账两处就地更正**（R61-a 先例）+ round-63 新条目置顶：脚本路径改为已提交路径、删 "(sandbox tree)"；ai-bridge.java→.js。
+3. **防回潮哨兵 V3-39**（v3，负空间测试标准动作——本轮手工发现转永久哨兵）：结构断言——脚本不得含 /home/ 绝对路径、必须 BASH_SOURCE 自解析、必须 mktemp+trap（EXIT/INT/TERM）、必须含 FAILED 累计与 pipefail 与终检门、台账必须指向已提交路径且不含失真路径字面量。v3 基线 39→**40**，新三件套基线 **44/27/40**。
+4. **方法论扩写**：§2.7 新增 round-63 实例化（"守护者的守护者也要过军规"：退出码必须真实、路径必须自解析、变异必须可恢复、文档必须指向实物 + 元纪律"负例脚本必须能证明自己会失败"）；§4 基线表更新；round-63 状态闭环行。
+
+## 实跑自证（军规 8：禁止"改完就算"）
+
+- **修复后脚本全量实跑**：六项全部 `mutated=yes sentinel=RED`（N1→S58-C1、N2→S58-E1、N3→S58-D1、N4→V2-24、N5→V2-22、N6→V2-23a），终检 v1/v2/v3 全绿（44/27/40），退出码 0。
+- **元负例 1（证第 4 条修复生效）**：把 N1 的 perl 表达式改坏（匹配不存在的字面量）→ 修复版报告 `mutated=no sentinel=NOT-RED`、FAILED=1、**exit 1**；恢复后复跑 exit 0。
+- **元负例 2（A/B 对照，旧缺陷现场）**：原版脚本（e4f8f43e）同法改坏 N1 → 打印 `mutated=no sentinel=NOT-RED` 后其余五项照常 RED、终检照常打印，**exit 0**——旧脚本在哨兵裸奔时宣布通过，缺陷现场完整复现。
+- **元负例 3（证第 3 条修复生效）**：后台运行修复版，9 秒时点（N1 已完成、N2 变异在途）kill -TERM → `wait` 返回 143，工作区 `git diff` 干净（在途变异被 trap 恢复），无残留 mktemp 备份；1.2s / 3.0s 时点重复一致。
+- **fail-closed 旁证**：脚本副本放到 /tmp（目录深度错位 → ROOT 解析为 /）→ cp/perl/验证全部失败 → **exit 1**——路径错位时宁可失败，不会静默验证错误的树。
+- **git 纪律现场（仓库无 .gitignore 的三重事故）**：构建后 `git add -A` 误纳引擎二进制（114MB）与 337 个构建产物（build/268 + .cxx/46 + .gradle/23）。首次修复命令以 `cat .gitignore` 开头——仓库本无该文件，`&&` 链在第一步静默断裂，**修复从未执行而验证输出看起来正常**；二次修复清了构建产物但引擎仍在；三次（本次）以 `git ls-tree -r HEAD` 硬断言验证：HEAD 树 161 文件 = e4f8f43e 的 160 + round63-audit.md，jniLibs/build/.gradle/.cxx 条目数全为 0。教训：①tar 纯净复核（§3.3）必须打包后立即执行；②**修复的验证断言不得与修复同处一条 `&&` 链**（链首失败会让验证一并跳过）；③验证用 `ls-tree`（树内容）而非 `show --stat`（差异）。
+- 三件套新基线 **44 / 27 / 40 全绿**（v3 含 V3-39）；恢复后复跑一致。
+
+## 验证结论
+
+- node --check：v3 改动通过（v1/v2 零改动，哨兵本体未触碰）。
+- chess.html：零变化（24,208 行 / 1,488,718 字节，本轮 JS 模块零改动，构建输入与 round-62 逐字节一致）。
+- 版本号 10203/"1.2.3" 不变；无新权限、无新网络出口、无新数据收集（本轮不触碰 Manifest/Java/JS）。
+- 台账：verifier/README.license round-63 条目置顶 + round-62 条目两处更正；H2b/H2f 双向哨兵随 v3 复跑全绿（新条目写完立即跑，§6.2 #18）。
+- APK：构建输入与 round-62 逐字节一致，全新环境重建后全量签名构建 + 六连验（结果见 round63-audit.md §4）。
+
+---
+
+# Regalia v1.2.3 — round-62 工作日志（2026-11-21 UTC+8）
+
+## 任务来源
+
+执行指南 §5.1 round-62 待办清单：①58b 六 bug 专项哨兵补盲（round-61 撤勾后的正式欠账）；②方法论文档行级出处扩写；③消重（最低目标：SafPickerHelper 三组 + 分块读循环共享段抽取 + 防回潮哨兵）；④APK 累计欠账补验与交付（58c/59/60/61 四轮无 APK 交付）；⑤仓库卫生。基线源 = GitHub main 快照（HEAD efa4a99e，指南钦定权威恢复源；本地 round-61 工作树核对后仅边缘文件差异，见下文）。
+
+## 环境重建记录（本沙箱从零搭建，指南 §2.3 之外的新坑）
+
+- Android SDK（platform-tools / platforms;android-35 / build-tools;35.0.0 + 34.0.0 / cmake;3.31.6）、NDK r27b（27.2.12479018，官方 zip）、Gradle 8.11.1、Temurin JDK 17.0.21 全部在线下载安装；引擎二进制取自官方 Stockfish sf_18 release 的 stockfish-android-armv8-dotprod.tar，**SHA-256 与指南硬性约束逐字节一致**（8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5，114,115,752 字节——官方构建即原始二进制，BUILDING.md 的"three-way match"记载得到印证）。
+- **新坑 1（内存）**：沙箱物理内存 4GB，项目 gradle.properties 要求 -Xmx4096m——Gradle daemon 起后即被杀（日志只到 Calculating task graph，无声死亡）。解法：GRADLE_USER_HOME/gradle.properties 覆盖为 -Xmx1536m（GRADLE_USER_HOME 级优先于项目级）。
+- **新坑 2（进程）**：跨工具调用的后台进程（含 setsid nohup 的 Gradle daemon）会在调用间隙被清理——构建必须单次前台调用内完成；依赖下载靠 Gradle 文件级缓存跨段收敛（实测 4 段 × ≤570s）。
+- **新坑 3（AGP 自动装 SDK 挂起）**：AGP 8.7.3 的自动安装器下载 build-tools 反复挂起；sdkmanager 手动预装 build-tools;34.0.0 后恢复。
+- **新坑 4（输出渲染假象）**：bash 工具输出把 `[main` 中的 `[m` 当 ANSI SGR reset 吞掉——`branches: [main, master]` 显示为 `branches: ain, master]`，一度误判 main 快照 workflows YAML 损坏；用 Python 字节级检查证伪。**教训：含方括号的输出判读必须经 repr/字节复核，不得凭肉眼。**
+- 均已写入方法论文档 §5（工具与环境坑）与恢复指南相应章节。
+
+## 一、58b 六 bug 专项哨兵（v1 行为级 + v2 结构级）
+
+- **v1 场景 S58**（10 断言）：S58-C0/C1/C2 同局面在飞去重（重复点击不再派发 + 重申分析中态）；S58-E1/E2/E3 非派发路径 bump gen 后的完成成果救援（环归属缓存 + 加载态与看门狗成对清偿 + 正在查看步立即回填）；S58-D0 进度 tick 重置看门狗（真静默语义），S58-D1/D2/D3 真静默自动重派恰好一次（加速时钟技术：沙箱内运行时替换 vm 的 setTimeout 把 45s 压到 15ms）+ 第二次静默只清偿不循环 + 重试预算不复位。v1 基线 34→**44**。
+- **v2 V2-22/23a/23b/23c/24**（结构级）：_manualLive 门控双模式（定义 + `_batchLive||_manualLive` 刷新条件）；onEngineRestarting/onEngineReady 各含 `if(_evalLoading){_evalLoading=false` 与看门狗 clearTimeout 成对；onEngineEval 三出口（救援/stale 缓存/正常）各清 `_evalLoading` 与 `_evalSafetyTimerId` ≥3 次；`_refreshReviewMoveListEvals` 在 ai-bridge 三处手动完成路径接线（typeof 守卫 + 调用相邻模式）。v2 基线 21→**27**。
+- **负例回归六连测**（perl 变异 ai-bridge.js 模拟旧行为 → 哨兵应红 → 恢复应绿）：N1 去重门失效→S58-C1 红；N2 救援分支失效→S58-E1 红；N3 重试无界→S58-D1 红；N4 删除正常完成路径的列表刷新→V2-24 红（注：初版负例只短路守卫不删语句，哨兵计数不变——负例必须**真删除调用语句**模拟 58b 前旧代码）；N5 _manualLive 门控失效→V2-22 红；N6 onEngineRestarting 看门狗解除删除→V2-23a 红。全部按预期，轨迹与脚本随源码树归档（verifier/runs/r62-negative-tests.sh）。
+- v1 S58-C1 断言等待从 60ms 修至 400ms（>300ms debounce）：负例在去重失效时需等 debounce 过后才可见重新派发——哨兵时序必须覆盖被测行为的完整路径。
+
+## 二、消重（首轮实体消重 + 防回潮）
+
+- **SafPickerHelper 两对选择器**：openExportFilePicker/openPGNExportFilePicker → openCreateDocumentPicker(单实现 + 参数化薄壳)；openSystemFilePicker/openPGNFilePicker → openOpenDocumentPicker。行为逐字保留（空内容守卫、Activity-null 守卫、catch 重置 pendingType 为默认 "settings"、setType("*/*") 主类型 HyperOS 兼容）。清理 3 个失效 import。
+- **8KB 分块读循环三份→一份**：FileIoHelper.readCappedText(cr, uri, maxChars, maxLines, tooLargeLabel, truncatedOut) 单实现；SafPickerHelper.readTextFromUri（maxLines=0 语义）/ readPgnFromUri（截断告警注释留在调用方——PGN 内容语义）/ StatsActivity PGN 导入三个调用方改造；round-13 null 检查、round-46 CR#15 字符硬上限、round-49 行数上限、round-54 CR#7/#8 CR/LF/CRLF 折合计数语义逐字保留。清理 2 个失效 import。
+- **指南口径更正**：§5.1 所称"三文件共享段"经现场核实为**两文件三处**（MainActivity 无分块读循环；round-61 行号口径过时——"行号引用即谎言"再次应验）。
+- **防回潮哨兵 V2-25**：ACTION_CREATE_DOCUMENT / ACTION_OPEN_DOCUMENT 在 SafPickerHelper 各恰 1 处；`char[8192]` 循环只在 FileIoHelper、SafPickerHelper/StatsActivity 为 0。
+- **G7 哨兵迁移（军规 3 现场案例）**：消重后 v3 G7a/G7b（守护 prevWasCr 计数）因逻辑移走而变红——按"哨兵是活的契约"更新为 G7a（FileIoHelper 唯一实现的 prevWasCr 语义）+ G7b（两个 PGN 调用方接线断言），并对"调用方回退朴素读取"做负例 RED 验证。v3 基线维持 **39**（条目语义升级，计数不变）。
+- **保留待办**：StockfishNative 五组（engineGoInternal/engineGoTimed 90 行最大组 + 2763/2818、4793/4905、4709/4842、912/1272）与 ui.js 两组（4183/220、6611-6638 跨 ui-interactions）——引擎状态机核心，本轮不做（回归面判断），行号锚点已更新至方法论文档 §3 军规 5。
+- StatsActivity 123/175 一带（OnBackInvokedCallback/handleBackKeyPress）：现场核实为 round-48 刻意抽取的复用关系，非重复——判定不动（负空间记录）。
+
+## 三、APK 欠账清偿（58c→62 累计）
+
+- 全新环境全量构建 BUILD SUCCESSFUL（ProGuard + shrinkResources + CMake native）。
+- **六连验全过**：v1/v2/v3 签名 true（apksigner verify）；证书 SHA-256 `45bc6d36c9fcff8ef9e55f510b43bce44cb854ea4b2f235a0f4955da05a8d8bc`（上传的 round-45 重建密钥库，与要求一致）；versionCode=10203 / versionName="1.2.3"（aapt2 badging）；APK 内 assets/chess.html 与源码 cmp 逐字节一致；APK 内 lib/arm64-v8a/libstockfish.so SHA-256 = 8f7116d3…61b5；bundle 确定性复核（python3 build-chess.py 重打包 cmp 无差异，24,208 行 / 1,488,718 字节——本轮 JS 模块零改动，与 round-61 完全一致）。
+- APK 78,320,490 字节。交付名 `Regalia-v1.2.3-round62-release.apk`。
+
+## 四、方法论文档行级扩写
+
+Regalia-bug-hunting-methodology.md 7.9KB→9.6KB：每条原则补 file+函数名锚定出处（行号以 round-62 基线标注并声明"跨轮引用以锚定特征为准"）；实例化 round-59/60/61 维度（谐振复算、装载形态语义差、噪声分诊、哨兵字面量/行锚定、双向哨兵）与 round-62 新维度（负例测试纪律、指标真实化三不、消重防回潮）；§4 基线表更新 44/27/39；新增 §5 工具与环境坑（四条新坑）。
+
+## 五、仓库卫生
+
+- CONTRIBUTING-en/zh 分支表 upload 行更新（分支 2026-11-21 已删除，main 唯一权威源）。
+- android-ci.yml 经字节级复核**完好无损**（`branches: [main, master]`×2，此前疑似的 `ain, master]` 损坏为输出渲染假象——见环境坑 4）；workflows 的 upload 引用清理在 main 侧已完成。
+- main 快照 vs round-61 工作树边缘差异（.gitignore / .github/dependabot.yml main 侧缺失；LICENSE&NOTICE.zip main 侧新增；.github/README.license main 侧缺 round-56 置顶条目；worker-pool.js main 侧存在=符合指南"留存目录不入清单"记载）：核心源码（Java/JS/chess.html/verifier/文档）完全一致；边缘文件差异**尊重 main 权威、不擅自恢复**，如实记录待用户定夺。
+- GitHub issue #48/#49：无仓库凭据，无法关闭/评论——留待仓库侧操作（本项为待办残留）。
+
+## 验证结论
+
+- node --check：改动的全部脚本（v1/v2/v3 验证器）通过；Java 由 javac（构建）通过。
+- 三件套：**44 / 27 / 39 全绿**（新基线；负例六连测 + G7b 负例全 RED）。
+- chess.html：零变化（24,208 行 / 1,488,718 字节，确定性重建复核）。
+- 版本号 10203/"1.2.3" 不变；无新权限、无新网络出口、无新数据收集。
+- 台账：verifier/ 与 src/main/java/com/Regalia/ README.license 新条目置顶（本轮改动文件登记），双向许可哨兵 H2b/H2f 随 v3 复跑全绿。
+
+---
+
 # Regalia v1.2.3 — round-61 工作日志（2026-11-21 UTC+8）
 
 ## 任务来源

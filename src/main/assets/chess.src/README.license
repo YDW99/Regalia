@@ -1,3 +1,68 @@
+v1.2.3 round-68 (2026.11.22): tablebase deadline/identity + splitter Sonar cleanup.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - tablebase.js (GPL v3, DroidFish-derived lineage): (1) probeTablebase —
+    the 5s deadline now covers the response BODY read (T4, CodeRabbit r67
+    Major): the abort timer stays armed through headers → status → body →
+    parse (outer try/catch/finally; timer declared outside try), an
+    AbortError during the body read is rethrown into the existing catch
+    (fail-count semantics — NOT the PHASE 19 malformed-payload path), and
+    the legacy no-AbortController path races the whole fetch+parse chain;
+    404-no-count (Rev62), bad-JSON-no-count (PHASE 19) and three-strike
+    offline semantics unchanged (behavioral fixture: 6/6, round68-audit
+    §T4). (2) _triggerTbQuery — stale-callback identity gate (T5,
+    CodeRabbit r67 Minor): board reference captured before the async probe;
+    a callback returning after the position changed never autoSelects the
+    old recommendation, and lowers the shared _tbLoading flag only when it
+    still owns it (new _tbLoadingBoard ownership token — reference equality,
+    not a generation counter). (3) _pgnFirstGameSplit — Sonar S3504/S3776/
+    S7766 cleanup (var -> let/const; _blankRunStart helper; Math.max),
+    byte-identical twin of stats.html's copy (V3-45), differential fuzz
+    112,411 cases zero diff.
+  - game-logic.js (GPL v3): AI tablebase path claims the shared
+    _tbLoadingBoard ownership token at arm time and lowers _tbLoading only
+    when it still owns it on both callback arms (T5 coordination; move-
+    execution identity gate unchanged).
+  - No other modules changed this round.
+
+v1.2.3 round-66 (2026.11.21): external-review report implementation — worker-pool.js deleted; parser hardening; comment truthification.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - worker-pool.js (was GPL v3): DELETED FOR REAL — the round-56 entry below
+    already recorded it as deleted ("zero-caller dead code"), but the file
+    lingered in the tree for 10 rounds with a header falsely claiming it was
+    "still exercised by stats.html's separate inline worker" (stats.html has
+    its own inline worker, build-chess.py:101-102; the pool had zero live
+    callers and was never in the bundle since round-56). Tree now matches the
+    ledger; 10 modules remain, all node --check clean.
+  - tablebase.js (GPL v3): (1) F-23 — the multi-game split regex was the
+    FOURTH pre-round-49 quadratic copy (round-49 fixed three copies, missed
+    this one — the MAIN page's import parser, main thread): now the hardened
+    linear lookbehind form shared with stats.html; (2) F-11 — legacy WebViews
+    without AbortController get a 5s Promise.race wall-clock fallback and the
+    abort timer is cleared in a finally.
+  - game-logic.js (GPL v3): F-5 — module header rewritten to the TRUE bundle
+    order (game-logic first, ui.js last) with the round-60 TDZ warning;
+    R-2 — dead worker-pool reference clause removed from the typeof-guard
+    rationale.
+  - ai-bridge.js (GPL v3): F-12 — the delayed-advance retry's empty catch now
+    logs '[BATCH] delayed advance failed' (the only silent catch on the
+    batch-advance critical path).
+  - License classification: all remaining files unchanged.
+
+v1.2.3 round-65 (2026.11.21): engine identity strings updated to Stockfish 19 (sf_18 -> sf_19 upgrade).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - ai-bridge.js (GPL v3): engine notification text
+    ('Stockfish 19 · '), eval badge option key sf18 -> sf19 with display
+    SF19 (_buildEvalHTML + the sf19:true call site), engine-config
+    fallback name 'Stockfish 19' (both the dialog default and the
+    getEngineInfo-catch fallback). Historical "Per SF18 eval
+    best-practices doc" comments kept verbatim (they cite the source
+    document, not the current engine).
+  - ui.js (GPL v3): About dialog engine row -> "Stockfish 19 (arm64-v8a
+    universal)".
+  - game-logic.js (GPL v3): timed-game comment referencing the engine
+    version updated to 19.
+  - License classification: all files unchanged.
+
 v1.2.3 round-61 (2026.11.21): analyze-all progress-hang terminator moved to the progress path (R61-c).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - ui.js (GPL v3): the 180s no-step-completed whole-batch wall-clock

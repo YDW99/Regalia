@@ -1,3 +1,223 @@
+v1.2.3 round-68 (2026.11.22): benchmark self-protection + deadline/identity sentinels; baseline 44/27/51 (49 PASS + V3-46/47 transitional RED).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - runs/r67-bench.js (AGPL v3 harness): hardened T1/T2 (CodeRabbit r67
+    #1/#2) — the round-67 case-1 input was the escaping accident
+    ' \\n' (space, backslash, letter n: NO real newline — a false-green
+    case testing nothing); fixed to ' \n' and every case now carries an
+    input SPEC (realNewline/bracket/closeBracket) asserted by a meta check
+    before benching (T1). Each case runs in a CHILD process (--case name);
+    the parent spawns serially with a hard timeout (BOUND_MS*3, SIGKILL,
+    case named, gate failed) — a hung/regressed parser can no longer stall
+    the gate past 3s/case or hang it forever (T2). Old-form negatives
+    N8a/N8b (round-66 lookbehind splitter re-injected into BOTH twins;
+    scanner per-candidate ']' rescan) prove the bound itself catches the
+    regression classes; N8c/N8d prove the meta check and the dead-loop kill
+    (T3). Verdict = exit code + success marker (dual proof).
+  - runs/r62-negative-tests.sh (AGPL v3 harness): backup set extended to
+    four byte-verified targets (tablebase.js and r67-bench.js joined);
+    bench invocations run fd-9-closed (children never inherit the workspace
+    mutex); four new gates N8a-d with the same mutate-run-assert-restore
+    discipline; final all-green check now tolerates EXACTLY the documented
+    V3-46/V3-47 transitional REDs (pre-merge delivery-channel gaps) and
+    fails on any other verifier failure; thirteen gates total, exit 0.
+  - v3/round54-pr56-triage.js (AGPL v3 harness): V3-45 predicates updated
+    same-batch with the splitter rewrite (Math.max core line, _blankRunStart
+    helper, scanner Math.max); V3-39 extended (four-target backup line, new
+    gate labels, run_bench fd discipline, restore_mut shape); V3-41 extended
+    (both rejection bodies pinned to return null — a return-destFile
+    mutation now goes RED; rejectExtractedEngine single-sourcing pinned);
+    NEW V3-48 (probe deadline covers fetch AND body: position-anchored
+    timer/parse/clearTimeout ordering, AbortError rethrow, handled-outcome
+    sentinel, legacy whole-chain race) and V3-49 (manual-path identity gate
+    + _tbLoadingBoard ownership protocol across both files).
+    Baseline: v1 44 / v2 27 / v3 51 checks (delivery tree carries .gitignore
+    so V3-47 is green locally; V3-46 stays RED until the user's post-merge
+    web deletion of worker-pool.js; remote mirrors once the zip lands —
+    see round68-audit T0).
+
+v1.2.3 round-67 (2026.11.21): de-twinning + linearization + delivery-completeness sentinels; baseline 44/27/49.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - verifier/v3/round54-pr56-triage.js (AGPL v3 harness): V3-41 REWRITTEN
+    (round-66's two byte-identical engine cache-gate / verify-then-commit
+    cascades de-twinned into shared cachedEngineAcceptable() +
+    commitExtractedEngine() in StockfishNative.java — PR #57 new-code
+    duplication gate 13.2% > 3%; predicates now pin the helper
+    implementation lines, BOTH label call sites, the
+    verify-SHA-then-rename adjacency (CodeRabbit r66-#8) and a literal
+    if(false)/if(0) death-guard ban (T15)). V3-43 UPGRADED (pins the
+    truncation ASSIGNMENT appendLen = i + 1 before the char-cap throw, not
+    just the declaration — CodeRabbit r66-#9). V3-45 REWRITTEN (the two
+    PGN parsers are single-pass linear now: isomorphic-twin
+    _pgnFirstGameSplit byte-equal across tablebase.js+stats.html, and
+    stats.html's header scanner runs on monotonic next-']'/next-'\n'
+    caches consulted before any slice — CodeRabbit r66-#2/#3/#4 proved both
+    round-66 forms still super-linear). V3-39 UPGRADED (flock workspace
+    mutex pinned before first backup, held to exit — CodeRabbit r66-#5;
+    N8/N9 gates wired). NEW V3-46 (worker-pool.js absence — the zip-overlay
+    upload channel cannot delete files, so the round-66 deletion never
+    landed remotely; the gap is now sentinel-visible) and V3-47 (.gitignore
+    presence + never-commit exclusions — the round-66 zip carried it, the
+    bot commit did not).
+  - verifier/runs/r67-bench.js (NEW, GPL v3): adversarial benchmark gate
+    (N8) — extracts the SHIPPED splitter/scanner implementations from the
+    tree, re-checks the isomorphic-twin invariant at runtime, and fails when
+    any adversarial case exceeds the 1000ms bound (worst round-67 sandbox
+    case 294ms; the round-66 forms cost minutes at these input sizes).
+    Linearity is a behavioral property — this harness makes the bound
+    executable, the v3 text predicates are tripwires against the known-bad
+    forms only.
+  - verifier/runs/r62-negative-tests.sh (GPL v3): flock workspace mutex
+    (T10) taken before the first backup and held to process exit so every
+    trap-path restore runs under the lock; NEW N8 (benchmark gate) and N9
+    (concurrency negative: a second instance must fail fast non-zero with
+    the lock message and zero tree contact).
+  - verifier/runs/round67-audit.md (new, GPL v3): round-67 audit trail —
+    CodeRabbit 9-item + Sonar 4-issue disposition, T0 delivery-completeness
+    root cause (upload-channel capability matrix), differential fuzz +
+    benchmark data, meta-negative RED records.
+  - License classification: v3 harness AGPL v3; shell scripts + bench
+    harness + audit GPL v3 (unchanged).
+
+v1.2.3 round-66 (2026.11.21): sentinel ladder upgrade — six new v3 sentinels, V3-39 third-round hardening, negative-script N7; baseline 44/27/47.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - verifier/v3/round54-pr56-triage.js (AGPL v3 harness): NEW V3-40b (engine
+    identity live-doc sweep: BUILDING live build guide digest+size,
+    release-helper SF19, PRIVACY digest, manual live zones + README live zone
+    clean of stale identity — the five round-65 leaks all fell outside V3-40's
+    coverage), V3-41 (exact-size cache gates, size constant, atomic tmp+rename
+    commit as LIVE line-anchored statements, priority-1..3 size checks),
+    V3-42 (game-logic header true order), V3-43 (readCappedText cap order),
+    V3-44 (SAF null-path pending clear), V3-45 (both PGN parsers
+    backtracking-free: stats.html deterministic scanner + tablebase.js
+    hardened split). V3-39 third-round hardening: trap handlers pinned by
+    command shape ('restore || exit 1', not the word restore — echo-restore
+    bypass closed); backup_one/restore_one/per-item cp+cmp implementation
+    lines all pinned (name-vs-predicate table in round66-audit.md §7).
+    V3-40 (b) leg re-pinned to the size constant. R-6: identity
+    .replace(/\\n/g,'\\n') removed from G7a (CodeQL js/identity-replacement).
+  - verifier/runs/r62-negative-tests.sh (GPL v3): generalized to multi-target
+    (exclusive mktemp -d backup directory, one byte-verified copy per mutable
+    target: ai-bridge.js + stats.html); NEW N7 (killing the stats.html
+    deterministic header scanner must turn V3-45 RED). Path variable renamed
+    ST -> STF (collision with the sentinel-status variable ST=RED left N6's
+    residual value "RED" as a filename — found on first run, fixed).
+  - verifier/runs/round66-audit.md (new, GPL v3): round-66 audit trail —
+    23 report findings disposition table, 4 new findings (F-23 tablebase
+    quadratic split, R-8 useLegacyPackaging semantics inversion, R-9 missing
+    remote .gitignore, V41 dead-guard fourth-level bypass), F-9 benchmark +
+    343,010-case differential fuzz data, meta-negative 20+1 RED records.
+  - License classification: v3 harness AGPL v3; shell scripts + audit GPL v3
+    (unchanged).
+
+v1.2.3 round-65 (2026.11.21): engine upgrade sf_18 -> sf_19 — NEW sentinel
+  V3-40 (engine identity cross-file consistency; baseline 44/27/41).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - verifier/v3/round54-pr56-triage.js (AGPL v3 harness): NEW V3-40 — the
+    engine identity is spread across live artifacts
+    (StockfishNative.java's EXPECTED_ENGINE_SHA256 runtime tamper gate and
+    its extraction-progress denominator, NOTICE's bundle declaration,
+    BUILDING.md's topmost build notes); an engine upgrade is exactly the
+    "change one place, miss another" hazard, so the sentinel pins
+    cross-file consistency (Java digest == NOTICE digest == topmost
+    BUILDING.md digest; progress denominator == NOTICE declared byte
+    size). RED-verified this round with two /tmp-fixture mutations
+    (NOTICE digest one hex digit flipped -> FAIL; denominator reverted
+    to the old engine size -> FAIL; clean control 41/41 green). v3
+    baseline 40 -> 41; triple baseline now **44/27/41**.
+  - v1/v2: zero changes this round.
+  - License classification: all files unchanged.
+
+v1.2.3 round-64 (2026.11.21): PR #57 CodeRabbit follow-up 2 — guard-script
+  data-loss paths closed, meta sentinel V3-39 upgraded to
+  implementation-line anchoring (baseline 44/27/40 unchanged).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - verifier/runs/r62-negative-tests.sh (project script): the round-63
+    hardening itself opened two DATA-LOSS paths (methodology §1.2, a
+    defense mechanism's own side effects) — (1) the initial backup cp
+    ran unchecked, so a full tmpfs / unreadable source would hand every
+    later restore an empty/partial BAK to copy over ai-bridge.js,
+    destroying the pre-run content; now cp + cmp -s byte-verified,
+    aborting BEFORE any mutation (before the traps are armed, worktree
+    untouched); (2) restore() deleted the backup unconditionally (a
+    failed cp still rm'd the ONLY copy while 2>/dev/null swallowed the
+    diagnosis) and the EXIT trap did not propagate the failure; now
+    idempotent restore (absent BAK = success — the signal-then-EXIT
+    double call cannot false-alarm), delete only after cp + cmp -s
+    succeed, keep the backup + print its path + exit non-zero otherwise;
+    the per-item restore in neg() gets the same check and aborts the
+    mutation series on failure, leaving recovery to the EXIT trap.
+  - verifier/v3/round54-pr56-triage.js (AGPL v3 harness): V3-39 upgraded
+    from literal existence to IMPLEMENTATION-LINE existence — every
+    property line-anchored (^ROOT=.*BASH_SOURCE/m, ^BAK=$(mktemp)/m,
+    ^set -o pipefail/m, ^[^#\n]*FAILED=$((FAILED+1))/m,
+    ^[^#\n]*[ "$FAILED" -gt 0 ]/m — a '#' comment line can never satisfy
+    them) and the trap handlers must actually call restore (^trap\s+'
+    [^']*\brestore\b[^']*'\s+EXIT|INT|TERM/m) — closing the live bypass
+    where s.includes('mktemp') was satisfied by the header comment
+    "exclusive mktemp backup" with the implementation line deleted, and
+    the empty-handler bypass (trap '' EXIT) on the trap regexes. Same
+    sentinel number, 25-assertion meta negative test suite (backup-cp
+    failure, restore failure with backup kept, SIGINT 130 with no
+    double-restore false alarm, empty handlers RED, implementation-
+    deleted-comment-kept RED + old-check A/B bypass demo) in
+    verifier/runs/round64-audit.md; all injections on /tmp fixture
+    copies, the real worktree untouched.
+  - License classification: all files unchanged.
+
+v1.2.3 round-63 (2026.11.21): PR #57 CodeRabbit follow-up — negative-test
+  script hardened, meta sentinel V3-39 added (baseline 44/27/40).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - verifier/runs/r62-negative-tests.sh (project script): four review
+    findings fixed — (1) the repo root self-resolves from the script
+    location (BASH_SOURCE), removing the hardcoded sandbox path that
+    fails the backup on other machines and would mutate/verify a foreign
+    checkout where it exists; (2) exclusive mktemp backup with
+    EXIT/INT/TERM traps armed before the first mutation (a mid-run
+    SIGTERM can no longer leave an injected regression in the worktree;
+    per-item restore kept); (3) failures accumulate — mutated=no (stale
+    perl expression) or sentinel=NOT-RED now exit non-zero; (4) the
+    final baseline propagates the verifiers' real exit statuses (set -o
+    pipefail; a bare `node | tail` returned tail's 0), and v3 joins the
+    final check because it also reads ai-bridge.js. Trajectory and the
+    meta negative tests (broken-expression exit 1, SIGTERM recovery) in
+    verifier/runs/round63-audit.md.
+  - verifier/v3/round54-pr56-triage.js (AGPL v3 harness): NEW V3-39 —
+    structural self-discipline guard over the negative-test script (no
+    absolute paths, self-resolved root, trap recovery, exclusive backup,
+    failure accumulation with a real exit gate, and this ledger pointing
+    at the committed script path). Baseline 39 -> 40 (v1/v2 unchanged).
+  - Round-62 ledger entry corrected in place (R61-a precedent): the
+    negative-test script reference now points at the committed path (it
+    previously named an uncommitted sandbox-tree location) and one
+    filename typo is fixed (ai-bridge.js, not .java).
+  - License classification: all files unchanged.
+
+v1.2.3 round-62 (2026.11.21): 58b six-bug sentinels + dedup regression sentinels (baseline 44/27/39).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - v1/eval-stale-harness.js (AGPL v3 harness): NEW scenario S58 (10
+    behavioral assertions) — same-position in-flight dedup (C0/C1/C2),
+    completed-work rescue with loading+watchdog settlement (E1/E2/E3),
+    true-silence watchdog with exactly-one bounded auto-retry via an
+    accelerated sandbox clock (D0/D1/D2/D3). Baseline 34 -> 44.
+  - v2/round53-sonar-triage.js (AGPL v3 harness): NEW V2-22 (_manualLive
+    gate in onEngineProgress), V2-23a/b/c (loading+watchdog paired
+    settlement in onEngineRestarting / onEngineReady / the three
+    onEngineEval exits), V2-24 (list refresh wired on all 3 manual
+    completion paths), V2-25 (dedup regression: SAF launch blocks single-
+    sourced, 8KB chunk loop only in FileIoHelper). Baseline 21 -> 27.
+  - v3/round54-pr56-triage.js (AGPL v3 harness): G7a/G7b migrated with
+    the round-62 dedup — G7a guards the prevWasCr CR/LF/CRLF counting in
+    FileIoHelper.readCappedText (sole implementation), G7b guards the
+    SafPickerHelper + StatsActivity caller wiring (RED if a caller
+    regresses to a naive read; negative-tested). Baseline stays 39
+    (entries upgraded in place, count unchanged).
+  - Negative-test discipline: all six new sentinels RED-verified by
+    regressing ai-bridge.js to pre-58b behavior via scripted mutations
+    (restore -> GREEN). Script: verifier/runs/r62-negative-tests.sh
+    (paths self-resolve from the script location; hardened in round-63);
+    trajectory in verifier/runs/round62-audit.md.
+  - License classification: all files unchanged.
+
 v1.2.3 round-56 (2026.10.5): v1 harness module list synced to build-chess.py.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - v1/eval-stale-harness.js (AGPL v3 harness): MODULES updated to the

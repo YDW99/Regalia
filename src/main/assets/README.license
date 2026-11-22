@@ -1,3 +1,23 @@
+v1.2.3 round-66 (2026.11.21): stats.html header extraction made backtracking-free (F-9).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - stats.html (GPL v3): the lazy-branch header regex (measured >120 s on a
+    100k-space malformed tag — frozen stats page) is replaced by a
+    deterministic scanner with IDENTICAL match semantics (differential fuzz
+    vs the old regex: 343,010 cases, zero diff — including the \\. escape
+    nuance where the dot never matches line terminators). Mirror-source
+    comments now point at tablebase.js's _parsePGN (the live twin since
+    worker-pool.js was deleted; R-3). Guarded by v3 V3-45 + negative N7.
+  - License classification: all files unchanged.
+
+v1.2.3 round-65 (2026.11.21): engine identity strings sf_18 -> sf_19; chess.html rebuilt (24,208 lines / 1,488,720 bytes).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by
+    build-chess.py from the chess.src modules carrying the round-65
+    engine-identity updates (see the chess.src ledger entry below for
+    the module-level detail). 24,208 lines / 1,488,720 bytes (round-64:
+    1,488,718).
+  - License classification: all files unchanged.
+
 v1.2.3 round-61 (2026.11.21): chess.html rebuilt from the round-61 modules (24,208 lines).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by
