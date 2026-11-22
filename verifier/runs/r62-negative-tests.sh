@@ -161,18 +161,39 @@ echo "=== restored, final all-green check ==="
 #   round68-audit.md T0). v1/v2 must be fully green; v3 may fail on exactly
 #   those two documented gaps and nothing else — a failed mutation restore
 #   still cannot hide behind the allowance, and once the post-merge steps
-#   land the allowance becomes inert.
+#   land the allowance becomes inert. (Post-merge state confirmed: main
+#   6ed30d3f runs 51/51 — the allowance is retained purely as insurance for
+#   pre-merge/mutated trees, round-69.)
 _V3OUT=$( (cd "$VDIR" && node v3/round54-pr56-triage.js 2>/dev/null); echo "rc=$?" )
 _V3RC=${_V3OUT##*rc=}
-printf '%s\n' "$_V3OUT" | grep "RESULT" | tail -1
-if [ "$_V3RC" -ne 0 ]; then
+_V3RESULT=$(printf '%s\n' "$_V3OUT" | grep "RESULT" | tail -1)
+printf '%s\n' "$_V3RESULT"
+# round-69 (CodeRabbit PR#57 Major): a nonzero exit is NOT enough to enter
+#   the allowance branch — v3 must first prove it ran to COMPLETION with a
+#   final RESULT marker. A run killed mid-way (crash, OOM, timeout kill)
+#   exits nonzero with partial PASS output and NO FAIL lines; the old logic
+#   then saw an empty "unexpected failures" list and declared the run
+#   "limited to the expected transitional REDs" — an incomplete baseline
+#   could pass the gate. Now: no RESULT marker, or a RESULT whose claimed
+#   failed-count disagrees with the FAIL lines actually printed (a truncated
+#   or tampered harness), both hard-fail BEFORE the allowance is consulted.
+_V3RESULTN=$(printf '%s\n' "$_V3OUT" | grep -c "RESULT")
+_V3FAILN=$(printf '%s\n' "$_V3OUT" | grep -c "^FAIL ")
+_V3CLAIM=$(printf '%s\n' "$_V3RESULT" | sed -n 's/.*RESULT: [0-9]* passed, \([0-9]*\) failed.*/\1/p')
+if [ "$_V3RC" -ne 0 ] && [ "$_V3RESULTN" -lt 1 ]; then
+  echo "v3 exited WITHOUT a final RESULT marker (crash/kill mid-run) — an incomplete baseline can never clear the allowance" >&2
+  FAILED=$((FAILED+1))
+elif [ "$_V3RC" -ne 0 ] && [ -n "$_V3CLAIM" ] && [ "$_V3CLAIM" != "$_V3FAILN" ]; then
+  echo "v3 RESULT marker claims $_V3CLAIM failed but $_V3FAILN FAIL lines were printed (truncated/tampered harness output)" >&2
+  FAILED=$((FAILED+1))
+elif [ "$_V3RC" -ne 0 ]; then
   _V3UNEXPECTED=$(printf '%s\n' "$_V3OUT" | grep "^FAIL " | grep -v "^FAIL V3-46 " | grep -v "^FAIL V3-47 " || true)
   if [ -n "$_V3UNEXPECTED" ]; then
     echo "v3 UNEXPECTED failures beyond the documented V3-46/V3-47 transitional REDs:" >&2
     printf '%s\n' "$_V3UNEXPECTED" >&2
     FAILED=$((FAILED+1))
   else
-    echo "v3 failures limited to the expected transitional REDs (V3-46/V3-47, T0 pre-merge gaps)"
+    echo "v3 failures limited to the expected transitional REDs (V3-46/V3-47, T0 pre-merge gaps; completed run with RESULT marker verified)"
   fi
 fi
 

@@ -1,3 +1,27 @@
+v1.2.3 round-69 (2026.11.22): tablebase ownership token + fail-count single accounting (PR#57 review triage).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - tablebase.js (GPL v3, DroidFish-derived lineage): (1) probeTablebase —
+    the server-side 5xx outcome now returns a frozen _TB_NETFAIL sentinel
+    from the fetch chain and is counted at a SINGLE accounting point after
+    the race/call settles (CodeRabbit PR#57 Minor: on the legacy
+    no-AbortController path a wall-clock timeout counted the query in the
+    catch, and a LATE 5xx resolution counted it AGAIN — two failed queries
+    could trip the 3-strike 60s offline). 404-no-count (Rev62), bad-JSON-
+    no-count (PHASE 19) semantics unchanged. (2) _triggerTbQuery — the
+    loading-flag ownership token is now a FRESH OBJECT per query
+    (_tbLoadingOwner), never the board reference (CodeRabbit PR#57 Minor:
+    the AI entry re-arms without a re-entry check, and two in-flight
+    queries saving the SAME board reference let the earlier callback pass
+    the identity check and lower the flag while the newer probe was still
+    airborne). Board identity checks remain where they guard PAYLOAD
+    correctness (autoSelect); they no longer double as ownership proof.
+  - game-logic.js (GPL v3): AI tablebase path claims the same fresh-object
+    _tbLoadingOwner token at arm time and lowers _tbLoading only while it
+    still owns the CURRENT token, on both callback arms (T5 coordination
+    updated; the move-execution board-identity gate is unchanged).
+  - assets/chess.html: rebuilt from these sources (deterministic rebuild
+    verified; see src/main/README.license round-69 for the byte counts).
+
 v1.2.3 round-68 (2026.11.22): tablebase deadline/identity + splitter Sonar cleanup.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - tablebase.js (GPL v3, DroidFish-derived lineage): (1) probeTablebase —

@@ -3042,7 +3042,18 @@ public class StockfishNative {
                 engineWriter.write(command + "\n");
                 engineWriter.flush();
             } catch (IOException e) {
-                Log.e(TAG, "Error sending command: " + command, e);
+                // v1.2.3 round-69 (CodeRabbit PR#57 Minor): never log the raw
+                //   command here. UCI commands include "position fen ..." which
+                //   embeds the full game position — a write failure would leak
+                //   the game state into logcat, and Log.e SURVIVES the release
+                //   proguard strip (only Log.v/d/i/w are stripped,
+                //   proguard-rules.pro), so this was a real release-build leak
+                //   surface that the .mobsf android_logging suppression was
+                //   masking. Static message + exception object carry the
+                //   diagnosis; the length aids correlation without content.
+                //   (The Log.d above is debug-build-only — stripped in release
+                //   — and stays for development diagnostics.)
+                Log.e(TAG, "Error sending command (length=" + command.length() + ")", e);
                 engineReady = false;
             }
         }

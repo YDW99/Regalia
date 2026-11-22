@@ -662,11 +662,12 @@ ok('V3-47 .gitignore present with never-commit exclusions (keystore.properties, 
        && /^src\/main\/jniLibs\/$/m.test(gi);
    })());
 
-// V3-48 — round-68 (T4, CodeRabbit r67 Major): probeTablebase's 5s deadline
-//   must cover the response BODY read, not just the headers. The round-66/67
-//   form cleared the abort timer in an inner finally right after fetch
-//   resolved — a server that sent headers then stalled the body hung the
-//   probe forever. Pinned (position-anchored, whole file, unique anchors):
+// V3-48 — round-68 (T4, CodeRabbit r67 Major) → round-69 (PR#57 Minor):
+//   probeTablebase's 5s deadline must cover the response BODY read, not just
+//   the headers. The round-66/67 form cleared the abort timer in an inner
+//   finally right after fetch resolved — a server that sent headers then
+//   stalled the body hung the probe forever. Pinned (position-anchored,
+//   whole file, unique anchors):
 //   (1) the timer decl sits OUTSIDE the try (so the outer finally covers
 //       every path);
 //   (2) the clearTimeout finally sits AFTER the body-parse anchor
@@ -676,13 +677,23 @@ ok('V3-47 .gitignore present with never-commit exclusions (keystore.properties, 
 //       during the body read into the EXISTING catch (fail-count semantics),
 //       not the PHASE 19 malformed-payload path;
 //   (4) the handled-outcome sentinel `if(data===undefined)return null;`
-//       distinguishes 4xx/5xx/bad-JSON outcomes from a parsed payload;
+//       distinguishes 4xx/bad-JSON outcomes from a parsed payload;
 //   (5) the legacy no-AbortController race wraps the whole _fetchProbe()
 //       chain, not a bare fetch;
 //   (6) the known-bad early-clear inner finally is gone.
+//   round-69 additions (fail-count single accounting, CodeRabbit PR#57
+//   Minor): (7) the server-side 5xx outcome RETURNS a frozen _TB_NETFAIL
+//       sentinel from the fetch chain instead of counting inline — on the
+//       legacy path a wall-clock timeout counted the query in the catch and
+//       a LATE 5xx counted it AGAIN (two failed queries could trip the
+//       3-strike offline); (8) the single accounting point
+//       `if(data===_TB_NETFAIL){_tbFailCount++...}` sits AFTER the
+//       undefined-sentinel gate; (9) the inline-count regression form
+//       (`if(r.status>=500){` directly followed by `_tbFailCount++`) is
+//       pinned gone.
 //   Meta-negatives RED-verified (round68-audit.md §T6): early-clear
 //   reintroduction, AbortError-rethrow removal, legacy race de-scoping.
-ok('V3-48 tablebase probe: 5s deadline covers fetch AND response body (timer outside try; clearTimeout AFTER body parse; AbortError during body read rethrown to fail-count catch; handled-outcome sentinel; legacy race wraps whole chain; early-clear inner finally gone)',
+ok('V3-48 tablebase probe: 5s deadline covers fetch AND response body; fail-count accounted ONCE post-race (timer outside try; clearTimeout AFTER body parse; AbortError rethrown to fail-count catch; handled-outcome sentinel; 5xx returns _TB_NETFAIL sentinel counted at the single post-race point; legacy race wraps whole chain; early-clear inner finally gone; inline 5xx counting gone)',
    (() => {
      const tb = read('src/main/assets/chess.src/tablebase.js');
      if (!tb) return false;
@@ -697,39 +708,55 @@ ok('V3-48 tablebase probe: 5s deadline covers fetch AND response body (timer out
      if (!/Promise\.race\(\[\n    _fetchProbe\(\),/.test(tb)) return false;
      if (/\}finally\{\n  if\(tmr\)clearTimeout\(tmr\);\n\}/.test(tb)) return false;
      if (/resp=await fetch\(/.test(tb)) return false;
+     // round-69: sentinel declared once, frozen, before the try
+     if (!/^const _TB_NETFAIL=Object\.freeze\(\{netfail:true\}\);$/m.test(tb)) return false;
+     // round-69: 5xx branch RETURNS the sentinel — no inline counting
+     if (!/if\(r\.status>=500\)\{\n[\s\S]{0,700}?return _TB_NETFAIL;\n[\s\S]{0,80}?\}\n[\s\S]{0,80}?return undefined;/.test(tb)) return false;
+     // round-69: the single accounting point AFTER the undefined gate
+     const gate = tb.indexOf('if(data===undefined)return null;');
+     const acct = tb.indexOf('if(data===_TB_NETFAIL){_tbFailCount++;');
+     if (!(gate >= 0 && acct > gate)) return false;
+     // round-69: the inline-count regression form is pinned gone
+     if (/if\(r\.status>=500\)\{\s*_tbFailCount\+\+/.test(tb)) return false;
      return true;
    })());
 
-// V3-49 — round-68 (T5, CodeRabbit r67 Minor): the manual tablebase query's
-//   async callback must be IDENTITY-CHECKED before it touches shared state.
-//   The probe is async; a callback returning after the position changed must
-//   not autoSelect an OLD recommendation onto the changed board, and must
-//   not lower a loading flag that now belongs to a NEWER query. The AI path
-//   precedent (_tbSavedBoard reference equality, game-logic.js) is extended
-//   with a shared ownership token _tbLoadingBoard (reference, NOT a
-//   generation counter — military rule 2): every arm claims it, every lower
-//   verifies it (58b Bug F "settle only your own state").
-//   Pinned: token declaration; manual-path capture + claim + gated lowering
-//   on BOTH the then and catch arms; autoSelect gated on board identity;
-//   the AI path's arm-site claim and BOTH gated lowerings; the old ungated
-//   `then(function(d){\n_tbLoading=false;` form gone.
-//   Meta-negatives RED-verified (round68-audit.md §T6): ownership check
-//   removal (stale callback clears newer loading), autoSelect gate removal.
-ok('V3-49 tablebase query callbacks identity-gated (_tbLoadingBoard ownership token: manual path captures board, claims token, lowers only-if-owning on both arms, autoSelect gated on board identity; AI path claims token at arm and lowers only-if-owning on both arms; old ungated lowering gone)',
+// V3-49 — round-68 (T5, CodeRabbit r67 Minor) → round-69 (PR#57 Minor):
+//   the manual tablebase query's async callback must be IDENTITY-CHECKED
+//   before it touches shared state. The probe is async; a callback returning
+//   after the position changed must not autoSelect an OLD recommendation
+//   onto the changed board, and must not lower a loading flag that now
+//   belongs to a NEWER query. round-68 used the board REFERENCE as the
+//   ownership token — round-69 replaces it with a FRESH OBJECT per query
+//   (_tbLoadingOwner): the AI entry re-arms without a re-entry check, and
+//   two in-flight queries saving the SAME board reference let the earlier
+//   callback pass the identity check and lower the flag while the newer
+//   probe was still airborne (CodeRabbit PR#57 Minor). Reference-equality
+//   semantics are kept (military rule 2) — the reference is now to a
+//   per-query token, never to a board.
+//   Pinned: token declaration; manual-path board capture + fresh-token claim
+//   + gated lowering on BOTH the then and catch arms; autoSelect gated on
+//   board identity (PAYLOAD correctness — kept from round-68); the AI
+//   path's arm-site fresh-token claim and BOTH gated lowerings; the old
+//   board-reference token form (_tbLoadingBoard) is pinned GONE from both
+//   files; the old ungated `then(function(d){\n_tbLoading=false;` form gone.
+ok('V3-49 tablebase query callbacks ownership-gated (_tbLoadingOwner fresh-object token: manual path captures board + fresh token, lowers only-if-owning on both arms, autoSelect gated on board identity; AI path claims fresh token at arm and lowers only-if-owning on both arms; board-reference token form gone; old ungated lowering gone)',
    (() => {
      const tb = read('src/main/assets/chess.src/tablebase.js');
      const gl = read('src/main/assets/chess.src/game-logic.js');
      if (!tb || !gl) return false;
-     if (!/^let _tbLoadingBoard=null;$/m.test(tb)) return false;
-     if (!/const _boardAtQuery=gameState\.board;\n_tbLoadingBoard=_boardAtQuery;/.test(tb)) return false;
-     const gatedLower = "if(_tbLoadingBoard===_boardAtQuery){_tbLoading=false;_tbLoadingBoard=null;}";
+     if (!/^let _tbLoadingOwner=null;$/m.test(tb)) return false;
+     if (!/const _boardAtQuery=gameState\.board;\n[\s\S]{0,400}?const _myOwnerToken=\{\};\n_tbLoadingOwner=_myOwnerToken;/.test(tb)) return false;
+     const gatedLower = "if(_tbLoadingOwner===_myOwnerToken){_tbLoading=false;_tbLoadingOwner=null;}";
      if ((tb.match(new RegExp(gatedLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length !== 2) return false;
      if (!/if\(gameState\.board===_boardAtQuery\)\{\nif\(d\)\{const bm=bestMoveFromTablebase\(d\);if\(bm\)\{autoSelectTablebaseMove\(bm\.uci\);\}\}\n\}/.test(tb)) return false;
      if (/probeTablebase\(gameState\)\.then\(function\(d\)\{\n_tbLoading=false;/.test(tb)) return false;
-     if (!/_tbLoading=true;_tbLoadingBoard=gameState\.board;\n/.test(gl)) return false;
-     const aiLower = "if(_tbLoadingBoard===_tbSavedBoard){_tbLoading=false;_tbLoadingBoard=null;}";
+     if (!/const _tbOwnerToken=\{\};_tbLoadingOwner=_tbOwnerToken;\n/.test(gl)) return false;
+     const aiLower = "if(_tbLoadingOwner===_tbOwnerToken){_tbLoading=false;_tbLoadingOwner=null;}";
      if ((gl.match(new RegExp(aiLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length !== 2) return false;
-     if (/\}\)\.catch\(function\(\)\{\n_tbLoading=false;\n_tbRetryCount\+\+;/.test(gl)) return false;
+     if (/\}\)\.catch\(function\(\)\{\n_tbLoading=false;\n_tbRetryCount\+\+/.test(gl)) return false;
+     // round-69: the board-reference token regression form is pinned gone
+     if (tb.includes('_tbLoadingBoard') || gl.includes('_tbLoadingBoard')) return false;
      return true;
    })());
 

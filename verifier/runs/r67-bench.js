@@ -140,6 +140,16 @@ function metaCheck(c, input) {
     fail('meta ' + c.name + ': input class must be \']\'-free but the built input contains one');
     return false;
   }
+  // round-69 (CodeRabbit PR#57 Minor): the mirror branch — a case declaring
+  //   closeBracket: true must actually CONTAIN a ']'. Without this check a
+  //   build() that drops the closing bracket (e.g. an escaping accident in
+  //   the repeat literal) silently changed the case's input CLASS, and the
+  //   benchmark then measured the wrong input while metaCheck reported the
+  //   spec as satisfied.
+  if (c.spec.closeBracket === true && input.indexOf(']') === -1) {
+    fail('meta ' + c.name + ': input class requires a \']\' but the built input contains none');
+    return false;
+  }
   return true;
 }
 

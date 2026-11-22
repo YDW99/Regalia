@@ -1,4 +1,5 @@
-# mobsfscan project exemptions (round-68, T13) — see round68-audit.md §T13.
+# mobsfscan project exemptions (round-68 T13, rationale updated round-69) —
+#   see round68-audit.md §T13 and the round-69 audit §T-mobsf.
 #
 # android_logging (CWE-532): every Log.* call that interpolates a variable is
 # flagged (264 findings on the full tree with mobsfscan 1.2.0). Project-wide
@@ -7,6 +8,23 @@
 # and E-level calls that embed file paths are exactly two documented
 # residuals (StockfishNative engine-extraction failure paths, none of them
 # user data). The app is offline-first (V3-38): no user data is ever logged.
+#
+# round-69 (CodeRabbit PR#57 Minor, root fix): the one android_logging
+# finding that DID carry user data — StockfishNative.sendUciCommand's
+# Log.e("Error sending command: " + command), whose command can embed a FEN
+# (the full game position) — is FIXED AT THE ROOT (the command text is no
+# longer logged; the message is static + command.length() only). That finding
+# no longer exists to suppress. The suppression is nevertheless KEPT:
+#   - the remaining ~263 findings are Log.v/d/i/w (release-stripped) plus the
+#     two documented path-bearing Log.e residuals — none carry user data;
+#   - mobsfscan has no per-line suppression granularity in .mobsf (only
+#     ignore-rules / ignore-paths / ignore-filenames), so "delete the global
+#     rule" would re-open ~263 SARIF alerts whose only effect is burying real
+#     signals in noise (alert fatigue is itself a security anti-pattern);
+#   - the release-strip stance is enforced by proguard and verified by the
+#     round-56 review chain.
+# If mobsfscan grows line-level suppression, prefer narrowing this rule to
+# the two documented E-level residuals and re-reviewing the v/d/i/w class.
 #
 # Why repo-side instead of per-finding UI dismissal: GitHub code scanning
 # dismissals are per-finding-instance — every new code line re-reports the

@@ -1,3 +1,25 @@
+v1.2.3 round-69 (2026.11.22): PR#57 review triage — .mobsf FEN-leak root fix + license ledger erratum.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - ERRATUM (CodeRabbit PR#57 Minor): the round-68 entry below labeled
+    assets/stats.html as "AGPL v3 combined-work page" — the file's own
+    header (and this ledger's lines 109/749) correctly declare GPL v3;
+    the AGPL v3 label belongs to chess.html. Line corrected in place;
+    every other claim of that entry is unchanged (append-only ledger,
+    factual erratum excepted).
+  - java/com/Regalia/StockfishNative.java: sendUciCommand's IOException
+    handler logged the raw UCI command — a "position fen ..." command
+    embeds the full game position, so a write failure would leak the
+    game state into logcat. The command text is removed from the Log.e
+    (message is now the static "Error sending command"; the exception
+    object still carries the diagnostic). Root fix for the CodeRabbit
+    PR#57 Minor that the .mobsf android_logging suppression was masking.
+  - java/.mobsf: rationale updated (not removed) — the sendUciCommand
+    finding is now fixed at the root; the project-wide android_logging
+    suppression stays because the remaining ~260 findings are Log.v/d/i/w
+    calls that release builds strip via proguard (round-56 SEC-06) and
+    per-line suppression of 260 lines would bury real signals in noise.
+    Documented so the trade-off is auditable.
+
 v1.2.3 round-68 (2026.11.22): Sonar cleanup + scanner platform exemptions.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - java/.mobsf NEW (AGPL v3, project-original scanner config): mobsfscan
@@ -11,7 +33,7 @@ v1.2.3 round-68 (2026.11.22): Sonar cleanup + scanner platform exemptions.
     §T13 with the web-creation fallback instructions.
   - assets/chess.html: rebuilt (24,358 lines / 1,498,288 bytes — tablebase
     deadline/identity changes below; deterministic rebuild verified).
-  - assets/stats.html (AGPL v3 combined-work page): _pgnFirstGameSplit twin
+  - assets/stats.html (GPL v3 combined-work page): _pgnFirstGameSplit twin
     rewritten with the tablebase.js twin (var -> let/const, cognitive-
     complexity helper, Math.max — Sonar S3504/S3776/S7766; behavior
     differential-fuzzed identical, round68-audit §T7/T8); scanner
