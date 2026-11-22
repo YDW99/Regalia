@@ -122,3 +122,12 @@ completion still returns the child's original status. A new regression signals o
 the wrapper PID, proves prompt termination/reaping and retains the existing process-
 group TERM case, bringing the primitive negative suite to 22 checks. Reviewed CI
 metadata and the gradlew executable mode are restored again after auto-unzip loss.
+
+Round-75 follow-up isolates each command in its own process group with `setsid`.
+HUP/INT/TERM handlers signal only that group, allow a two-second TERM grace period,
+then use a watchdog outside the cleaned group to escalate to KILL. The direct child
+is reaped before finalization and the watchdog is cancelled and reaped; inherited
+stdin, complete output/history and 129/130/143 statuses are retained. New regressions
+cover a non-`exec` background descendant and a child that refuses TERM, bringing the
+primitive negative suite to 24 checks. Reviewed CI metadata and the gradlew executable
+mode are restored again after auto-unzip loss.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# round-74: asynchronous wait lets wrapper-only signals interrupt promptly.
+# round-75: isolate each command and bound signal-driven descendant cleanup.
 set -uo pipefail
 if [ "$#" -lt 2 ]; then
   printf 'usage: %s NAME COMMAND [ARG ...]\n' "$0" >&2
@@ -19,6 +19,7 @@ printf -v CMD '%q ' "$@"
 START="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 FINALIZED=0
 CHILD_PID=""
+TERM_GRACE_SECONDS=2
 
 finish() {
   local rc="$1"
@@ -49,11 +50,20 @@ handle_signal() {
   local signal="$2"
   trap '' HUP INT TERM
   if [ -n "$CHILD_PID" ]; then
-    # A wrapper-only signal must not leave the asynchronous child running.
-    # Reap it before reading TMP so its final output is included in the log.
-    kill -TERM "$CHILD_PID" 2>/dev/null || true
+    # Signal only this command's isolated group, never the caller's group.
+    kill -TERM -- "-$CHILD_PID" 2>/dev/null || true
+    # A child may ignore TERM; escalate outside its group after a bounded grace.
+    (
+      trap - HUP INT TERM
+      sleep "$TERM_GRACE_SECONDS"
+      kill -KILL -- "-$CHILD_PID" 2>/dev/null || true
+    ) </dev/null >/dev/null 2>&1 &
+    local watchdog_pid=$!
+    # Reap the direct child before reading TMP so its final output is retained.
     wait "$CHILD_PID" 2>/dev/null || true
     CHILD_PID=""
+    kill "$watchdog_pid" 2>/dev/null || true
+    wait "$watchdog_pid" 2>/dev/null || true
   fi
   finish "$rc" "$signal"
   exit "$rc"
@@ -63,7 +73,7 @@ trap 'handle_signal 130 INT' INT
 trap 'handle_signal 143 TERM' TERM
 
 set +e
-"$@" >"$TMP" 2>&1 <&0 &
+setsid -- "$@" >"$TMP" 2>&1 <&0 &
 CHILD_PID=$!
 wait "$CHILD_PID"
 RC=$?

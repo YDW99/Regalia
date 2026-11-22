@@ -229,3 +229,25 @@ round-72 新源码 ZIP 包含当前许可包、v1–v11、完整审计与诚实�
 修复后 v11 原语负测 **22/22**、隔离集成测试 **18/18**、固定基线 source gate **27/27**、rename-only 十二项通过。既有 v1 **44/44**、v2 **27/27**、v3 **51/51**，r62 十三门全绿，r67-bench PASS，JS 10 模块语法通过。网页包两次构建一致，SHA-256 仍为 `cc69b869077a72dc1367461c6567a47fea159d292fd5e3d207a2afef84f167b5`。
 
 本轮仅交付仓库相对路径补丁 ZIP，不生成 APK；补丁自身哈希不写入本日志，避免自引用。
+
+
+# Regalia v1.2.3 — round-75 进程组与有界清理补丁工作日志（2026-11-22 UTC）
+
+## 基线与缺陷复现
+
+根据新邮件的 2 条 Major 意见继续加固 v11 wrapper。补丁基线为当前远端 `upload` 提交 `abbfc79f83d518136c5f55740db60819ce9eed21`，固定源码比较基线不变。旧实现下，非 `exec` 后代用例明确报告 `command lacked an isolated process group`；拒绝 TERM 的子进程使 wrapper 在 8 秒后仍以 `TimeoutExpired` 阻塞。两项失败均作为旧缺陷证据保留，未通过放宽断言获得通过。
+
+## 实施
+
+- 子命令通过 `setsid` 在独立进程组中启动，wrapper 仍保存并等待其直接子 PID；HUP/INT/TERM handler 只向该命令的负 PGID 发信号，不向调用者所在组发清理信号。
+- TERM 后设置 2 秒有限宽限；独立 watchdog 不属于被清理进程组，超时向同一组发 KILL。handler 回收直接子进程，再取消并回收 watchdog，最后保留完整 TMP 输出、history 和原信号对应的 129/130/143 状态。
+- 新负测分别覆盖 `bash -c 'sleep 30 & …; wait'` 的非 `exec` 后代，以及忽略 TERM 的循环子进程；断言独立组、直接子与后代消失、143 状态和日志/history 完整。原 `exec sleep 30`、进程组 TERM、正常退出码和并发日志用例继续保留，管道 stdin 另行实测通过。
+- 自动解压通道再次漏掉 `.github` 更新与 gradlew 可执行位，本轮按 round-74 已审字节恢复 CodeQL、MobSF、Dependabot 和 gradlew 100755，不做额外 CI 重构。
+
+本轮不改棋类功能、Java 业务行为、APK、依赖、SDK、ABI、版本或权限，不执行远端写操作。根 `LICENSE&NOTICE.zip` 未修改；后续人工更新继续优先，不以当前观察值作为固定大小或哈希，也不因历史差异回退。
+
+## 验证结果
+
+修复后 v11 原语负测 **24/24**、隔离集成测试 **18/18**、固定基线 source gate **27/27**、rename-only 十二项通过。隔离集成使用仅本地验证提交完成干净检出检查，未推送远端。既有 v1 **44/44**、v2 **27/27**、v3 **51/51**，r62 十三门全绿，r67-bench PASS，JS 10 模块语法通过。网页包两次构建与构建前逐字节一致，大小 1,500,732 B，SHA-256 仍为 `cc69b869077a72dc1367461c6567a47fea159d292fd5e3d207a2afef84f167b5`。
+
+本轮仅交付仓库相对路径补丁 ZIP，不生成 APK；补丁自身哈希不写入本日志，避免自引用。

@@ -303,6 +303,115 @@ def test_wrapper_only_signal() -> None:
     passed("wrapper-only TERM promptly terminates and reaps the child before finalizing evidence")
 
 
+def assert_process_gone(pid: int, description: str) -> None:
+    deadline = time.monotonic() + 2
+    while True:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return
+        if time.monotonic() >= deadline:
+            raise AssertionError(f"{description} is still running or unreaped")
+        time.sleep(0.02)
+
+
+def test_wrapper_descendant_signal() -> None:
+    runs = ROOT / "verifier/runs"
+    label = f"wrapper-descendant-negative-term-{os.getpid()}"
+    before_logs = set(runs.glob(f"*-{label}.*.log"))
+    history = runs / "v11-history.tsv"
+    before_history = set(history.read_text(encoding="utf-8").splitlines()) if history.is_file() else set()
+    with tempfile.TemporaryDirectory(prefix="v11-descendant-term-") as temporary:
+        ready = Path(temporary) / "ready"
+        child_pid_file = Path(temporary) / "child.pid"
+        descendant_pid_file = Path(temporary) / "descendant.pid"
+        process = subprocess.Popen(
+            ["bash", str(ROOT / "verifier/v11/run-and-log.sh"), label,
+             "bash", "-c",
+             "printf 'child-before-TERM\\n'; printf '%s' \"$$\" > \"$1\"; "
+             "sleep 30 & descendant=$!; printf '%s' \"$descendant\" > \"$2\"; "
+             "printf ready > \"$3\"; wait",
+             "bash", str(child_pid_file), str(descendant_pid_file), str(ready)],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        child_pid = descendant_pid = None
+        try:
+            deadline = time.monotonic() + 10
+            while not ready.is_file():
+                if process.poll() is not None:
+                    raise AssertionError("wrapper exited before the descendant fixture became ready")
+                if time.monotonic() > deadline:
+                    raise AssertionError("timed out waiting for descendant fixture")
+                time.sleep(0.02)
+            child_pid = int(child_pid_file.read_text(encoding="ascii"))
+            descendant_pid = int(descendant_pid_file.read_text(encoding="ascii"))
+            isolated_group = (os.getpgid(child_pid) == child_pid and
+                              os.getpgid(child_pid) != os.getpgid(process.pid))
+            os.kill(process.pid, signal.SIGTERM)
+            output = process.communicate(timeout=8)[0]
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.communicate()
+            for pid in (child_pid, descendant_pid):
+                if pid is not None:
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+        assert_process_gone(child_pid, "direct child")
+        assert_process_gone(descendant_pid, "non-exec descendant")
+        if not isolated_group:
+            raise AssertionError("command lacked an isolated process group")
+    assert_term_run(label, before_logs, before_history, process, output)
+    passed("wrapper-only TERM terminates the isolated group including non-exec descendants")
+
+
+def test_wrapper_term_refusal() -> None:
+    runs = ROOT / "verifier/runs"
+    label = f"wrapper-stubborn-negative-term-{os.getpid()}"
+    before_logs = set(runs.glob(f"*-{label}.*.log"))
+    history = runs / "v11-history.tsv"
+    before_history = set(history.read_text(encoding="utf-8").splitlines()) if history.is_file() else set()
+    with tempfile.TemporaryDirectory(prefix="v11-stubborn-term-") as temporary:
+        ready = Path(temporary) / "ready"
+        child_pid_file = Path(temporary) / "child.pid"
+        process = subprocess.Popen(
+            ["bash", str(ROOT / "verifier/v11/run-and-log.sh"), label,
+             "bash", "-c",
+             "trap '' TERM; printf 'child-before-TERM\\n'; printf '%s' \"$$\" > \"$1\"; "
+             "printf ready > \"$2\"; while :; do sleep 1; done",
+             "bash", str(child_pid_file), str(ready)],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        child_pid = None
+        try:
+            deadline = time.monotonic() + 10
+            while not ready.is_file():
+                if process.poll() is not None:
+                    raise AssertionError("wrapper exited before the TERM-refusal fixture became ready")
+                if time.monotonic() > deadline:
+                    raise AssertionError("timed out waiting for TERM-refusal fixture")
+                time.sleep(0.02)
+            child_pid = int(child_pid_file.read_text(encoding="ascii"))
+            os.kill(process.pid, signal.SIGTERM)
+            output = process.communicate(timeout=8)[0]
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.communicate()
+            if child_pid is not None:
+                try:
+                    os.kill(child_pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+        assert_process_gone(child_pid, "TERM-refusing child")
+    assert_term_run(label, before_logs, before_history, process, output)
+    passed("bounded TERM grace escalates to KILL and preserves interrupted evidence")
+
+
 def test_leading_data_nested_secret() -> None:
     secret = "V11-TEST-SENTINEL-SHEBANG-71c2"
     inner = io.BytesIO()
@@ -358,6 +467,8 @@ def main() -> None:
     test_wrapper()
     test_wrapper_signal()
     test_wrapper_only_signal()
+    test_wrapper_descendant_signal()
+    test_wrapper_term_refusal()
     test_recursive_secrets()
     test_leading_data_nested_secret()
     test_recursive_binaries()
@@ -365,7 +476,7 @@ def main() -> None:
     test_directory_member_budget()
     test_license_budget_order()
     test_walk_errors()
-    assert checks == 22, checks
+    assert checks == 24, checks
     print(f"V11-NEGATIVE-PRIMITIVES OK: {checks}/{checks}")
 
 
