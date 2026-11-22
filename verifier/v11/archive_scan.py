@@ -83,60 +83,53 @@ def scan_archive(
         if len(file_names) != len(set(file_names)):
             raise AssertionError(f"duplicate archive member at {label}")
         for info in infos:
+            member_label = budget.next_label(label)
+            # Directory entries consume the shared member budget even though
+            # they have no payload to decompress.
+            budget.reserve(info, member_label)
             if info.is_dir():
                 continue
-            member_label = budget.next_label(label)
             if not safe_member_name(info.filename):
                 raise AssertionError(f"unsafe archive member at {member_label}")
             if info.flag_bits & 0x1:
                 raise AssertionError(f"encrypted archive member at {member_label}")
-            budget.reserve(info, member_label)
-            spool = None
+            spool = tempfile.SpooledTemporaryFile(max_size=4 * MIB)
             try:
                 with archive.open(info) as stream:
-                    first = stream.read(MIB)
-                    candidate = _looks_like_zip_name(info.filename) or first.startswith(b"PK")
-                    if candidate:
-                        if info.file_size > limits.max_nested_archive_bytes:
-                            raise AssertionError(f"nested archive size limit exceeded at {member_label}")
-                        spool = tempfile.SpooledTemporaryFile(max_size=4 * MIB)
-
-                    def chunks(first=first, stream=stream, spool=spool):
-                        if first:
-                            if spool is not None:
-                                spool.write(first)
-                            yield first
+                    def chunks(stream=stream, spool=spool):
                         while True:
                             chunk = stream.read(MIB)
                             if not chunk:
                                 break
-                            if spool is not None:
-                                spool.write(chunk)
+                            spool.write(chunk)
                             yield chunk
 
                     consume(chunks(), member_label, info.filename)
-                if spool is not None:
+                # Extensions and PK prefixes are not ZIP proof: a valid ZIP may
+                # carry a shebang or arbitrary leading data. Inspect the whole
+                # bounded member before deciding whether recursion is required.
+                spool.seek(0)
+                try:
+                    is_zip = zipfile.is_zipfile(spool)
+                except Exception:
+                    raise AssertionError(f"archive detection failed at {member_label}") from None
+                if not is_zip:
+                    if _looks_like_zip_name(info.filename):
+                        raise AssertionError(f"invalid nested archive at {member_label}")
+                else:
+                    if info.file_size > limits.max_nested_archive_bytes:
+                        raise AssertionError(f"nested archive size limit exceeded at {member_label}")
+                    if depth + 1 > limits.max_depth:
+                        raise AssertionError(f"archive depth limit exceeded at {member_label}")
                     spool.seek(0)
-                    try:
-                        is_zip = zipfile.is_zipfile(spool)
-                    except Exception as exc:
-                        raise AssertionError(f"archive detection failed at {member_label}") from None
-                    if not is_zip:
-                        if _looks_like_zip_name(info.filename):
-                            raise AssertionError(f"invalid nested archive at {member_label}")
-                    else:
-                        if depth + 1 > limits.max_depth:
-                            raise AssertionError(f"archive depth limit exceeded at {member_label}")
-                        spool.seek(0)
-                        scan_archive(
-                            spool, consume, member_label, depth=depth + 1,
-                            budget=budget, limits=limits,
-                        )
+                    scan_archive(
+                        spool, consume, member_label, depth=depth + 1,
+                        budget=budget, limits=limits,
+                    )
             except AssertionError:
                 raise
-            except Exception as exc:
+            except Exception:
                 raise AssertionError(f"archive read failed at {member_label}") from None
             finally:
-                if spool is not None:
-                    spool.close()
+                spool.close()
     return budget

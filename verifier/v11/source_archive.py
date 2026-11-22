@@ -103,6 +103,16 @@ def payload_files(root: Path, output: Path | None = None) -> list[Path]:
     return sorted(files, key=lambda path: path.relative_to(root).as_posix())
 
 
+def is_archive_payload(path: Path, label: str) -> bool:
+    """Detect ZIP content regardless of suffix; archive-shaped files fail closed."""
+    try:
+        with path.open("rb") as stream:
+            detected = zipfile.is_zipfile(stream)
+    except Exception:
+        raise AssertionError(f"archive detection failed at {label}") from None
+    return detected or path.suffix.lower() in (".zip", ".jar")
+
+
 class BinaryInspector:
     """Reject signing material, engines, ELF and unsafe names at every depth."""
 
@@ -149,6 +159,9 @@ def protected_license_metadata(root: Path) -> tuple[int, str]:
     path = root / "LICENSE&NOTICE.zip"
     if not path.is_file() or path.stat().st_size == 0:
         raise AssertionError("current protected license archive is missing or empty")
+    # Reject oversized or otherwise unsafe archives before testzip() performs
+    # any unbounded decompression. CRC validation remains a separate gate.
+    BinaryInspector().archive(path, "source.license")
     try:
         with zipfile.ZipFile(path) as archive:
             for info in archive.infolist():
@@ -168,8 +181,9 @@ def inspect_source_payload(files: list[Path]) -> BinaryInspector:
     for index, path in enumerate(files, 1):
         label = f"source.file{index}"
         inspector.file(path, label)
-        if path.suffix.lower() in (".zip", ".jar"):
-            # Archive-shaped payloads must be valid and recursively clean.
+        if is_archive_payload(path, label):
+            # Actual ZIP payloads recurse even with arbitrary suffixes or
+            # leading data; malformed .zip/.jar payloads still fail closed.
             inspector.archive(path, label + ".archive")
     return inspector
 
@@ -187,7 +201,8 @@ def _required_entries() -> set[str]:
         "verifier/v11/round72-acceptance.md", "verifier/v11/source_archive.py",
         "verifier/v11/secret_scan.py", "verifier/v11/archive_scan.py",
         "verifier/v11/negative-tests.py", "verifier/v11/integration-tests.py",
-        "verifier/v11/browser-download.py", "verifier/v11/run-and-log.sh", "worklog.md", "LICENSE&NOTICE.zip",
+        "verifier/v11/browser-download.py", "verifier/v11/run-and-log.sh",
+        "verifier/v11/verify-apk.py", "worklog.md", "LICENSE&NOTICE.zip",
     }
     for version in ("v4", "v5", "v6", "v7", "v8", "v9", "v10"):
         required.add(f"verifier/{version}/round71-acceptance.md")
@@ -245,6 +260,10 @@ def verify(root: Path, archive_path: Path) -> None:
     archive_path = archive_path.resolve()
     if not archive_path.is_file():
         raise AssertionError("source ZIP missing")
+    # The bounded walker must reject hostile sizes before any member digest,
+    # CRC pass or archive.read() can decompress the delivery archive.
+    inspector = BinaryInspector()
+    budget = inspector.archive(archive_path, "delivery.source")
     license_size, license_hash = protected_license_metadata(root)
     expected_files = payload_files(root, archive_path)
     inspect_source_payload(expected_files)
@@ -285,8 +304,6 @@ def verify(root: Path, archive_path: Path) -> None:
         gradlew = archive.getinfo(PREFIX + "gradlew")
         if stat.S_IMODE(gradlew.external_attr >> 16) & 0o111 == 0:
             raise AssertionError("gradlew executable mode missing")
-    inspector = BinaryInspector()
-    budget = inspector.archive(archive_path, "delivery.source")
     print(f"source_entries={len(names)} crc_ok=true duplicate_entries=0 manifest_exact=true")
     print(f"nested_archive_members_scanned={budget.members} nested_archive_bytes={budget.bytes}")
     print(f"protected_license_archive_bytes={license_size}")

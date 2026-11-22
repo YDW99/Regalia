@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import os
 from pathlib import Path
 import re
 import subprocess
 import sys
-import zipfile
+
+from source_archive import protected_license_metadata
 
 DEFAULT_BASE = "f78317919818a02c1fa169a99b85cad6ebf8a1fe"
 ROUND72_START = "a245de549b473812aa36f0158f3f8b1a98a4a3e5"
@@ -84,13 +84,12 @@ def main() -> None:
     license_path = ROOT / "LICENSE&NOTICE.zip"
     check("current protected license archive exists and is nonempty", license_path.is_file() and license_path.stat().st_size > 0)
     try:
-        with zipfile.ZipFile(license_path) as archive:
-            license_ok = archive.testzip() is None
+        license_size, license_digest = protected_license_metadata(ROOT)
+        license_ok = True
     except Exception:
         license_ok = False
-    check("current protected license archive CRC; no historical size/hash lock", license_ok)
-    license_digest = hashlib.sha256(license_path.read_bytes()).hexdigest()
-    print(f"CURRENT_LICENSE bytes={license_path.stat().st_size} sha256={license_digest}")
+    check("current protected license archive bounded scan and CRC; no historical size/hash lock", license_ok)
+    print(f"CURRENT_LICENSE bytes={license_size} sha256={license_digest}")
 
     mobsf = text("src/main/java/.mobsf")
     active = [line for line in mobsf.splitlines() if line.strip() and not line.lstrip().startswith("#")]
