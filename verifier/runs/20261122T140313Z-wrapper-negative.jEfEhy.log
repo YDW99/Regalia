@@ -1,0 +1,6 @@
+timestamp_start=2026-11-22T14:03:13Z
+timestamp_end=2026-11-22T14:03:13Z
+cwd=/tmp/regalia-r72/work
+command=sh -c exit\ 7 
+exit_code=7
+--- output ---

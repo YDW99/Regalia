@@ -1,0 +1,35 @@
+timestamp_start=2026-11-22T14:11:31Z
+timestamp_end=2026-11-22T14:11:31Z
+cwd=/tmp/regalia-r72/work
+command=python3 verifier/v11/source-gate.py 
+exit_code=0
+--- output ---
+PASS 01: comparison baseline is independent of current HEAD
+PASS 02: CodeQL c-cpp no-build coverage
+PASS 03: CodeQL checkout credentials disabled
+PASS 04: tracked native sources acknowledged
+PASS 05: MobSF scanner pinned
+PASS 06: Dependabot ecosystems and schedules
+PASS 07: gradlew executable index mode
+PASS 08: project PMD ruleset preserved
+PASS 09: unchanged build dependencies and configuration
+PASS 10: SDK/NDK contract
+PASS 11: version contract
+PASS 12: arm64-only ABI
+PASS 13: permissions unchanged from fixed base
+PASS 14: AGPL seven-file ledger
+PASS 15: GPL twelve-file ledger
+PASS 16: mixed license correction
+PASS 17: current protected license archive exists and is nonempty
+PASS 18: current protected license archive CRC; no historical size/hash lock
+CURRENT_LICENSE bytes=56011 sha256=d4bd3cd4752421aac192475bda7bdb5042964b5eec3102c836265c25f666595b
+PASS 19: MobSF comment-only config and review boundary
+PASS 20: old Java identifiers absent
+PASS 21: Java changes are an allowed subset, not an exact working-tree set
+PASS 22: no out-of-scope repository changes against fixed base
+PASS 23: round-70 audit erratum appended
+PASS 24: recovery honesty record
+PASS 25: v9 marked superseded without deleting history
+PASS 26: round-72 twenty-comment triage exists
+PASS 27: no engine or signing material tracked
+SOURCE-V11-GATE OK (27 checks), fixed_base=f78317919818a02c1fa169a99b85cad6ebf8a1fe

@@ -1,5 +1,7 @@
 # Regalia round-71 acceptance criteria (v9)
 
+> **Historical record — superseded by v10 and v11.** This document is preserved for audit, not used as the current acceptance gate. In particular, v10 corrects the no-INTERNET assertion and v11 replaces the fixed license-archive size/hash expectation with current-byte validation.
+
 Created: 2026-11-22 (UTC). Base: PR #59 head `f78317919818a02c1fa169a99b85cad6ebf8a1fe`.
 
 This is the authoritative final-artifact gate. It preserves v4–v8 and makes one evidence-based correction to v8's native-library set. No source, regression, security, signing or packaging requirement is relaxed.

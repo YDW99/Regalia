@@ -1,0 +1,10 @@
+timestamp_start=2026-11-22T14:11:31Z
+timestamp_end=2026-11-22T14:11:31Z
+cwd=/tmp/regalia-r72/work
+command=python3 verifier/v11/rename-only-proof.py 
+exit_code=0
+--- output ---
+PASS rename-only: src/main/java/com/Regalia/StockfishNative.java
+PASS rename-only: src/main/java/com/Regalia/StatsActivity.java
+PASS rename-only: src/main/java/com/Regalia/EngineService.java
+RENAME-ONLY-V11 OK (12 renames), fixed_base=f78317919818a02c1fa169a99b85cad6ebf8a1fe

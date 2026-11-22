@@ -1,0 +1,68 @@
+timestamp_start=2026-11-22T14:10:46Z
+timestamp_end=2026-11-22T14:10:52Z
+cwd=/tmp/regalia-r72/work
+command=node verifier/v1/eval-stale-harness.js 
+exit_code=0
+--- output ---
+AndroidBridge.initEngine not available
+[suite] load & smoke
+  PASS onEngineEval exported into scope
+  PASS requestEngineEval present
+  PASS round-52 _evalLastDispatchedFen declared
+  PASS round-52 _evalRecentDispatches ring declared
+[A] normal mode: late previous-position callback dropped
+  PASS A1: first eval dispatched
+  PASS A2: dispatched fen recorded
+  PASS A3: second eval dispatched
+  PASS A4: fens differ
+  PASS A5: dispatched fen updated
+[AIBridge] Stale eval callback dropped (fen mismatch vs last dispatched user-nav request)
+  PASS A6: stale callback did NOT mark eval ready
+  PASS A7: stale callback did NOT overwrite _sfEval
+  PASS A8: current callback accepted
+  PASS A9: current callback value correct (got 33)
+[E] duplicate callback for current fen
+  PASS E1: duplicate harmless
+[C] legacy 7-arg path
+  PASS C1: legacy callback accepted (got 44)
+[B] review mode: stale callback cached under matched step
+  PASS B1: review has 4 states (got 4)
+  PASS B2: step-0 eval dispatched
+  PASS B3: step-2 eval dispatched
+  PASS B4: dispatched fen is step-2 fen
+[AIBridge] Stale eval callback dropped (fen mismatch vs last dispatched user-nav request)
+  PASS B5: still on step 2
+  PASS B6: stale step-0 value NOT displayed on step 2 (sfEval=null)
+  PASS B7: stale value cached under step 0 correctly
+[AIBridge] Stale eval callback dropped (fen mismatch vs last dispatched user-nav request)
+  PASS B8: black-to-move stale eval sign-flipped to White POV (got -50)
+  PASS B9: step 3 cache NOT poisoned by step-1 result
+  PASS B10: step-3 (black to move) result cached with correct sign (got -60)
+[D] batch path round-trip
+  PASS D1: batch dispatch recorded with fen
+  PASS D2: batch step-0 cached and batch advanced
+  PASS D3a: batch finished (active flag cleared)
+  PASS D3: batch cached all 4 steps (got 4)
+[R61] progress-only batch hang terminator (R61-c)
+  PASS R61-1: fresh batch started
+  PASS R61-2: healthy progress tick (fresh wall clock) does NOT terminate
+[AIBridge] Analyze-all terminated after 0 consecutive failures (no step completed for 180s)
+  PASS R61-3: progress tick with 180s+ stale wall clock TERMINATES the batch (R61-c)
+  PASS R61-4: termination path ran (step reset to -1)
+[S58] round-58b manual eval: in-flight dedup / ring rescue / bounded retry
+  PASS S58-C0: step-0 manual eval dispatched, loading, watchdog armed
+  PASS S58-C1: repeat tap on SAME in-flight position does NOT re-dispatch (58b dedup)
+  PASS S58-C2: dedup path re-asserts the analyzing state, not a stale cached value
+[AIBridge] Late eval callback cached for its original step (gen bumped by non-dispatching nav)
+  PASS S58-E1: late callback rescued into its own step, not dropped (58b Bug E)
+  PASS S58-E2: rescue settles _evalLoading AND the watchdog (58b Bug F pairing)
+  PASS S58-E3: viewed-step result backfilled immediately after rescue
+  PASS S58-D0: progress tick re-arms the manual watchdog (true-silence semantics)
+Eval safety timer: engine silent for 45s, resetting + auto-retry
+Eval safety timer: engine silent for 45s, resetting + auto-retry
+  PASS S58-D1: true engine silence auto-retried the SAME fen exactly ONCE
+  PASS S58-D2: second silence settles loading — no infinite retry loop
+  PASS S58-D3: retry budget consumed; the retry path does not reset it
+  PASS V1-30: no TDZ ReferenceError swallowed during bundle eval/bootstrap (warns seen: 8)
+
+===== RESULT: 44 passed, 0 failed =====

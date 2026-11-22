@@ -1,0 +1,24 @@
+timestamp_start=2026-11-22T14:09:56Z
+timestamp_end=2026-11-22T14:09:56Z
+cwd=/tmp/regalia-r72/work
+command=python3 verifier/v11/negative-tests.py 
+exit_code=0
+--- output ---
+PASS V11-N01: missing command exits nonzero and creates no run record
+PASS V11-N02: child exit code is preserved in output and process status
+PASS V11-N03: eight same-second concurrent invocations retain eight independent logs
+PASS V11-N04: five-level nested password is detected without path/member/value leakage
+PASS V11-N05: nested UTF-16LE/BE secret forms fail closed
+PASS V11-N06: file-open diagnostics do not copy secret-bearing paths
+PASS V11-N07: five-level nested engine digest is rejected
+PASS V11-N08: five-level nested keystore digest is rejected
+PASS V11-N09: five-level nested ELF magic is rejected
+PASS V11-N10: nested src/main/jniLibs content is rejected independent of suffix
+PASS V11-N11: mixed-case jniLibs matching uses normalized path components
+PASS V11-N12: archive depth overflow fails closed
+PASS V11-N13: member-size limit fails closed
+PASS V11-N14: cumulative decompressed-size limit fails closed
+PASS V11-N15: archive member-count limit fails closed
+PASS V11-N16: corrupt archive-shaped nested member fails closed
+PASS V11-N17: directory traversal errors invoke onerror and abort payload enumeration
+V11-NEGATIVE-PRIMITIVES OK: 17/17

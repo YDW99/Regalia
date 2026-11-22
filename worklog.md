@@ -147,3 +147,36 @@ v2 block ID、原生库集合与基线权限口径；失败 gate、错误 wrappe
 
 小米澎湃 OS 3 仅做静态兼容性核验（SDK、ABI、Manifest、Release 打包与 v1/v2/v3
 签名）。未连接物理设备，未做安装或真机运行测试，不作真机验证声明。
+
+# Regalia v1.2.3 — round-72 工作日志（2026-11-22 UTC）
+
+## 任务与当前基线
+
+根据上传 CodeRabbit 邮件的 20 条 actionable 意见完成验证链与交付证据加固。固定比较基线仍为 PR#59 变更前 head `f78317919818a02c1fa169a99b85cad6ebf8a1fe`；实施前和定稿前两次查询远端 `upload` 均为 `a245de549b473812aa36f0158f3f8b1a98a4a3e5`。本轮不改棋类功能或 Java 业务行为，不重建或重签 APK，不执行远端写操作。
+
+## 许可包与自动解压差异
+
+远端当前 `LICENSE&NOTICE.zip` 为 56,011 B、SHA-256 `d4bd3cd4752421aac192475bda7bdb5042964b5eec3102c836265c25f666595b`，与 round-71 原始 ZIP 内同大小但不同哈希的历史副本不同。已先独立保全当前远端版，未用旧 ZIP 覆盖、restore 或 reset 回退。上述观察值不是未来固定不变量，后续人工更新继续优先。
+
+自动解压通道未送达 `.github/dependabot.yml`，CodeQL/MobSF 工作流也落后。本轮恢复 C/C++ no-build、checkout 禁持久凭据、mobsfscan 1.2.0、Dependabot 周检和 gradlew mode 100755；未夹带应用修改。
+
+## v11 实施
+
+- wrapper 缺少命令时退出 64 且不写成功记录；每次运行使用 `mktemp` 排他日志并保留真实退出码。
+- rename-only 与 source gate 使用显式固定基线；Java 改动检查为允许子集，干净提交不再误失败，已提交越界修改也不能漏检。
+- 新增共用有界递归 ZIP walker：统一深度、成员数、单成员和累计解压大小预算；重复名、危险路径、加密、损坏和读取错误全部 fail closed。
+- 密码扫描覆盖源文件、源内归档、原始及递归 APK/source-ZIP；UTF-8、UTF-16LE/BE 均检查，错误只用不透明阶段/成员序号，不输出路径、成员名或口令值。
+- 二进制检查在任意嵌套层拒绝 ELF、引擎/密钥库哈希、禁用后缀与任意大小写 `src/main/jniLibs` 成员。
+- 源码打包启用 `os.walk(onerror=...)`、完整 regular-file payload、output/lock/tmp 显式排除、独占 output lock 和唯一临时文件；验证完整 entry set 与逐成员 SHA-256，不再只查 required 子集。
+- 许可包只要求当前文件存在、非空、CRC/路径有效、递归内容安全并与当前受控字节一致，不写死 56,011 B 或旧哈希。
+- v9 页首标明被 v10/v11 取代；v4–v10 旧文本和失败历史均保留。
+
+## 实际验证结果
+
+v1 **44/44**、v2 **27/27**、v3 **51/51**，r62 十三门全绿，r67-bench PASS，JS 10 模块语法通过。网页包两次构建一致：24,393 行 / 1,500,732 B，SHA-256 `cc69b869077a72dc1367461c6567a47fea159d292fd5e3d207a2afef84f167b5`。v11 固定基线 source gate **27/27**，基础负向测试 **17/17**，隔离集成测试 **15/15**。回归前后 Java 聚合摘要和当前许可包哈希不变。
+
+通过现有 HTML 下载入口真实 Chromium 点击并保存 APK，failure=null，建议文件名正确。对**实际下载保存文件**直接运行完整 v11 APK gate，退出 0：81,552,289 B，SHA-256 `644919d57c690b54c56b26ed0ce91ec785d67a68e8e58eeaa6aed2946a5533fb`；v1/v2/v3=true，证书、版本、SDK、基线八项权限、两个签名块、精确三项原生库、引擎和网页包全部通过。澎湃 OS 3 仍仅作静态兼容性说明。
+
+## 最终 ZIP 边界
+
+round-72 新源码 ZIP 包含当前许可包、v1–v11、完整审计与诚实日志，不含引擎、ELF、构建缓存、密钥库或签名材料。最终 ZIP 的 verify、秘密扫描、大小、条目数和 SHA-256 属于 post-package 证据，外置到 recovery 与交付清单，不回写已验 ZIP 造成自引用。完整实施审计见 `verifier/runs/round72-audit.md`，恢复边界见 `verifier/runs/recovery-round72.md`。

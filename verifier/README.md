@@ -93,3 +93,13 @@ Final authoritative artifact gate. Corrects the mistaken no-INTERNET assertion:
 that permission is present in the byte-unchanged baseline manifest. The APK must
 match all eight baseline permission names exactly, with no additions; removing
 baseline functionality is not part of this task. All other v9 gates are retained.
+
+## v11 (2026-11-22, created)
+Round-72 authoritative verification and delivery-evidence gate. Uses the explicit
+pre-round-71 commit for source/rename comparisons; preserves the current manually
+updated license archive without historical size/hash locks; adds bounded recursive
+archive traversal, opaque secret diagnostics, complete source-manifest and digest
+checks, safe concurrent packing, exclusive same-second logs, 17 primitive negative
+checks and 15 isolated integration checks. The exact browser-downloaded inherited
+APK must pass the complete v11 gate. Post-package source-ZIP evidence remains
+external to avoid self-reference. No chess/Java business behavior or APK bytes change.
