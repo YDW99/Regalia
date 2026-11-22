@@ -103,3 +103,43 @@ checks, safe concurrent packing, exclusive same-second logs, 17 primitive negati
 checks and 15 isolated integration checks. The exact browser-downloaded inherited
 APK must pass the complete v11 gate. Post-package source-ZIP evidence remains
 external to avoid self-reference. No chess/Java business behavior or APK bytes change.
+
+Round-73 follow-up hardening retains v11 and addresses six archive/log-gate review
+findings: directory entries consume member budget; complete bounded members are
+detected as ZIP by content even with leading data or neutral suffixes; protected
+license and delivery ZIP budgets run before CRC/digest decompression; source payload
+and secret-scan entry points share content-based archive detection; `verify-apk.py`
+is a required source entry; and HUP/INT/TERM paths preserve output, history and
+129/130/143 statuses. The source gate also reuses the bounded protected-license
+entry. New regressions reproduce the old failures and pass 21 primitive negative
+checks plus 18 isolated integration checks. CodeQL/MobSF/Dependabot metadata and
+the gradlew executable index mode are restored after the current auto-unzip upload.
+
+Round-74 follow-up fixes wrapper-only signal handling. The child runs asynchronously
+with inherited stdin while Bash waits on its PID; HUP/INT/TERM handlers terminate and
+reap that child before finalizing output, history and 129/130/143 statuses. Normal
+completion still returns the child's original status. A new regression signals only
+the wrapper PID, proves prompt termination/reaping and retains the existing process-
+group TERM case, bringing the primitive negative suite to 22 checks. Reviewed CI
+metadata and the gradlew executable mode are restored again after auto-unzip loss.
+
+Round-75 follow-up isolates each command in its own process group with `setsid`.
+HUP/INT/TERM handlers signal only that group, allow a two-second TERM grace period,
+then use a watchdog outside the cleaned group to escalate to KILL. The direct child
+is reaped before finalization and the watchdog is cancelled and reaped; inherited
+stdin, complete output/history and 129/130/143 statuses are retained. New regressions
+cover a non-`exec` background descendant and a child that refuses TERM, bringing the
+primitive negative suite to 24 checks. Reviewed CI metadata and the gradlew executable
+mode are restored again after auto-unzip loss.
+
+Round-76 follow-up corrects round-75's premature watchdog cancellation: direct-child
+reaping no longer cancels escalation, and the watchdog is reaped only after its
+bounded grace expires and group-level KILL has been issued. Startup HUP/INT/QUIT/TERM
+signals are deferred until `$!` is recorded; the launch subshell restores default
+signal dispositions before `exec setsid`. Cleanup signals both the direct PID (for the
+pre-`setsid` window) and its isolated PGID. QUIT triggers the same bounded cleanup
+and is logged as 131. Assertions now run before test fallback cleanup; new deterministic regressions cover
+a TERM-accepting parent with a stubborn orphan, the pre-assignment signal window and
+process-group QUIT, bringing the primitive negative suite to 27 checks. SIGKILL cannot
+be trapped, so no wrapper self-cleanup guarantee is claimed after an external KILL.
+Reviewed CI metadata and gradlew's Git index mode 100755 are restored again.

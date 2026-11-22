@@ -180,3 +180,100 @@ v1 **44/44**、v2 **27/27**、v3 **51/51**，r62 十三门全绿，r67-bench PAS
 ## 最终 ZIP 边界
 
 round-72 新源码 ZIP 包含当前许可包、v1–v11、完整审计与诚实日志，不含引擎、ELF、构建缓存、密钥库或签名材料。最终 ZIP 的 verify、秘密扫描、大小、条目数和 SHA-256 属于 post-package 证据，外置到 recovery 与交付清单，不回写已验 ZIP 造成自引用。完整实施审计见 `verifier/runs/round72-audit.md`，恢复边界见 `verifier/runs/recovery-round72.md`。
+
+
+# Regalia v1.2.3 — round-73 验证链补丁工作日志（2026-11-22 UTC）
+
+## 基线与范围
+
+根据新上传邮件的 6 条 actionable 意见加固 v11。补丁基线为当前远端 `upload` 提交 `f36e239e3a8b085e3c446620a32fcd57d6dfe996`；固定源码比较基线仍为 `f78317919818a02c1fa169a99b85cad6ebf8a1fe`。只修改验证器、追加式记录及已确认回退的 CI 元数据，不改棋类功能、Java 业务行为、APK、依赖、SDK、ABI、版本或权限，不执行远端写操作。
+
+## 六项修复
+
+- 目录成员在跳过内容前先占用共享成员预算；预算内目录仍通过且计数包含目录。
+- 每个非目录成员在既有单成员和累计预算内完整 spool，再用 `zipfile.is_zipfile()` 按内容识别 ZIP；非 ZIP 后缀、shebang 或其他前导数据不能绕过递归。确认为 ZIP 后才执行嵌套大小与深度限制，归档后缀损坏仍 fail closed。
+- 源码打包与秘密扫描共用实际 ZIP 内容识别入口；`payload.dat` 内嵌 ELF 会在发布前拒绝。
+- `verifier/v11/verify-apk.py` 加入必需文件清单，源目录与 ZIP 同步删除也不能绕过。
+- 最终源码 ZIP 在任何成员摘要、CRC 或 `archive.read()` 前先跑共享有界扫描；许可包及 source gate 也复用有界入口，保留原有 CRC 和当前字节一致性检查。
+- wrapper 的 EXIT trap 仅清理临时文件；HUP/INT/TERM 分别完成日志与 history 后以 129/130/143 退出，保留中断前输出并记录信号。
+
+## 自动解压元数据
+
+当前远端再次缺 `.github/dependabot.yml`，CodeQL/MobSF 回退且 gradlew index mode 为 100644。按 round-72 已审字节恢复 C/C++ no-build、checkout 禁持久凭据、`mobsfscan==1.2.0`、Dependabot 周检与 gradlew 100755；未做额外 CI 重构。根 `LICENSE&NOTICE.zip` 未修改，后续人工更新继续优先，不以本轮观察值作为固定大小或哈希。
+
+## 负向复现与回归
+
+新增用例先在保留旧实现的隔离副本上分别复现：TERM 后输出/history/退出码错误、前导数据隐式 ZIP 被接受、目录未计费、许可包先 CRC、源码包先摘要、嵌套 ELF 被打包以及 verify-apk 双删被接受。修复后 v11 原语负测 **21/21**、隔离集成测试 **18/18**、固定基线 source gate **27/27**。高压缩率 129 MiB 合成成员在摘要或 CRC 前被成员预算拒绝，未实际执行无界解压。
+
+既有回归 v1 **44/44**、v2 **27/27**、v3 **51/51**，r62 十三门全绿，r67-bench PASS，rename-only 十二项通过，JS 10 模块语法通过。网页包两次构建一致：24,393 行 / 1,500,732 B，SHA-256 `cc69b869077a72dc1367461c6567a47fea159d292fd5e3d207a2afef84f167b5`。本轮仅交付仓库相对路径补丁 ZIP，不生成 APK；补丁自身哈希不写入本日志，避免自引用。
+
+
+# Regalia v1.2.3 — round-74 包装器中断修复补丁工作日志（2026-11-22 UTC）
+
+## 基线与缺陷复现
+
+根据新邮件的 1 条 Major 意见修复 v11 wrapper。补丁基线为当前远端 `upload` 提交 `677fcef5fa0ab47311632f8febfef90b79e67563`，固定源码比较基线不变。旧实现对子进程组发 TERM 时能够通过测试，但只向 wrapper PID 发 TERM 时，前台 `sleep 30` 仍使 Bash 延迟 trap；新增用例在 5 秒等待后以 `TimeoutExpired` 复现，未把该超时记作通过。
+
+## 实施
+
+- 子命令改为异步启动并保存 `$!`，wrapper 使用 `wait` 等待；正常完成仍保留子命令原始退出码。
+- HUP/INT/TERM handler 在写最终日志前向本次子进程发 TERM 并 `wait` 回收，再保存完整 TMP 输出、history 和 129/130/143 状态；重复信号在 handler 内屏蔽。
+- 异步子命令显式继承调用者 stdin，避免 Bash 对后台命令默认接 `/dev/null` 改变既有行为；管道输入实测通过。
+- 新负测只向 wrapper PID 发 TERM，确认其及时退出 143、子进程已终止并回收、日志保留中断前输出且 history 指向同一日志；原进程组 TERM 用例继续保留。
+- 自动解压通道再次漏掉 `.github` 更新与 gradlew 可执行位，本轮按 round-73 已审字节恢复 CodeQL、MobSF、Dependabot 和 gradlew 100755，不做额外 CI 重构。
+
+本轮不改棋类功能、Java 业务行为、APK、依赖、SDK、ABI、版本或权限，不执行远端写操作。根 `LICENSE&NOTICE.zip` 未修改；后续人工更新继续优先，不以当前观察值作为固定大小或哈希。
+
+## 验证结果
+
+修复后 v11 原语负测 **22/22**、隔离集成测试 **18/18**、固定基线 source gate **27/27**、rename-only 十二项通过。既有 v1 **44/44**、v2 **27/27**、v3 **51/51**，r62 十三门全绿，r67-bench PASS，JS 10 模块语法通过。网页包两次构建一致，SHA-256 仍为 `cc69b869077a72dc1367461c6567a47fea159d292fd5e3d207a2afef84f167b5`。
+
+本轮仅交付仓库相对路径补丁 ZIP，不生成 APK；补丁自身哈希不写入本日志，避免自引用。
+
+
+# Regalia v1.2.3 — round-75 进程组与有界清理补丁工作日志（2026-11-22 UTC）
+
+## 基线与缺陷复现
+
+根据新邮件的 2 条 Major 意见继续加固 v11 wrapper。补丁基线为当前远端 `upload` 提交 `abbfc79f83d518136c5f55740db60819ce9eed21`，固定源码比较基线不变。旧实现下，非 `exec` 后代用例明确报告 `command lacked an isolated process group`；拒绝 TERM 的子进程使 wrapper 在 8 秒后仍以 `TimeoutExpired` 阻塞。两项失败均作为旧缺陷证据保留，未通过放宽断言获得通过。
+
+## 实施
+
+- 子命令通过 `setsid` 在独立进程组中启动，wrapper 仍保存并等待其直接子 PID；HUP/INT/TERM handler 只向该命令的负 PGID 发信号，不向调用者所在组发清理信号。
+- TERM 后设置 2 秒有限宽限；独立 watchdog 不属于被清理进程组，超时向同一组发 KILL。handler 回收直接子进程，再取消并回收 watchdog，最后保留完整 TMP 输出、history 和原信号对应的 129/130/143 状态。
+- 新负测分别覆盖 `bash -c 'sleep 30 & …; wait'` 的非 `exec` 后代，以及忽略 TERM 的循环子进程；断言独立组、直接子与后代消失、143 状态和日志/history 完整。原 `exec sleep 30`、进程组 TERM、正常退出码和并发日志用例继续保留，管道 stdin 另行实测通过。
+- 自动解压通道再次漏掉 `.github` 更新与 gradlew 可执行位，本轮按 round-74 已审字节恢复 CodeQL、MobSF、Dependabot 和 gradlew 100755，不做额外 CI 重构。
+
+本轮不改棋类功能、Java 业务行为、APK、依赖、SDK、ABI、版本或权限，不执行远端写操作。根 `LICENSE&NOTICE.zip` 未修改；后续人工更新继续优先，不以当前观察值作为固定大小或哈希，也不因历史差异回退。
+
+## 验证结果
+
+修复后 v11 原语负测 **24/24**、隔离集成测试 **18/18**、固定基线 source gate **27/27**、rename-only 十二项通过。隔离集成使用仅本地验证提交完成干净检出检查，未推送远端。既有 v1 **44/44**、v2 **27/27**、v3 **51/51**，r62 十三门全绿，r67-bench PASS，JS 10 模块语法通过。网页包两次构建与构建前逐字节一致，大小 1,500,732 B，SHA-256 仍为 `cc69b869077a72dc1367461c6567a47fea159d292fd5e3d207a2afef84f167b5`。
+
+本轮仅交付仓库相对路径补丁 ZIP，不生成 APK；补丁自身哈希不写入本日志，避免自引用。
+
+
+# Regalia v1.2.3 — round-76 完整进程组清理补丁工作日志（2026-11-22 UTC）
+
+## 基线与缺陷复现
+
+根据新邮件的 4 条 actionable 意见继续加固 v11 wrapper。补丁基线为当前远端 `upload` 提交 `f28bb65e9aea80a2a239a9286ecb67c10433ec33`，固定源码比较基线不变。该提交中的 gradlew Git index mode 实测为 100644，与 round-75 恢复记录不一致。
+
+旧实现经新增负测复现：父进程响应 TERM 退出后，忽略 HUP/TERM 的孤儿后代仍存活；在 `CHILD_PID=$!` 前精确注入 TERM 会遗留已启动命令；组级 QUIT 用例在 8 秒后超时。首个 Bash 顽固孤儿夹具因旧看门竞态偶发碰巧通过，未作为有效证据；最终改用确定性 Python 父子夹具连续复现，未放宽任何断言。
+
+## 实施
+
+- 直接子进程退出不再取消 watchdog。handler 回收直接子进程后仍等待 watchdog 完成 2 秒有限宽限并发出组级 KILL，再回收 watchdog、保存日志和 history；正常命令完成路径不进入该宽限流程。
+- 启动信号在 `$!` 记录前只暂存首个 HUP/INT/QUIT/TERM，记录 PID 后立即进入统一清理。后台子壳先恢复默认信号处置再 `exec setsid`，避免暂存期间的忽略状态遗传给命令。
+- 清理同时处理直接 PID 与本次命令的独立负 PGID：前者覆盖 setsid 尚未 exec 的窗口，后者覆盖全部后代；不向调用者所在组发送清理信号。组级 QUIT 由 wrapper 捕获并触发同一有界清理，按 131 落盘。
+- 原后代与 TERM-refusal 用例的进程消失及独立组断言移到 `try` 内的兜底清理之前；`finally` 仅在断言失败后负责收尾。新增顽固孤儿、PID 赋值前精确中断和组级 QUIT 三项负测，总数增至 27。
+- SIGKILL 不可被 Bash 捕获，本轮不声称 wrapper 被外部 KILL 后仍能自我清理；未引入额外常驻监督进程。保留 setsid 隔离、stdin、输出、history 和正常退出码语义。
+- 自动解压通道再次回退 `.github` 与 gradlew 模式，本轮按已审字节恢复 CodeQL、MobSF、Dependabot，并同时验证工作树及 Git index 中 gradlew 均为 100755，不做额外 CI 重构。
+
+本轮不改棋类功能、Java 业务行为、APK、依赖、SDK、ABI、版本或权限，不执行远端写操作。根 `LICENSE&NOTICE.zip` 未修改；后续人工更新继续优先，不以当前观察值作为固定大小或哈希，也不因历史差异回退。
+
+## 验证结果
+
+修复后 v11 原语负测 **27/27**、隔离集成测试 **18/18**、固定基线 source gate **27/27**、rename-only 十二项通过。隔离集成使用仅本地验证提交完成干净检出检查，未推送远端。既有 v1 **44/44**、v2 **27/27**、v3 **51/51**，r62 十三门全绿，r67-bench PASS，JS 10 模块语法通过，管道 stdin 实测通过。网页包两次构建与构建前逐字节一致，大小 1,500,732 B，SHA-256 仍为 `cc69b869077a72dc1367461c6567a47fea159d292fd5e3d207a2afef84f167b5`。
+
+本轮仅交付仓库相对路径补丁 ZIP，不生成 APK；补丁自身哈希不写入本日志，避免自引用。
