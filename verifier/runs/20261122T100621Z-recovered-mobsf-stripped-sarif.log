@@ -1,0 +1,8 @@
+timestamp_start=2026-11-22T10:06:21Z
+timestamp_end=2026-11-22T10:06:29Z
+cwd=/tmp/regalia-r71/repo
+command=bash -c set\ +e\;\ cd\ /tmp/regalia-r71/mobsf-stripped\;\ mobsfscan\ src/main/java\ src/main/AndroidManifest.xml\ --type\ android\ --sarif\ --output\ /tmp/regalia-r71/repo/verifier/runs/recovered-mobsf-stripped.sarif\;\ rc=\$\?\;\ set\ -e\;\ echo\ mobsfscan_exit=\$rc\;\ test\ \$rc\ -eq\ 0\ -o\ \$rc\ -eq\ 1\;\ test\ -s\ /tmp/regalia-r71/repo/verifier/runs/recovered-mobsf-stripped.sarif 
+exit_code=0
+--- output ---
+[33mInvalid YAML, ignoring config from .mobsf[0m
+mobsfscan_exit=1

@@ -3339,21 +3339,25 @@ if(gameOver||reviewMode||setupMode||gameState.currentTurn===playerColor||!isAITh
 //   the tablebase probe and fall through to Stockfish (which is always
 //   available once the engine is ready).
 if(aiLevel===7&&typeof pieceCountLE7==='function'&&pieceCountLE7(gameState.board)){
-_tbLoading=true;_tbLoadingBoard=gameState.board;
-// v1.2.3 round-68 (T5): claim the shared _tbLoading ownership token (see
-//   tablebase.js) — the manual tablebase path lowers the flag only when it
-//   still owns it; without this claim a stale manual callback could lower
-//   THIS probe's flag (and vice versa).
+_tbLoading=true;
+// v1.2.3 round-68 (T5) → round-69 (CodeRabbit PR#57 Minor): claim the
+//   shared _tbLoading ownership token (see tablebase.js). round-68 pointed
+//   the token at gameState.board — NOT unique: a manual query still in
+//   flight on the SAME board reference could pass the identity check and
+//   lower THIS probe's flag (or vice versa). A fresh object per arm is
+//   unique by construction; each path lowers the flag only while it still
+//   owns the CURRENT token.
+const _tbOwnerToken={};_tbLoadingOwner=_tbOwnerToken;
 _aiBarInfo='⏳ '+T('tb_querying');_updateAIThinkDisplay();render();
 // Save board reference BEFORE async call to prevent race condition
 // (gameState may change while tablebase query is in-flight)
 const _tbSavedBoard=gameState.board;
 probeTablebase(gameState).then(function(tbData){
-// v1.2.3 round-68 (T5): lower the shared loading flag only when this probe
-//   still owns it — the token still pointing at this probe's saved board
-//   proves no NEWER query re-armed the flag while this one was in flight
-//   (see tablebase.js for the ownership protocol).
-if(_tbLoadingBoard===_tbSavedBoard){_tbLoading=false;_tbLoadingBoard=null;}
+// v1.2.3 round-68 (T5) → round-69: lower the shared loading flag only when
+//   this probe still owns it — the token still being OURS proves no NEWER
+//   query re-armed the flag while this one was in flight (see tablebase.js
+//   for the ownership protocol).
+if(_tbLoadingOwner===_tbOwnerToken){_tbLoading=false;_tbLoadingOwner=null;}
 _tbRetryCount=0;
 if(tbData){
 const tbMove=bestMoveFromTablebase(tbData);
@@ -3378,7 +3382,7 @@ return;
 // TB data arrived but no valid move — fall back to Stockfish
 _requestStockfishMove();
 }).catch(function(){
-if(_tbLoadingBoard===_tbSavedBoard){_tbLoading=false;_tbLoadingBoard=null;}
+if(_tbLoadingOwner===_tbOwnerToken){_tbLoading=false;_tbLoadingOwner=null;}
 _tbRetryCount++;
 if(_tbRetryCount<=2){
 isAIThinking=false;_aiBarInfo='';doAIMove();

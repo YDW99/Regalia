@@ -1,0 +1,26 @@
+timestamp_start=2026-11-22T09:55:52Z
+timestamp_end=2026-11-22T09:56:29Z
+cwd=/tmp/regalia-r71/repo
+command=bash verifier/runs/r62-negative-tests.sh 
+exit_code=0
+--- output ---
+NEG[N1-dedup] mutated=yes sentinel=RED
+NEG[N2-rescue] mutated=yes sentinel=RED
+NEG[N3-unbound] mutated=yes sentinel=RED
+NEG[N4-list] mutated=yes sentinel=RED
+NEG[N5-manual] mutated=yes sentinel=RED
+NEG[N6-watchdog] mutated=yes sentinel=RED
+NEG[N7-f9scan] mutated=yes sentinel=RED
+=== restored, final all-green check ===
+===== RESULT: 44 passed, 0 failed =====
+===== RESULT: 27 passed, 0 failed =====
+===== RESULT: 51 passed, 0 failed =====
+NEG[N8-bench] sentinel=GREEN (all adversarial cases under bound)
+ok: bench scan: 10MB single-line mixed tags: 105.4ms (bound 1000ms)
+R67-BENCH OK
+NEG[N8a-split-oldform] mutated=yes sentinel=RED (lookbehind splitter caught: hard-timeout kill or bound exceeded)
+NEG[N8b-scan-oldform] mutated=yes sentinel=RED (per-candidate rescan scanner caught: hard-timeout kill or bound exceeded)
+NEG[N8c-meta-newline] mutated=yes sentinel=RED (input meta check fired on the escaping accident)
+NEG[N8d-deadloop] mutated=yes sentinel=RED (dead-loop case killed at hard timeout and named)
+NEG[N9-lock] mutated=zero-touch sentinel=RED
+R62-NEG OK: all thirteen gates green (11 mutations RED + bench bound + lock mutex), baseline green

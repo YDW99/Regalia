@@ -1,0 +1,39 @@
+timestamp_start=2026-11-22T10:42:20Z
+timestamp_end=2026-11-22T10:43:12Z
+cwd=/tmp/regalia-r71/repo
+command=bash -c export\ JAVA_HOME=/mnt/agents/buildenv/jdk17\;\ export\ PATH=\"\$JAVA_HOME/bin:/mnt/agents/buildenv/gradle-8.11.1/bin:\$PATH\"\;\ java\ -version\;\ gradle\ --version\;\ /mnt/agents/buildenv/sdk/cmake/3.31.6/bin/cmake\ --version\;\ grep\ \"\^Pkg.Revision\"\ /mnt/agents/buildenv/sdk/ndk/27.2.12479018/source.properties\;\ /mnt/agents/buildenv/sdk/build-tools/35.0.0/aapt\ version 
+exit_code=0
+--- output ---
+openjdk version "17.0.20.1" 2026-08-18
+OpenJDK Runtime Environment Temurin-17.0.20.1+1 (build 17.0.20.1+1)
+OpenJDK 64-Bit Server VM Temurin-17.0.20.1+1 (build 17.0.20.1+1, mixed mode, sharing)
+
+Welcome to Gradle 8.11.1!
+
+Here are the highlights of this release:
+ - Parallel load and store for Configuration Cache
+ - Java compilation errors at the end of the build output
+ - Consolidated report for warnings and deprecations
+
+For more details see https://docs.gradle.org/8.11.1/release-notes.html
+
+
+------------------------------------------------------------
+Gradle 8.11.1
+------------------------------------------------------------
+
+Build time:    2024-11-20 16:56:46 UTC
+Revision:      481cb05a490e0ef9f8620f7873b83bd8a72e7c39
+
+Kotlin:        2.0.20
+Groovy:        3.0.22
+Ant:           Apache Ant(TM) version 1.10.14 compiled on August 16 2023
+Launcher JVM:  17.0.20.1 (Eclipse Adoptium 17.0.20.1+1)
+Daemon JVM:    /mnt/agents/buildenv/jdk17 (no JDK specified, using current Java home)
+OS:            Linux 6.18.44 amd64
+
+cmake version 3.31.6
+
+CMake suite maintained and supported by Kitware (kitware.com/cmake).
+Pkg.Revision = 27.2.12479018
+Android Asset Packaging Tool, v0.2-11948202

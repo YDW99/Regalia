@@ -1,0 +1,9 @@
+timestamp_start=2026-11-22T10:36:58Z
+timestamp_end=2026-11-22T10:40:58Z
+cwd=/tmp/regalia-r71/repo
+command=python3 verifier/v10/verify-apk.py /mnt/agents/output/.Regalia-v1.2.3-round71-release.payload.bin
+exit_code=124
+--- output ---
+Outer tool deadline expired after 240 seconds. The runner was terminated before its normal log finalization.
+Recovered temporary output file /tmp/tmp.DAf41QBQ86 had birth timestamp 2026-11-22T10:36:58Z and size 0; no subprocess output was preserved.
+This run is a TIMEOUT, not a pass. The staged payload had already passed cmp and SHA-256 identity against the locally validated APK.

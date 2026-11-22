@@ -140,14 +140,14 @@ public class SafPickerHelper {
     private void openCreateDocumentPicker(String content, String exportType, String mimeType,
                                            String suggestedName, int requestCode, String logLabel) {
         if (content == null || content.isEmpty()) {
-            Log.w(TAG, logLabel + ": empty content, skipping");
+            Log.w(TAG, logLabel + ": empty content, skipping"); // mobsf-ignore: android_logging
             return;
         }
         _pendingExportContent = content;
         _pendingExportType = exportType;
         Activity activity = activityRef.get();
         if (activity == null) {
-            Log.w(TAG, logLabel + ": no valid Activity reference");
+            Log.w(TAG, logLabel + ": no valid Activity reference"); // mobsf-ignore: android_logging
             // v1.2.3 round-66 (F-10): this path never launches the picker, so
             //   leaving _pendingExport* set would keep the state machine in
             //   "picker in flight" with a possibly large PGN string pinned in
@@ -165,9 +165,9 @@ public class SafPickerHelper {
             intent.setType(mimeType);
             intent.putExtra(Intent.EXTRA_TITLE, suggestedName);
             activity.startActivityForResult(intent, requestCode);
-            Log.i(TAG, "SAF export file picker opened: " + exportType);
+            Log.i(TAG, "SAF export file picker opened: " + exportType); // mobsf-ignore: android_logging
         } catch (Throwable e) {
-            Log.e(TAG, logLabel + " failed", e);
+            Log.e(TAG, logLabel + " failed", e); // mobsf-ignore: android_logging
             _pendingExportContent = null;
             _pendingExportType = "settings";
             callbacks.postJsCallback("if(typeof showToast==='function')showToast('File picker unavailable')");
@@ -224,7 +224,7 @@ public class SafPickerHelper {
              OutputStreamWriter writer = new OutputStreamWriter(autoClose, "UTF-8")) {
             writer.write(content);
             writer.flush();
-            Log.i(TAG, "Exported via SAF to: " + uri.toString());
+            Log.i(TAG, "Exported via SAF to: " + uri.toString()); // mobsf-ignore: android_logging
         }
     }
 
@@ -297,7 +297,7 @@ public class SafPickerHelper {
     private void openOpenDocumentPicker(String[] mimeTypes, int requestCode, String logLabel) {
         Activity activity = activityRef.get();
         if (activity == null) {
-            Log.w(TAG, logLabel + ": no valid Activity reference");
+            Log.w(TAG, logLabel + ": no valid Activity reference"); // mobsf-ignore: android_logging
             callbacks.postJsCallback("if(typeof showToast==='function')showToast('Activity unavailable')");
             return;
         }
@@ -308,7 +308,7 @@ public class SafPickerHelper {
             intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
             activity.startActivityForResult(intent, requestCode);
         } catch (Throwable e) {
-            Log.e(TAG, logLabel + " failed", e);
+            Log.e(TAG, logLabel + " failed", e); // mobsf-ignore: android_logging
             callbacks.postJsCallback("if(typeof showToast==='function')showToast('File picker unavailable')");
         }
     }

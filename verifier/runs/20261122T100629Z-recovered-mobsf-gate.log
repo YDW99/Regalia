@@ -1,0 +1,11 @@
+timestamp_start=2026-11-22T10:06:29Z
+timestamp_end=2026-11-22T10:06:29Z
+cwd=/tmp/regalia-r71/repo
+command=python3 verifier/v5/mobsf-gate.py verifier/runs/recovered-mobsf-current.sarif verifier/runs/recovered-mobsf-stripped.sarif 
+exit_code=1
+--- output ---
+Traceback (most recent call last):
+  File "/tmp/regalia-r71/repo/verifier/v5/mobsf-gate.py", line 73, in <module>
+    assert not missing, f'missing disputed spans: {missing}'
+           ^^^^^^^^^^^
+AssertionError: missing disputed spans: {"('EngineSettingsHelper.java', (202, 254))": 1}

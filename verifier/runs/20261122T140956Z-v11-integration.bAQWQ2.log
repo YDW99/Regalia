@@ -1,0 +1,23 @@
+timestamp_start=2026-11-22T14:09:56Z
+timestamp_end=2026-11-22T14:10:03Z
+cwd=/tmp/regalia-r72/work
+command=python3 verifier/v11/integration-tests.py 
+exit_code=0
+--- output ---
+PASS V11-I01: complete current source payload packs and verifies
+PASS V11-I02: unexpected archive member is rejected by exact manifest comparison
+PASS V11-I03: missing archive member is rejected by exact manifest comparison
+PASS V11-I04: same-name modified content is rejected by per-member SHA-256
+PASS V11-I05: required-entry gate rejects removal of build.gradle
+PASS V11-I06: required-entry gate rejects removal of gradlew
+PASS V11-I07: required-entry gate rejects removal of src/main/java/com/Regalia/MainActivity.java
+PASS V11-I08: required-entry gate rejects removal of verifier/v11/secret_scan.py
+PASS V11-I09: valid manually updated license archive passes without historical size/hash lock
+PASS V11-I10: in-tree repack excludes previous ZIP, lock and temporary artifacts
+PASS V11-I11: preexisting output lock fails closed without touching output or owner lock
+Preparing worktree (detached HEAD 246dbdb)
+PASS V11-I12: clean committed checkout passes with a base independent of HEAD
+PASS V11-I13: uncommitted and committed out-of-scope Java edits both fail
+PASS V11-I14: protected build configuration edit fails against fixed base
+PASS V11-I15: manual license update is accepted without comparing historical hash
+V11-INTEGRATION OK: 15/15

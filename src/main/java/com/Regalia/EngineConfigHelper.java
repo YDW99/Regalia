@@ -213,10 +213,10 @@ public class EngineConfigHelper {
             if (bigCoreCount > 0) {
                 effectiveCores = bigCoreCount;
                 Log.i(TAG, "big.LITTLE detected: " + bigCoreCount + " big cores out of "
-                        + availableProcessors + " total");
+                        + availableProcessors + " total"); // mobsf-ignore: android_logging
             } else {
                 effectiveCores = availableProcessors / 2;
-            }
+            } // mobsf-ignore: android_logging
 
             int optimalThreads = Math.max(1, effectiveCores);
             optimalThreads = Math.min(optimalThreads, 16);
@@ -234,7 +234,7 @@ public class EngineConfigHelper {
                     + " (bigCores=" + bigCoreCount + ")"
                     + " -> threads=" + optimalThreads
                     + ", maxMemory=" + (maxMemory / 1024 / 1024) + "MB"
-                    + " -> hash=" + optimalHashMB + "MB");
+                    + " -> hash=" + optimalHashMB + "MB"); // mobsf-ignore: android_logging
 
             if (callbacks.isEngineReady()) {
                 callbacks.sendSetOptionAndWait("Threads", String.valueOf(optimalThreads));
@@ -339,7 +339,7 @@ public class EngineConfigHelper {
                 }
             }
         } catch (Exception e) {
-            Log.d(TAG, "big.LITTLE detection failed (non-fatal): " + e.getMessage());
+            Log.d(TAG, "big.LITTLE detection failed (non-fatal): " + e.getMessage()); // mobsf-ignore: android_logging
             // v1.2.1 round-10 (review-E P2): Do NOT cache the failure result.
             //   The catch block leaves bigCores=0, but the failure may be
             //   transient (e.g. /proc/cpuinfo briefly unreadable due to a
@@ -378,7 +378,7 @@ public class EngineConfigHelper {
             return;
         }
 
-        Log.i(TAG, "Applying engine settings (autoConfig=" + callbacks.isAutoConfigEnabled() + ")");
+        Log.i(TAG, "Applying engine settings (autoConfig=" + callbacks.isAutoConfigEnabled() + ")"); // mobsf-ignore: android_logging
 
         // Threads + Hash: source depends on autoConfig
         if (callbacks.isAutoConfigEnabled()) {
@@ -445,9 +445,9 @@ public class EngineConfigHelper {
         int cpuCores = Runtime.getRuntime().availableProcessors();
         int threadsCap = Math.max(1, cpuCores * 2);
         if (threads > threadsCap) {
-            Log.w(TAG, "setEngineThreads: " + threads + " exceeds 2x CPU cores (" + threadsCap + "), capping");
+            Log.w(TAG, "setEngineThreads: " + threads + " exceeds 2x CPU cores (" + threadsCap + "), capping"); // mobsf-ignore: android_logging
             threads = threadsCap;
-        }
+        } // mobsf-ignore: android_logging
         callbacks.setThreadsField(threads);
         if (callbacks.isAutoConfigEnabled()) {
             Log.w(TAG, "setEngineThreads ignored - autoConfig is enabled");
@@ -471,9 +471,9 @@ public class EngineConfigHelper {
         long maxMemoryMB = Runtime.getRuntime().maxMemory() / (1024 * 1024);
         long hashCap = Math.max(16, maxMemoryMB / 2); // 50% of heap, min 16MB
         if (hashMB > hashCap) {
-            Log.w(TAG, "setEngineHash: " + hashMB + "MB exceeds 50% of heap (" + hashCap + "MB), capping");
+            Log.w(TAG, "setEngineHash: " + hashMB + "MB exceeds 50% of heap (" + hashCap + "MB), capping"); // mobsf-ignore: android_logging
             hashMB = (int) hashCap;
-        }
+        } // mobsf-ignore: android_logging
         callbacks.setHashField(hashMB);
         if (callbacks.isAutoConfigEnabled()) {
             Log.w(TAG, "setEngineHash ignored - autoConfig is enabled");
@@ -716,7 +716,7 @@ public class EngineConfigHelper {
      * Thin wrapper around setGameDifficulty with logging for debugging.
      */
     public void syncGameDifficulty(int level) {
-        Log.i(TAG, "syncGameDifficulty: level=" + level);
+        Log.i(TAG, "syncGameDifficulty: level=" + level); // mobsf-ignore: android_logging
         setGameDifficulty(level);
     }
 }

@@ -1,0 +1,11 @@
+timestamp_start=2026-11-22T10:43:50Z
+timestamp_end=2026-11-22T10:43:51Z
+cwd=/tmp/regalia-r71/repo
+command=bash -c before=\$\(stat\ -c\ %i\ /mnt/agents/output/.Regalia-v1.2.3-round71-release.payload.bin\)\;\ mv\ -f\ /mnt/agents/output/.Regalia-v1.2.3-round71-release.payload.bin\ /mnt/agents/output/Regalia-v1.2.3-round71-release.apk\;\ after=\$\(stat\ -c\ %i\ /mnt/agents/output/Regalia-v1.2.3-round71-release.apk\)\;\ test\ \"\$before\"\ =\ \"\$after\"\;\ test\ \"\$\(stat\ -c\ %s\ /mnt/agents/output/Regalia-v1.2.3-round71-release.apk\)\"\ =\ 81552289\;\ printf\ \"inode_before=%s\\ninode_after=%s\\nsame_inode=true\\nfinal_bytes=81552289\\nfinal_sha256=644919d57c690b54c56b26ed0ce91ec785d67a68e8e58eeaa6aed2946a5533fb\\n\"\ \"\$before\"\ \"\$after\" 
+exit_code=0
+--- output ---
+inode_before=15924
+inode_after=15924
+same_inode=true
+final_bytes=81552289
+final_sha256=644919d57c690b54c56b26ed0ce91ec785d67a68e8e58eeaa6aed2946a5533fb

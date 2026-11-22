@@ -1,0 +1,67 @@
+timestamp_start=2026-11-22T10:30:54Z
+timestamp_end=2026-11-22T10:31:33Z
+cwd=/tmp/regalia-r71/repo
+command=python3 verifier/v8/verify-apk.py build/outputs/apk/release/Regalia-release.apk 
+exit_code=1
+--- output ---
+$ apksigner verify --verbose --print-certs /tmp/regalia-r71/repo/build/outputs/apk/release/Regalia-release.apk
+Verifies
+Verified using v1 scheme (JAR signing): true
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): true
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+Signer #1 certificate DN: CN=Regalia, OU=Regalia, O=Regalia, L=Beijing, ST=Beijing, C=CN
+Signer #1 certificate SHA-256 digest: 45bc6d36c9fcff8ef9e55f510b43bce44cb854ea4b2f235a0f4955da05a8d8bc
+Signer #1 certificate SHA-1 digest: 891549beeae3c1ccd77f478f7817b81e8d7d567d
+Signer #1 certificate MD5 digest: 2605d6cc3b7b180933d6948b7b7e7d75
+Signer #1 key algorithm: RSA
+Signer #1 key size (bits): 4096
+Signer #1 public key SHA-256 digest: aa5e989f5a3d9884af5cbf2b44600fbe86dbb619a0b0f66f3198ff8b325bb2c1
+Signer #1 public key SHA-1 digest: 413f4dd5081b9d3f181f75c0a59c43d281e5d5d8
+Signer #1 public key MD5 digest: 6ea8e6f2160a855e06e2c99dc545b17b
+WARNING: META-INF/com/android/build/gradle/app-metadata.properties not protected by signature. Unauthorized modifications to this JAR entry will not be detected. Delete or move the entry outside of META-INF/.
+WARNING: META-INF/version-control-info.textproto not protected by signature. Unauthorized modifications to this JAR entry will not be detected. Delete or move the entry outside of META-INF/.
+
+$ aapt dump badging /tmp/regalia-r71/repo/build/outputs/apk/release/Regalia-release.apk
+package: name='com.Regalia' versionCode='10203' versionName='1.2.3' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'
+sdkVersion:'23'
+targetSdkVersion:'35'
+uses-permission: name='android.permission.INTERNET'
+uses-permission: name='android.permission.WAKE_LOCK'
+uses-permission: name='android.permission.VIBRATE'
+uses-permission: name='android.permission.WRITE_EXTERNAL_STORAGE' maxSdkVersion='28'
+uses-permission: name='android.permission.READ_EXTERNAL_STORAGE' maxSdkVersion='32'
+uses-permission: name='android.permission.FOREGROUND_SERVICE'
+uses-permission: name='android.permission.FOREGROUND_SERVICE_SPECIAL_USE'
+uses-permission: name='android.permission.POST_NOTIFICATIONS'
+application-label:'Regalia v1.2.3'
+application-icon-160:'res/9w.png'
+application-icon-240:'res/yn.png'
+application-icon-320:'res/FS.png'
+application-icon-480:'res/RJ.png'
+application-icon-640:'res/o-.png'
+application: label='Regalia v1.2.3' icon='res/9w.png'
+launchable-activity: name='com.Regalia.MainActivity'  label='' icon=''
+feature-group: label=''
+  uses-feature-not-required: name='android.hardware.screen.landscape'
+  uses-feature-not-required: name='android.hardware.screen.portrait'
+  uses-feature: name='android.hardware.faketouch'
+  uses-implied-feature: name='android.hardware.faketouch' reason='default feature for all apps'
+main
+other-activities
+other-services
+supports-screens: 'small' 'normal' 'large' 'xlarge'
+supports-any-density: 'true'
+locales: '--_--'
+densities: '160' '240' '320' '480' '640'
+native-code: 'arm64-v8a'
+
+Traceback (most recent call last):
+  File "/tmp/regalia-r71/repo/verifier/v8/verify-apk.py", line 197, in <module>
+    main()
+  File "/tmp/regalia-r71/repo/verifier/v8/verify-apk.py", line 152, in main
+    raise AssertionError("unexpected INTERNET permission")
+AssertionError: unexpected INTERNET permission

@@ -1,0 +1,9 @@
+timestamp_start=2026-11-22T10:11:23Z
+timestamp_end=2026-11-22T10:13:13Z
+cwd=/tmp/regalia-r71/repo
+command=bash -c set\ -e\;\ A=/mnt/agents/buildenv/dl/stockfish-sf19/stockfish-android-arm64-universal.fresh.tar.gz\;\ test\ \"\$\(stat\ -c\ %s\ \"\$A\"\)\"\ =\ 80233187\;\ test\ \"\$\(sha256sum\ \"\$A\"\ \|\ cut\ -d\"\ \"\ -f1\)\"\ =\ ebb24051aa4a222b4daaf049b882ecf1163d370c128fe02316602643f4d5e426\;\ rm\ -rf\ /tmp/regalia-r71/engine-stage\;\ mkdir\ -p\ /tmp/regalia-r71/engine-stage\;\ tar\ -xzf\ \"\$A\"\ -C\ /tmp/regalia-r71/engine-stage\ stockfish/stockfish-android-arm64-universal\;\ mkdir\ -p\ src/main/jniLibs/arm64-v8a\;\ cp\ /tmp/regalia-r71/engine-stage/stockfish/stockfish-android-arm64-universal\ src/main/jniLibs/arm64-v8a/libstockfish.so\;\ chmod\ 755\ src/main/jniLibs/arm64-v8a/libstockfish.so\;\ test\ \"\$\(stat\ -c\ %s\ src/main/jniLibs/arm64-v8a/libstockfish.so\)\"\ =\ 100695968\;\ test\ \"\$\(sha256sum\ src/main/jniLibs/arm64-v8a/libstockfish.so\ \|\ cut\ -d\"\ \"\ -f1\)\"\ =\ ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8\;\ stat\ -c\ \"engine_bytes=%s\"\ src/main/jniLibs/arm64-v8a/libstockfish.so\;\ sha256sum\ src/main/jniLibs/arm64-v8a/libstockfish.so\;\ echo\ ENGINE-STAGE-OK 
+exit_code=0
+--- output ---
+engine_bytes=100695968
+ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8  src/main/jniLibs/arm64-v8a/libstockfish.so
+ENGINE-STAGE-OK

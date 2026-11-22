@@ -1,0 +1,15 @@
+timestamp_start=2026-11-22T14:17:01Z
+timestamp_end=2026-11-22T14:19:24Z
+cwd=/tmp/regalia-r72/work
+command=python3 verifier/v11/browser-download.py http://127.0.0.1:8765/ /tmp/regalia-r72/download/Regalia-v1.2.3-round71-release.apk 
+exit_code=0
+--- output ---
+{
+  "page_title": "Regalia v1.2.3 · APK 下载",
+  "suggested_filename": "Regalia-v1.2.3-round71-release.apk",
+  "download_url": "http://127.0.0.1:8765/Regalia-round71.bin",
+  "saved_bytes": 81552289,
+  "saved_sha256": "644919d57c690b54c56b26ed0ce91ec785d67a68e8e58eeaa6aed2946a5533fb",
+  "failure": null
+}
+BROWSER-DOWNLOAD-V11 OK

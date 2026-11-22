@@ -1,0 +1,7 @@
+timestamp_start=2026-11-22T14:11:31Z
+timestamp_end=2026-11-22T14:11:31Z
+cwd=/tmp/regalia-r72/work
+command=bash -c git\ diff\ --check\ \&\&\ git\ diff\ --cached\ --check\ \&\&\ echo\ DIFF-CHECK-OK 
+exit_code=0
+--- output ---
+DIFF-CHECK-OK

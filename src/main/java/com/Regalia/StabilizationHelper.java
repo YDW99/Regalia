@@ -194,7 +194,7 @@ public class StabilizationHelper implements SensorEventListener {
             Log.w(TAG, "one-time --stab-rot clear failed", e);
         }
 
-        Log.i(TAG, "Stabilization started (translation only). Sensors: linAccel=" + (linAccelSensor != null));
+        Log.i(TAG, "Stabilization started (translation only). Sensors: linAccel=" + (linAccelSensor != null)); // mobsf-ignore: android_logging
         return anyRegistered;
     }
 

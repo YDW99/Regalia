@@ -113,17 +113,17 @@ public class ChessWebViewClient extends WebViewClient {
                         appCtx.startActivity(intent);
                     }
                 }
-                Log.i(TAG, "Opened external URL via WebViewClient: " + url);
+                Log.i(TAG, "Opened external URL via WebViewClient: " + url); // mobsf-ignore: android_logging
             } catch (Exception e) {
                 // v1.2.3 (S1181): catch Exception, not Throwable — startActivity
                 //   throws ActivityNotFoundException/SecurityException/IllegalStateException
                 //   (all Exception subtypes). Errors (OOM etc.) must not be swallowed.
-                Log.w(TAG, "Failed to open external URL: " + url, e);
+                Log.w(TAG, "Failed to open external URL: " + url, e); // mobsf-ignore: android_logging
             }
             return true; // Always return true so the WebView itself doesn't try to load it
         }
         // Block all other schemes (file:, content:, javascript:, intent:, etc.)
-        Log.w(TAG, "Blocked non-asset, non-http(s) URL: " + url);
+        Log.w(TAG, "Blocked non-asset, non-http(s) URL: " + url); // mobsf-ignore: android_logging
         return true;
     }
 
@@ -144,7 +144,7 @@ public class ChessWebViewClient extends WebViewClient {
     @Override
     public void onPageFinished(WebView view, String url) {
         super.onPageFinished(view, url);
-        Log.i(TAG, "Page loaded: " + url);
+        Log.i(TAG, "Page loaded: " + url); // mobsf-ignore: android_logging
         // v18.6.0: Use WeakReference to avoid leaking the Activity
         MainActivity activity = activityRef.get();
         if (activity != null) {
@@ -164,7 +164,7 @@ public class ChessWebViewClient extends WebViewClient {
     @Override
     public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
         // v1.0.8 PHASE 30: simplified log (removed invented "policy" label)
-        Log.e(TAG, "WebView render process gone: crashed=" + detail.didCrash());
+        Log.e(TAG, "WebView render process gone: crashed=" + detail.didCrash()); // mobsf-ignore: android_logging
         // v1.1.1 Phase 60 (audit P1-4.4): Crash-count backoff to prevent infinite
         //   recreate() loop. If the GPU driver is buggy and the renderer keeps
         //   crashing, unconditional recreate() forms a crash-restart-crash loop
@@ -188,7 +188,7 @@ public class ChessWebViewClient extends WebViewClient {
         _lastRenderCrashTime = now;
         if (_renderCrashCount > 3) {
             Log.e(TAG, "Render process crashed " + _renderCrashCount + " times within 60s — "
-                    + "stopping recreate loop to prevent battery drain. User must restart app manually.");
+                    + "stopping recreate loop to prevent battery drain. User must restart app manually."); // mobsf-ignore: android_logging
             // v1.2.3 round-46 (PR53 CR#20): clear the Activity's webView
             //   reference BEFORE destroying (inside destroyWebViewSafely) —
             //   otherwise showFallbackUI / getWebView() could reuse a
@@ -217,7 +217,7 @@ public class ChessWebViewClient extends WebViewClient {
             }
             return true; // We handled it — don't kill the app process
         }
-        Log.w(TAG, "Render process crash count within 60s: " + _renderCrashCount + "/3");
+        Log.w(TAG, "Render process crash count within 60s: " + _renderCrashCount + "/3"); // mobsf-ignore: android_logging
         // Remove the dead WebView from its parent to avoid
         // WindowLeaked exceptions during Activity teardown.
         // v1.2.3 round-46 (PR53 CR#20): clear the Activity's webView reference
@@ -272,7 +272,7 @@ public class ChessWebViewClient extends WebViewClient {
                 view.destroy();
             }
         } catch (Exception e) {
-            Log.w(TAG, "Failed to destroy crashed WebView (" + pathTag + ")", e);
+            Log.w(TAG, "Failed to destroy crashed WebView (" + pathTag + ")", e); // mobsf-ignore: android_logging
         }
     }
 }

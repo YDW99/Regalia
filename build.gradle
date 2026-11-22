@@ -34,6 +34,27 @@ buildscript {
     dependencies {
         classpath 'com.android.tools.build:gradle:8.7.3'
     }
+    // v1.2.3 round-69 (Dependabot High ×2): the AGP 8.7.3 buildscript classpath
+    //   pulls transitive org.bouncycastle:bcprov-jdk18on:1.77 (via
+    //   bcpkix-jdk18on 1.77, used by apksig for APK signing) and
+    //   com.google.guava:guava:32.0.1-jre — both flagged by Dependabot:
+    //   CVE-2025-14813 affects BC < 1.80.2/< 1.81.1 (GOST CTR keystream) plus
+    //   the follow-up ASN.1/DoS fixes backported through 1.8x; the guava
+    //   deserialization DoS (CVE-2026-102554) is fixed from 33.7.2. These are
+    //   BUILD-TIME dependencies (never packaged into the APK), so the exposure
+    //   is the build host's supply chain — still worth closing. All three
+    //   BouncyCastle artifacts are forced to the SAME version so bcpkix 1.77's
+    //   compiled references never meet a bcprov API it was not built against;
+    //   guava is forced to the current 33.8.0-jre. Verified in-sandbox by a
+    //   full assembleRelease + apksigner verify (round-69 audit §T-dep).
+    configurations.classpath {
+        resolutionStrategy {
+            force 'org.bouncycastle:bcprov-jdk18on:1.87'
+            force 'org.bouncycastle:bcpkix-jdk18on:1.87'
+            force 'org.bouncycastle:bcutil-jdk18on:1.87'
+            force 'com.google.guava:guava:33.8.0-jre'
+        }
+    }
 }
 
 apply plugin: 'com.android.application'

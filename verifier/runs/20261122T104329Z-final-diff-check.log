@@ -1,0 +1,7 @@
+timestamp_start=2026-11-22T10:43:29Z
+timestamp_end=2026-11-22T10:43:29Z
+cwd=/tmp/regalia-r71/repo
+command=bash -c printf\ \"%s\\n\"\ \"A\ duplicate\ invocation\ immediately\ after\ final-toolchain-versions\ returned\ 0\ before\ this\ authoritative\ logged\ rerun.\"\;\ git\ diff\ --check\ \&\&\ git\ diff\ --cached\ --check 
+exit_code=0
+--- output ---
+A duplicate invocation immediately after final-toolchain-versions returned 0 before this authoritative logged rerun.

@@ -2066,15 +2066,23 @@ let _tbFailCount=0;
 let _tbOfflineSince=0;
 function isTbOffline(){if(_tbOffline&&Date.now()-_tbOfflineSince>60000){_tbOffline=false;_tbFailCount=0;}return _tbOffline}
 let _tbLoading=false;
-// v1.2.3 round-68 (T5): ownership token for the shared _tbLoading flag —
-//   the board reference the CURRENT in-flight loading was armed for. Two
-//   paths arm _tbLoading (this manual trigger + game-logic's AI tablebase
-//   move, which re-arms without a re-entry check); a callback may only
-//   lower a flag it armed for the board it armed it for (58b Bug F
-//   "settle only your own state"). Reference equality, NOT a generation
-//   counter (military rule 2) — the AI path's _tbSavedBoard precedent,
-//   hoisted to shared scope because two writers share one flag.
-let _tbLoadingBoard=null;
+// v1.2.3 round-69 (CodeRabbit PR#57 Minor): ownership token for the shared
+//   _tbLoading flag. round-68 used the board REFERENCE as the token — but
+//   the AI entry re-arms without a re-entry check, and when an in-flight
+//   manual query and a fresh AI arm saved the SAME board reference, the
+//   earlier callback still passed the identity check and lowered the flag
+//   while the newer query was still in flight (the UI would report "not
+//   loading" for a probe still airborne). round-69 arms a FRESH OBJECT per
+//   query: uniqueness by construction, so a callback may lower the flag
+//   only while its token is still the CURRENT one (58b Bug F "settle only
+//   your own state"). Reference-equality semantics are kept (military
+//   rule 2) — the reference is now to a per-query token, never to a board,
+//   which two queries can share. Board identity checks REMAIN where they
+//   guard PAYLOAD correctness (autoSelect/executeMove must not act on a
+//   stale recommendation) — they just no longer double as the loading-flag
+//   ownership proof. Hoisted to shared scope because two writers (this
+//   manual trigger + game-logic's AI tablebase move) share one flag.
+let _tbLoadingOwner=null;
 let _tbRetryCount=0;
 let _tbLastRequestTime=0;
 
@@ -2142,6 +2150,12 @@ if(wait>0)await new Promise(r=>setTimeout(r,wait));
 //   5xx/network errors three-strike offline for 60s.
 const ctrl=typeof AbortController!=='undefined'?new AbortController():null;
 const tmr=ctrl?setTimeout(()=>ctrl.abort(),5000):null;
+// round-69: sentinel for "server-side 5xx" — counted ONCE at the single
+//   accounting point after the race/call, never inside the fetch chain.
+//   Frozen and unique (===) — a tablebase JSON body can never collide with
+//   it; undefined stays reserved for the no-count handled outcomes (4xx,
+//   malformed payload).
+const _TB_NETFAIL=Object.freeze({netfail:true});
 try{
 const _tbUrl=`https://tablebase.lichess.ovh/standard?fen=${encodeURIComponent(fen)}`;
 // One chain for both paths: headers → status gates → body parse. Returns
@@ -2160,8 +2174,15 @@ const _fetchProbe=async()=>{
   //   (caught below) count toward _tbFailCount; 4xx errors return null silently.
   if(!r.ok){
     if(r.status>=500){
-      _tbFailCount++;
-      if(_tbFailCount>=3){_tbOffline=true;_tbOfflineSince=Date.now();}
+      // round-69 (CodeRabbit PR#57 Minor): return a NETFAIL sentinel instead
+      //   of counting here. The legacy no-AbortController path races this
+      //   chain against a 5s wall-clock rejection: if the deadline fires
+      //   first the outer catch already counted this query, and a LATE 5xx
+      //   resolution counting again would double-charge one query (two
+      //   failed queries could trip the 3-strike 60s offline). The single
+      //   accounting point is after the race (below), so every query counts
+      //   at most once no matter which arm settles first.
+      return _TB_NETFAIL;
     }
     return undefined;
   }
@@ -2195,6 +2216,13 @@ if(ctrl){
 // tablebase API — is NOT undefined, so it keeps the historical cache+reset
 // semantics instead of being mistaken for a handled failure.)
 if(data===undefined)return null;
+// round-69 (CodeRabbit PR#57 Minor): the single fail-count accounting point
+//   for server-side 5xx outcomes — runs once, after the race/call settled,
+//   so a legacy-path LATE 5xx resolution (whose race was already lost to
+//   the wall-clock timeout, counted in the catch) can never double-charge.
+//   404/bad-JSON still count zero; network/deadline errors are counted by
+//   the catch below. Three strikes trip the 60s offline as before.
+if(data===_TB_NETFAIL){_tbFailCount++;if(_tbFailCount>=3){_tbOffline=true;_tbOfflineSince=Date.now();}return null;}
 // LRU cache: evict oldest when full
 if(_tbCache.size>=_TB_CACHE_MAX){const firstKey=_tbCache.keys().next().value;_tbCache.delete(firstKey);}
 _tbCache.set(fen,data);
@@ -2215,20 +2243,23 @@ return data.moves[0];
 // Manual trigger: user clicks to query tablebase for current position
 function _triggerTbQuery(){
 if(_tbLoading||isTbOffline())return;
-// v1.2.3 round-68 (T5, CodeRabbit r67 Minor, outside-diff :2174): manual-path
-//   stale-callback identity check, mirroring the AI path's _tbSavedBoard
-//   precedent (game-logic.js). The probe is async — if the position changed
-//   while it was in flight, the payload describes the OLD position and must
-//   never be autoSelected onto the changed board. The loading flag is
-//   lowered only when this callback still owns it: a newer query (the AI
+//   v1.2.3 round-68 (T5, CodeRabbit r67 Minor, outside-diff :2174) →
+//   round-69 (CodeRabbit PR#57 Minor): manual-path stale-callback checks.
+//   The probe is async — if the position changed while it was in flight,
+//   the payload describes the OLD position and must never be autoSelected
+//   onto the changed board (board identity check, below). The loading flag
+//   is lowered only when this callback still owns it: a newer query (the AI
 //   path can start while a manual query is in flight — it re-arms
-//   _tbLoading without a re-entry check) has re-pointed _tbLoadingBoard at
-//   the new board, and that flag is not ours to lower.
+//   _tbLoading without a re-entry check) has replaced _tbLoadingOwner with
+//   ITS fresh token, and that flag is not ours to lower.
 const _boardAtQuery=gameState.board;
-_tbLoadingBoard=_boardAtQuery;
+// round-69: a FRESH token object per manual query — never the board
+//   reference (see the _tbLoadingOwner declaration above for why).
+const _myOwnerToken={};
+_tbLoadingOwner=_myOwnerToken;
 _tbLoading=true;render();
 probeTablebase(gameState).then(function(d){
-if(_tbLoadingBoard===_boardAtQuery){_tbLoading=false;_tbLoadingBoard=null;}
+if(_tbLoadingOwner===_myOwnerToken){_tbLoading=false;_tbLoadingOwner=null;}
 // Auto-select piece on tablebase recommendation
 if(gameState.board===_boardAtQuery){
 if(d){const bm=bestMoveFromTablebase(d);if(bm){autoSelectTablebaseMove(bm.uci);}}
@@ -2239,7 +2270,7 @@ render();
 //   has its own internal try/catch that logs and returns null; this catch
 //   covers errors from the downstream callbacks in the promise chain.
 }).catch(function(e){console.warn('probeTablebase callback failed:',e);
-if(_tbLoadingBoard===_boardAtQuery){_tbLoading=false;_tbLoadingBoard=null;}
+if(_tbLoadingOwner===_myOwnerToken){_tbLoading=false;_tbLoadingOwner=null;}
 render();});
 }
 

@@ -52,9 +52,20 @@ PR #57 stale 大限 **2026-12-21**，合并收尾在此前。
   source-backup）→ `git add -A`（**能表达删除**）→ commit（署名 D.W. Yang）→ push。
   凭据约束：PAT 只经环境变量/凭据管理器注入命令，**永不写入仓库、文档、tar、zip、
   交付 README 或任何会离开沙箱的文件**；凭据用后即焚（unset）。
-- 路线 B（GitHub Contents API 逐文件）：PUT
-  `repos/YDW99/Regalia/contents/<path>?ref=upload`（base64 内容＋sha 可表达修改与
-  删除），一次循环送全部变更文件；同样凭据约束。
+- 路线 B（GitHub Contents API 逐文件）——**round-69 勘误（CodeRabbit PR#57
+  Major＋Minor）**：原文写「PUT `…/<path>?ref=upload`（base64 内容＋sha 可表达
+  修改与删除）」有两处错误，均已按 Contents API 文档（docs.github.com）更正：
+  1. **写入分支必须在请求体里指定**：URL 上的 `?ref=upload` 只是读取基准，不指定
+     写入分支——默认分支不是 upload 时 PUT 会写到默认分支，或因 sha 不匹配而
+     409。每个 PUT/DELETE 请求体都必须带 `"branch": "upload"`。
+  2. **PUT 不能删除文件**：PUT 只能创建/替换（base64 内容＋当前 sha 表达修改）；
+     删除必须用同端点的 **DELETE** 方法，请求体带
+     `{"message":"Delete file","sha":"<文件 blob sha>","branch":"upload"}`。
+     **round-70 勘误（CodeRabbit PR#59 #5）**：原文示例 `{"message", "sha": …}`
+     不是合法 JSON——`"message"` 是 Contents API DELETE 的必填提交说明
+     字符串，必须带值。按原文（修复示例前）操作 worker-pool.js 会残留、
+     V3-46 持续 RED。
+  一次循环送全部变更文件（修改走 PUT、删除走 DELETE）；同样凭据约束。
 - 共同验收：推送后对远端 head 快照复跑三件套＋`diff -rq` 远端 vs 本地交付树零未解释
   差异（§7 硬断言照走）——git 直推改变的是"送达通道"，不豁免"送达后复核"。
 

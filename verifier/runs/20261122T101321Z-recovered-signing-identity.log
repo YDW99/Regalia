@@ -1,0 +1,11 @@
+timestamp_start=2026-11-22T10:13:21Z
+timestamp_end=2026-11-22T10:13:47Z
+cwd=/tmp/regalia-r71/repo
+command=python3 verifier/v7/check-signing-identity.py 
+exit_code=0
+--- output ---
+keytool_exit=0
+alias_match=true
+certificate_sha256_match=true
+keystore_sha256_match=true
+SIGNING-KEY-IDENTITY OK

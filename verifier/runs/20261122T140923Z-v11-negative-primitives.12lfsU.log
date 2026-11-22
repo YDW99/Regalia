@@ -1,0 +1,16 @@
+timestamp_start=2026-11-22T14:09:23Z
+timestamp_end=2026-11-22T14:09:23Z
+cwd=/tmp/regalia-r72/work
+command=python3 verifier/v11/negative-tests.py 
+exit_code=1
+--- output ---
+PASS V11-N01: missing command exits nonzero and creates no run record
+PASS V11-N02: child exit code is preserved in output and process status
+Traceback (most recent call last):
+  File "/tmp/regalia-r72/work/verifier/v11/negative-tests.py", line 215, in <module>
+    main()
+  File "/tmp/regalia-r72/work/verifier/v11/negative-tests.py", line 205, in main
+    test_wrapper()
+  File "/tmp/regalia-r72/work/verifier/v11/negative-tests.py", line 106, in test_wrapper
+    raise AssertionError("same-second logs were overwritten")
+AssertionError: same-second logs were overwritten

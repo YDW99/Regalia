@@ -1,0 +1,7 @@
+timestamp_start=2026-11-22T09:56:30Z
+timestamp_end=2026-11-22T09:56:30Z
+cwd=/tmp/regalia-r71/repo
+command=bash -c set\ -e\;\ count=0\;\ for\ f\ in\ src/main/assets/chess.src/\*.js\;\ do\ node\ --check\ \"\$f\"\ \>/dev/null\;\ count=\$\(\(count+1\)\)\;\ done\;\ echo\ \"node_check_modules=\$count\ OK\" 
+exit_code=0
+--- output ---
+node_check_modules=10 OK

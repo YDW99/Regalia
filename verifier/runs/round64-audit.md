@@ -366,12 +366,25 @@ A. **Gradle 属性**（`org.gradle.*` 命名空间；官方文档 "Gradle proper
 
 B. **项目属性**（其余一切键，喂给 `project.findProperty`/`providers.gradleProperty`）：
    1. `-P`/`--project-prop`（命令行）— 实测 E4/E5
-   2. `-Dorg.gradle.project.<name>`（命令行系统属性）— 实测 E3/E6
-   3. `ORG_GRADLE_PROJECT_<name>`（环境变量）— 实测 E2/E5/E6/E11
-   4. gradle.properties 文件（GRADLE_USER_HOME > 项目根 > GRADLE_HOME）— 实测 E10
-   5. （`gradle.properties` 文件内写 `org.gradle.project.<name>` 形态：**8.11.1
-      实测无效**（E9：唯一来源时属性为 unset）——官方文档第 2 项"or
-      gradle.properties file"的措辞与实测不符，按实测记录。）
+   2. `-Dorg.gradle.project.<name>`（命令行系统属性）— 实测 E3/E6/E14
+   3. `gradle.properties` 文件内 **`systemProp.org.gradle.project.<name>`**
+      形态：**有效**——单独生效（E12）；胜环境变量（E13）；胜同文件 plain
+      条目（E15）；输给命令行 `-D`（E14）。`systemProp.` 前缀把文件条目装载
+      为 JVM 系统属性、落入与第 2 条相同的通道，故占**系统属性层级的文件
+      档位**：高于环境变量与 plain 文件条目、低于命令行。这正是官方文档
+      "Project properties" 第 2 项 "or gradle.properties file" 所指的文件形态。
+   4. `ORG_GRADLE_PROJECT_<name>`（环境变量）— 实测 E2/E5/E6/E11/E13
+   5. gradle.properties 文件 plain `<name>` 条目（GRADLE_USER_HOME > 项目根
+      > GRADLE_HOME）— 实测 E10/E13b/E15
+   6. `gradle.properties` 文件内 `org.gradle.project.<name>` 形态（**无**
+      systemProp. 前缀）：**8.11.1 实测无效**（E9：唯一来源时属性为 unset；
+      round-69 复测仍 null）。该形态本就不在官方文档的承诺范围内。
+
+   **round-70 勘误（CodeRabbit PR#59 #4）**：本表旧版把 systemProp. 形态列在
+   第 6 位（环境变量之后），与实测矛盾——E13 证明该形态经系统属性通道**胜过**
+   环境变量。旧排序按 append-only 纪律由本勘误取代（superseded），以本表为
+   准；E13/E13b/E14/E15 配方与结果见下方 round-70 实测记录。round-69 勘误
+   （E9 测错形态的更正）维持不变。
 
 **文档 vs 实测的分歧点（如实记录）**：官方 "Project properties" 节的四选项列表
 按 1`-P` 2系统属性 3属性文件 4环境变量 排序——实测第 3/4 位**相反**（E2：环境
@@ -382,3 +395,20 @@ round-68 沙箱实测记录（Gradle 8.11.1 + Temurin 17.0.21，/tmp/gradle-prio
 工程）：E3 `-Dorg.gradle.project.foo` 覆盖项目根文件条目生效（规划 T12 验收项）；
 E5 `-P` 胜环境变量；E6 系统属性胜环境变量；E9 文件内 org.gradle.project 形态无效；
 E10 GRADLE_USER_HOME 文件胜项目根文件；E11 环境变量胜 GRADLE_USER_HOME 文件。
+
+round-69 沙箱实测记录（Gradle 8.11.1 + OpenJDK 21.0.13，/tmp/gradle-e12 最小
+工程）：E12 项目根 gradle.properties 内 `systemProp.org.gradle.project.foo=bar`
+→ `project.findProperty('foo')` 返回 `bar`（有效，官方文档所指形态）；E9 复测
+无前缀形态仍 `null`（无效）；无文件基线 `null`（双向对照）。
+
+round-70 沙箱实测记录（Gradle 8.11.1 + Temurin 17.0.21，/tmp/ge-* 最小工程、
+隔离 GRADLE_USER_HOME、--no-daemon，驱动 round-70 勘误）：
+- E13 项目根 `systemProp.org.gradle.project.foo=bar` 与环境变量
+  `ORG_GRADLE_PROJECT_foo=env` 并存 → `bar`（**systemProp 形态胜环境变量**）；
+- E13b 项目根 plain `foo=plain` 与同一环境变量并存 → `env`（E2 复现：环境
+  变量胜 plain 文件条目）；
+- E14 同 E13 文件与命令行 `-Dorg.gradle.project.foo=baz` 并存 → `baz`
+  （**命令行 -D 胜文件 systemProp 形态**）；
+- E15 同文件 `foo=plain` 与 `systemProp.org.gradle.project.foo=sysp` 并存 →
+  `sysp`（**systemProp 形态胜同文件 plain 条目**）；
+- 基线无任何来源 → `null`。

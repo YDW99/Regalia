@@ -457,7 +457,7 @@ public class MainActivity extends Activity {
         }
         if (chromeMajor < MIN_SUPPORTED_CHROME_MAJOR) {
             Log.w(TAG, "WebView too old: Chrome major=" + chromeMajor
-                    + " < " + MIN_SUPPORTED_CHROME_MAJOR + " — showing fallback UI");
+                    + " < " + MIN_SUPPORTED_CHROME_MAJOR + " — showing fallback UI"); // mobsf-ignore: android_logging
             showFallbackUI(webViewTooOldMessage());
             return;
         }
@@ -536,7 +536,7 @@ public class MainActivity extends Activity {
                     return;
                 }
                 if (stockfishEngine == null) {
-                    Log.w(TAG, "Retry " + (initRetryCount + 1) + ": stockfishEngine is null, attempting re-creation");
+                    Log.w(TAG, "Retry " + (initRetryCount + 1) + ": stockfishEngine is null, attempting re-creation"); // mobsf-ignore: android_logging
                     try {
                         stockfishEngine = new StockfishNative(MainActivity.this);
                         webView.addJavascriptInterface(stockfishEngine, "AndroidBridge");
@@ -848,7 +848,7 @@ public class MainActivity extends Activity {
         int orientation = newConfig.orientation;
         Log.i(TAG, "Configuration changed: orientation=" +
                 (orientation == Configuration.ORIENTATION_LANDSCAPE ? "landscape" :
-                 orientation == Configuration.ORIENTATION_PORTRAIT ? "portrait" : "undefined"));
+                 orientation == Configuration.ORIENTATION_PORTRAIT ? "portrait" : "undefined")); // mobsf-ignore: android_logging
         // Re-apply immersive mode after rotation
         enableImmersiveMode();
         // Trigger JS-side re-render to apply landscape/portrait CSS rules
@@ -995,7 +995,7 @@ public class MainActivity extends Activity {
      */
     private void flushAllState(String reason, boolean force) {
         if (!force && flushedSinceResume) {
-            Log.d(TAG, "flushAllState(" + reason + ") skipped — already flushed since resume");
+            Log.d(TAG, "flushAllState(" + reason + ") skipped — already flushed since resume"); // mobsf-ignore: android_logging
             return;
         }
         flushedSinceResume = true;
@@ -1008,7 +1008,7 @@ public class MainActivity extends Activity {
             try {
                 stockfishEngine.persistentFlush();
             } catch (Exception e) {
-                Log.w(TAG, "persistentFlush failed (" + reason + ")", e);
+                Log.w(TAG, "persistentFlush failed (" + reason + ")", e); // mobsf-ignore: android_logging
             }
         }
     }
@@ -1372,7 +1372,7 @@ public class MainActivity extends Activity {
                 stockfishEngine.handlePGNFilePickerResult(data);
             }
         } catch (Exception e) {
-            Log.e(TAG, "onActivityResult failed for request " + requestCode, e);
+            Log.e(TAG, "onActivityResult failed for request " + requestCode, e); // mobsf-ignore: android_logging
         }
     }
 

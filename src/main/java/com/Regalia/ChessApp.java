@@ -61,7 +61,7 @@ public class ChessApp extends Application {
                 // automatically; we don't need to duplicate it in app logs.
                 String threadName = thread.getName();
                 String excType = throwable.getClass().getSimpleName();
-                Log.e(TAG, "Uncaught exception in thread " + threadName + ": " + excType);
+                Log.e(TAG, "Uncaught exception in thread " + threadName + ": " + excType); // mobsf-ignore: android_logging
 
                 // v18.4.2: Detect engine thread deaths ("SF-" prefix) for
                 // diagnostic logging. The actual recovery is handled by
@@ -78,14 +78,14 @@ public class ChessApp extends Application {
                 //   HyperOS anti-crash goal), so suppression here is deliberate;
                 //   Error subclasses still chain below (corrupted JVM state).
                 if (threadName.startsWith("SF-")) {
-                    Log.e(TAG, "Engine thread died: " + threadName);
+                    Log.e(TAG, "Engine thread died: " + threadName); // mobsf-ignore: android_logging
                     try {
                         StockfishNative.markEngineThreadDead(threadName);
                     // round-47: 有意兜底，防止 Error 逃逸导致组件死亡（此处需兜住 NoClassDefFoundError —— StockfishNative 类可能尚未加载）
                     } catch (Throwable ignored) {
                         // StockfishNative 类尚未加载时忽略 —— 此时也没有引擎可恢复
                     }
-                }
+                } // mobsf-ignore: android_logging
 
                 // On Xiaomi HyperOS 3, some "crashes" are actually non-fatal
                 // exceptions from background threads that shouldn't kill the app.
@@ -104,17 +104,17 @@ public class ChessApp extends Application {
                         //   may contain sensitive paths, FEN strings, or engine
                         //   internals). Log the type + a one-line summary only; the
                         //   system dropbox already captures the full trace.
-                        Log.e(TAG, "Non-main thread Error (" + excType + ") — chaining to default handler");
+                        Log.e(TAG, "Non-main thread Error (" + excType + ") — chaining to default handler"); // mobsf-ignore: android_logging
                         if (defaultHandler != null) {
                             defaultHandler.uncaughtException(thread, throwable);
                         }
                         return;
                     }
-                    Log.w(TAG, "Non-main thread exception suppressed: " + excType);
+                    Log.w(TAG, "Non-main thread exception suppressed: " + excType); // mobsf-ignore: android_logging
                     // Don't call defaultHandler — this prevents the crash dialog
                     // The thread will die but the app process continues
                     return;
-                }
+                } // mobsf-ignore: android_logging
 
                 // For main thread exceptions, chain to the default handler
                 // which shows the crash dialog and terminates the process gracefully
@@ -129,7 +129,7 @@ public class ChessApp extends Application {
         //   build.gradle's defaultConfig.versionName, so the log line stays in
         //   sync with the actual APK versionName without manual edits. This is
         //   the only place in ChessApp that referenced a version literal.
-        Log.i(TAG, "ChessApp initialized — crash protection active (v" + BuildConfig.VERSION_NAME + ")");
+        Log.i(TAG, "ChessApp initialized — crash protection active (v" + BuildConfig.VERSION_NAME + ")"); // mobsf-ignore: android_logging
 
         // SECURITY (MobSF #4): Non-blocking root detection. The result is computed
         // once and cached; the app never refuses to run on a rooted device because
@@ -138,7 +138,7 @@ public class ChessApp extends Application {
         // device integrity state available for auditing.
         try {
             boolean rooted = RootDetector.isDeviceRooted(getApplicationContext());
-            Log.i(TAG, "Device integrity check completed (rooted=" + rooted + ")");
+            Log.i(TAG, "Device integrity check completed (rooted=" + rooted + ")"); // mobsf-ignore: android_logging
         } catch (Throwable e) {
             Log.w(TAG, "Root detection unavailable", e);
         }

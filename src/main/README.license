@@ -1,3 +1,76 @@
+v1.2.3 round-71 (2026.11.22): PR#59 follow-up — PMD naming, scanner boundaries and CI repair.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - CR-1: twelve actually present underscore-prefixed Java methods renamed
+    mechanically in StockfishNative, StatsActivity and EngineService (the guide's
+    "13 methods" was an off-by-one; see per-file ledger). Behavior and license
+    classification unchanged; no reflection or JNI identifier was renamed.
+  - PMD 7.4.0 with config/pmd-ruleset.xml: 422 baseline results including 12
+    MethodNamingConventions -> 410 results including 0 naming findings. The
+    project ruleset (quickstart minus ControlStatementBraces), not unmodified
+    quickstart, is the sole acceptance configuration.
+  - MobSF audit boundary corrected: new unmarked logging can alert, but editing
+    an already marked statement may remain suppressed and requires renewed
+    review. Accepted engine diagnostics may contain PV moves, never FEN or user
+    identity data. mobsfscan 1.2.0 execution-success and current/stripped scans
+    are mandatory evidence; finding counts alone are insufficient.
+  - java/*.java (15 files, Mixed AGPL v3 and GPL v3; see per-file ledger).
+  - CR-2/3/4: CodeQL c-cpp no-build coverage restored for tracked JNI sources;
+    checkout credentials disabled; MobSF tool version pinned; Dependabot added;
+    gradlew executable bit recorded in Git. No dependency version was upgraded.
+  - Delivery: uploaded signing identity used only through build-time environment
+    variables. Passwords never enter documents or deliverables; keystore and
+    passwords never enter the repository, archive or guide. HyperOS 3 support is
+    static compatibility verification only, not a physical-device test claim.
+
+v1.2.3 round-70 (2026.11.22): PR#59 review triage — per-line mobsf migration + callback-payload root fix.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - java/com/Regalia/StockfishNative.java: _postJsCallbackDirect's catch
+    logged the raw JS callback expression — an onEngineEval callback embeds
+    the FEN (the full game position) as its 8th argument, so an
+    evaluateJavascript failure would leak the game state into logcat via
+    the release-surviving Log.e (CodeRabbit PR#59 #1). Root-fixed the
+    round-69 sendUciCommand way: the message now carries the callback
+    EVENT NAME (text before the first '(' — new helper _callbackEventName)
+    and the payload LENGTH only; payload text never enters logcat.
+  - java/*.java (15 files, Mixed AGPL v3 and GPL v3; see per-file ledger): the mobsfscan android_logging
+    suppression migrates from the global .mobsf ignore-rule to per-line
+    `// mobsf-ignore: android_logging` markers at every flagged line
+    (223 unique sites covering all 259 findings; CodeRabbit PR#59 #2).
+    Suppression semantics verified empirically (mobsfscan 1.2.0: annotated
+    lines suppressed, unannotated flagged; byte-parity proof that nothing
+    but the markers changed); FUTURE unsafe Log lines will now ALERT in
+    the MobSF SARIF instead of being swallowed by a global rule.
+    Line-level review of the 48 Log.e-class findings: game-content-capable
+    paths are exactly the two now root-fixed (sendUciCommand round-69,
+    postJsCallback round-70); the remaining release Log.e output is engine
+    paths, thread/setting names, exit codes and static labels
+    (round70-audit §T-logE).
+  - java/.mobsf: ALL active directives removed (ignore-rules deleted) —
+    the file survives as the audit trail for the documented stance;
+    suppression now lives at the flagged lines (see above).
+
+v1.2.3 round-69 (2026.11.22): PR#57 review triage — .mobsf FEN-leak root fix + license ledger erratum.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - ERRATUM (CodeRabbit PR#57 Minor): the round-68 entry below labeled
+    assets/stats.html as "AGPL v3 combined-work page" — the file's own
+    header (and this ledger's lines 109/749) correctly declare GPL v3;
+    the AGPL v3 label belongs to chess.html. Line corrected in place;
+    every other claim of that entry is unchanged (append-only ledger,
+    factual erratum excepted).
+  - java/com/Regalia/StockfishNative.java: sendUciCommand's IOException
+    handler logged the raw UCI command — a "position fen ..." command
+    embeds the full game position, so a write failure would leak the
+    game state into logcat. The command text is removed from the Log.e
+    (message is now the static "Error sending command"; the exception
+    object still carries the diagnostic). Root fix for the CodeRabbit
+    PR#57 Minor that the .mobsf android_logging suppression was masking.
+  - java/.mobsf: rationale updated (not removed) — the sendUciCommand
+    finding is now fixed at the root; the project-wide android_logging
+    suppression stays because the remaining ~260 findings are Log.v/d/i/w
+    calls that release builds strip via proguard (round-56 SEC-06) and
+    per-line suppression of 260 lines would bury real signals in noise.
+    Documented so the trade-off is auditable.
+
 v1.2.3 round-68 (2026.11.22): Sonar cleanup + scanner platform exemptions.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - java/.mobsf NEW (AGPL v3, project-original scanner config): mobsfscan
@@ -11,7 +84,7 @@ v1.2.3 round-68 (2026.11.22): Sonar cleanup + scanner platform exemptions.
     §T13 with the web-creation fallback instructions.
   - assets/chess.html: rebuilt (24,358 lines / 1,498,288 bytes — tablebase
     deadline/identity changes below; deterministic rebuild verified).
-  - assets/stats.html (AGPL v3 combined-work page): _pgnFirstGameSplit twin
+  - assets/stats.html (GPL v3 combined-work page): _pgnFirstGameSplit twin
     rewritten with the tablebase.js twin (var -> let/const, cognitive-
     complexity helper, Math.max — Sonar S3504/S3776/S7766; behavior
     differential-fuzzed identical, round68-audit §T7/T8); scanner

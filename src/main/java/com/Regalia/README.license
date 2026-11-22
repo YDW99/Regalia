@@ -1,3 +1,23 @@
+v1.2.3 round-71 (2026.11.22): mechanical PMD MethodNamingConventions remediation.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Twelve methods renamed, with every declaration/call site updated and no
+    behavioral edit: StockfishNative.java — clearRestartInProgress,
+    createEngineExecutor, safeExecute, compensateRacedStop,
+    resetEngineRuntimeState, postJsCallbackDirect, callbackEventName, isHttpUrl;
+    StatsActivity.java — handleUrlOverride, applyImmersiveMode,
+    applyLegacyImmersive (plus the StockfishNative.isHttpUrl call site);
+    EngineService.java — buildNotificationWithContent.
+  - Rename-only proof compares each file to HEAD after applying only these
+    declared substitutions. No reflection or JNI identifier was changed.
+  - License classification unchanged. AGPL v3 (7): ChessApp,
+    ChessWebViewClient, EngineService, MainActivity, RootDetector,
+    StabilizationHelper, TlsSecurityHelper. GPL v3 (12): EngineConfigHelper,
+    EngineHealthMonitor, EngineProcessManager, EngineSettingsHelper,
+    FileIoHelper, HapticManager, JsBridgeGateway, PermissionHelper,
+    PgnCacheManager, SafPickerHelper, StatsActivity, StockfishNative.
+  - Only the three files named above changed in this round; every other file
+    retains its existing header and license classification.
+
 v1.2.3 round-68 (2026.11.22): StockfishNative Sonar cleanup (T10/T11).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - StockfishNative.java (GPL v3, DroidFish-derived lineage): (1) Sonar

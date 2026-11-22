@@ -256,7 +256,7 @@ public class EngineService extends Service {
         // and updateNotification(). Both methods construct identical
         // notifications (same title, content, icon, flags, channel) — only
         // the content text differs, which is passed as a parameter.
-        return _buildNotificationWithContent(this, title, contentText, contentIntent);
+        return buildNotificationWithContent(this, title, contentText, contentIntent);
     }
 
     /**
@@ -426,7 +426,7 @@ public class EngineService extends Service {
             } catch (Throwable e) { /* fallback: no content intent */ }
 
             // v1.0.5 Rev55: Use the shared helper (was duplicated inline here).
-            Notification notification = _buildNotificationWithContent(context, title, info, contentIntent);
+            Notification notification = buildNotificationWithContent(context, title, info, contentIntent);
             nm.notify(NOTIFICATION_ID, notification);
         } catch (Throwable e) {
             Log.w(TAG, "Failed to update notification", e);
@@ -452,7 +452,7 @@ public class EngineService extends Service {
      * @param contentIntent PendingIntent fired on tap (may be null)
      * @return configured Notification
      */
-    private static Notification _buildNotificationWithContent(Context context, String title,
+    private static Notification buildNotificationWithContent(Context context, String title,
                                                               String contentText,
                                                               PendingIntent contentIntent) {
         Notification notification;

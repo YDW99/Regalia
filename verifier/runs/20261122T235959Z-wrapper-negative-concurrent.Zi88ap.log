@@ -1,0 +1,7 @@
+timestamp_start=2026-11-22T23:59:59Z
+timestamp_end=2026-11-22T23:59:59Z
+cwd=/tmp/regalia-r72/work
+command=sh -c printf\ \'run-3\\n\'\;\ exit\ 0 
+exit_code=0
+--- output ---
+run-3

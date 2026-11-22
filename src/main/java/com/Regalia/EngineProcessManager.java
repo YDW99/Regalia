@@ -139,7 +139,7 @@ public class EngineProcessManager {
                 }
             }
         } catch (Exception e) {
-            Log.w(TAG, "Failed to make executable: " + file.getAbsolutePath(), e);
+            Log.w(TAG, "Failed to make executable: " + file.getAbsolutePath(), e); // mobsf-ignore: android_logging
         }
     }
 

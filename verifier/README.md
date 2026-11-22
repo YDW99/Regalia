@@ -56,3 +56,50 @@ Round-54 acceptance (GitHub PR #56 AI-review triage):
 - 2026-10-05T0530Z · v3 · runs/2026-10-05T0530Z-v3/ · round-54b SonarCloud follow-up: v3 strengthened to 29 assertions (G4a direct comparison, G6d dangling-Javadoc, G6e typeof-guard absence) 29/29 PASS + v2 19/19 + v1 29/29 + compile BUILD SUCCESSFUL
 - 2026-10-05T0630Z · v3 · runs/2026-10-05T0630Z-v3/ · round-55 CodeRabbit follow-up triage: v3 read() now resolves from __dirname (cwd-independent, like v1/v2); 34 assertions (G2a window 900→1600 for the round-55 comment blocks; G2c rewritten — single _aiRetryCount owner; G2d doAIMove increment+cap retained; H1a getParentPath re-gates the resolved parent; H2a/H2b no AGPL tags on GPL-classified files in either README.license ledger; H3 __dirname resolution) 34/34 PASS (incl. foreign-cwd run) + v2 19/19 + v1 29/29 + compile BUILD SUCCESSFUL
 - 2026-10-05T0900Z · v3 · runs/2026-10-05T0900Z-v3/ · round-55 license-classification audit: v3 strengthened to 37 assertions (H2c NOTICE live-tag sweep — no AGPL on StatsActivity/HapticManager/index.html.tpl; H2d src/main + assets ledger AGPL sweep — no AGPL on game-logic/pgn-standard; H2e README.md round-55 section + classification lists) 37/37 PASS (incl. foreign-cwd run) + v2 19/19 + v1 29/29 + compile BUILD SUCCESSFUL
+
+## v4 (2026-11-21, recovered 2026-11-22)
+Round-71 twelve-gate acceptance. Historical text retained verbatim, including
+its incorrect thirteen-method statement; v5 corrects that statement.
+
+## v5 (2026-11-21, recovered 2026-11-22)
+Corrects the actual rename count to twelve and adds executable mobsfscan 1.2.0
+current/stripped dual-scan gates, successful-invocation checks and exact spans.
+
+## v6 (2026-11-21, recovered 2026-11-22)
+Corrects source-gate version parsing to the repository's four version components;
+v5's failed validator is preserved, not overwritten.
+
+## v7 (2026-11-22, recovered)
+Adds executable signing-key identity verification and corrected MobSF unique-span
+assertions. Its prospective final-artifact section is retained as an invalid
+historical draft: the v2 block ID and stockfish-only native-library statement are
+wrong and are not used for acceptance.
+
+## v8 (2026-11-22, created)
+Authoritative final-artifact acceptance. Corrects v2 Signing Block ID to
+0x7109871a, includes both libstockfish.so and the tracked CMake/JNI
+libengine_bridge.so, and adds executable APK, source-ZIP and password-scan gates.
+HyperOS 3 remains static-compatibility-only; no device-test claim is made.
+
+## v9 (2026-11-22, created)
+Final authoritative artifact gate. Adds the actually packaged, build-required
+libc++_shared.so to the exact arm64-only native set alongside Stockfish and the
+JNI bridge; v8's two-library expectation is preserved as a rejected draft. Runs
+the same signing, content, source-archive and secret-scan requirements with v9
+labels and run history.
+
+## v10 (2026-11-22, created)
+Final authoritative artifact gate. Corrects the mistaken no-INTERNET assertion:
+that permission is present in the byte-unchanged baseline manifest. The APK must
+match all eight baseline permission names exactly, with no additions; removing
+baseline functionality is not part of this task. All other v9 gates are retained.
+
+## v11 (2026-11-22, created)
+Round-72 authoritative verification and delivery-evidence gate. Uses the explicit
+pre-round-71 commit for source/rename comparisons; preserves the current manually
+updated license archive without historical size/hash locks; adds bounded recursive
+archive traversal, opaque secret diagnostics, complete source-manifest and digest
+checks, safe concurrent packing, exclusive same-second logs, 17 primitive negative
+checks and 15 isolated integration checks. The exact browser-downloaded inherited
+APK must pass the complete v11 gate. Post-package source-ZIP evidence remains
+external to avoid self-reference. No chess/Java business behavior or APK bytes change.
