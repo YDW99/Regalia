@@ -1,0 +1,26 @@
+# Regalia v1.2.3 — never-commit exclusions (round-56 SEC-02; round-67 zip
+# carried this file but it did not land in the bot commit — recreated
+# round-68; if it again fails to land via the zip channel, create it via
+# the GitHub web editor with this exact content, see round-68 README).
+
+# Signing material — must NEVER enter git
+keystore.properties
+*.keystore
+*.jks
+
+# Local build configuration (machine-specific SDK path)
+local.properties
+
+# Build outputs and caches
+build/
+.cxx/
+.gradle/
+
+# The ~100MB engine binary is fetched at build time (BUILDING.md §2.3),
+# never committed — GitHub hard-limits files at 100MB
+src/main/jniLibs/
+
+# IDE / OS noise
+.idea/
+*.iml
+.DS_Store
