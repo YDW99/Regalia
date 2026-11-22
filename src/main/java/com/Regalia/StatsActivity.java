@@ -486,7 +486,7 @@ public class StatsActivity extends Activity {
                 if (url == null) return;
                 String trimmed = url.trim();
                 // v1.2.1 round-10 (review-E P2): case-insensitive scheme check
-                //   (mirrors StockfishNative._isHttpUrl). RFC 3986 §3.1: scheme
+                //   (mirrors StockfishNative.isHttpUrl). RFC 3986 §3.1: scheme
                 //   is case-insensitive — accept "HTTP://...", "Https://...", etc.
                 // v1.2.1 round-10 regression: reuse `parsed` for the Intent instead
                 //   of re-parsing (was a redundant second Uri.parse call).
@@ -524,13 +524,13 @@ public class StatsActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String url = (request != null && request.getUrl() != null) ? request.getUrl().toString() : "";
-                return _handleUrlOverride(url);
+                return handleUrlOverride(url);
             }
 
             @Override
             @SuppressWarnings("deprecation")
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                return _handleUrlOverride(url != null ? url : "");
+                return handleUrlOverride(url != null ? url : "");
             }
 
             @Override
@@ -584,7 +584,7 @@ public class StatsActivity extends Activity {
 
         // v1.0.5 Rev55: Apply immersive mode (hide system bars) — match MainActivity.
         // The user expects the stats page to be fully immersive too.
-        _applyImmersiveMode();
+        applyImmersiveMode();
 
         Log.i(TAG, "StatsActivity created, loading stats.html");
     }
@@ -597,7 +597,7 @@ public class StatsActivity extends Activity {
      * block the WebView from loading the URL ourselves; {@code false} to let
      * the WebView proceed (only for our own asset:// URLs).
      */
-    private boolean _handleUrlOverride(String url) {
+    private boolean handleUrlOverride(String url) {
         if (url == null || url.isEmpty()) {
             return true; // Block empty URLs
         }
@@ -627,7 +627,7 @@ public class StatsActivity extends Activity {
      * WindowInsetsController on API 30+, legacy flags on API 23-29.
      */
     @android.annotation.SuppressLint("NewApi")
-    private void _applyImmersiveMode() {
+    private void applyImmersiveMode() {
         try {
             if (android.os.Build.VERSION.SDK_INT >= 35) {
                 // Android 15+: Edge-to-Edge enforced, just hide system bars.
@@ -637,7 +637,7 @@ public class StatsActivity extends Activity {
                             android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
                 } catch (Throwable e) {
                     Log.w(TAG, "Android 15+ immersive mode failed", e);
-                    _applyLegacyImmersive();
+                    applyLegacyImmersive();
                 }
                 return;
             }
@@ -649,17 +649,17 @@ public class StatsActivity extends Activity {
                             android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
                 } catch (Throwable e) {
                     Log.w(TAG, "API 30-34 immersive mode failed", e);
-                    _applyLegacyImmersive();
+                    applyLegacyImmersive();
                 }
                 return;
             }
-            _applyLegacyImmersive();
+            applyLegacyImmersive();
         } catch (Throwable e) {
-            Log.w(TAG, "_applyImmersiveMode failed", e);
+            Log.w(TAG, "applyImmersiveMode failed", e);
         }
     }
 
-    private void _applyLegacyImmersive() {
+    private void applyLegacyImmersive() {
         try {
             View decorView = getWindow().getDecorView();
             if (decorView != null) {
@@ -673,14 +673,14 @@ public class StatsActivity extends Activity {
                 );
             }
         } catch (Throwable e) {
-            Log.w(TAG, "_applyLegacyImmersive failed", e);
+            Log.w(TAG, "applyLegacyImmersive failed", e);
         }
     }
 
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) _applyImmersiveMode();
+        if (hasFocus) applyImmersiveMode();
     }
 
     @Override

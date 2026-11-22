@@ -1,0 +1,453 @@
+{
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "mobsfscan",
+          "rules": [
+            {
+              "id": "webview_javascript_interface",
+              "help": {
+                "text": "Ensure that javascript interface is implemented securely. Execution of user controlled code in WebView is a  critical Security issue.\n\nReference: https://github.com/MobSF/owasp-mstg/blob/master/Document/0x05h-Testing-Platform-Interaction.md#determining-whether-java-objects-are-exposed-through-webviews-mstg-platform-7"
+              },
+              "name": "Ensure that javascript interface is implemented securely (CWE-749)",
+              "properties": {
+                "tags": [
+                  "security",
+                  "external/cwe/cwe-749",
+                  "owasp-mobile/m1",
+                  "masvs/platform-7"
+                ],
+                "precision": "high",
+                "security-severity": "5.5",
+                "problem.severity": "warning"
+              },
+              "defaultConfiguration": {},
+              "fullDescription": {
+                "text": "Ensure that javascript interface is implemented securely. Execution of user controlled code in WebView is a  critical Security issue."
+              },
+              "helpUri": "https://github.com/MobSF/owasp-mstg/blob/master/Document/0x05h-Testing-Platform-Interaction.md#determining-whether-java-objects-are-exposed-through-webviews-mstg-platform-7",
+              "shortDescription": {
+                "text": "Ensure that javascript interface is implemented securely (CWE-749)"
+              }
+            },
+            {
+              "id": "android_task_hijacking2",
+              "help": {
+                "text": "Activity is found to be vulnerable to StrandHogg 2.0 task hijacking vulnerability. When vulnerable, it is possible for other applications to place a malicious activity on top of the activity stack of the vulnerable application. This makes the application an easy target for phishing attacks. The vulnerability can be remediated by setting the launch mode attribute to \"singleInstance\" and by setting an empty taskAffinity (taskAffinity=\"\"). You can also update the target SDK version (26) of the app to 29 or higher to fix this issue at platform level.\n\nReference: https://github.com/OWASP/owasp-mastg/blob/master/Document/0x05a-Platform-Overview.md"
+              },
+              "name": "Activity is found to be vulnerable to StrandHogg 2.0 task hijacking vulnerability (CWE-1021)",
+              "properties": {
+                "tags": [
+                  "security",
+                  "external/cwe/cwe-1021",
+                  "owasp-mobile/m1",
+                  "masvs/platform-1"
+                ],
+                "precision": "high",
+                "security-severity": "9.0",
+                "problem.severity": "error"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "fullDescription": {
+                "text": "Activity is found to be vulnerable to StrandHogg 2.0 task hijacking vulnerability. When vulnerable, it is possible for other applications to place a malicious activity on top of the activity stack of the vulnerable application. This makes the application an easy target for phishing attacks. The vulnerability can be remediated by setting the launch mode attribute to \"singleInstance\" and by setting an empty taskAffinity (taskAffinity=\"\"). You can also update the target SDK version (26) of the app to 29 or higher to fix this issue at platform level."
+              },
+              "helpUri": "https://github.com/OWASP/owasp-mastg/blob/master/Document/0x05a-Platform-Overview.md",
+              "shortDescription": {
+                "text": "Activity is found to be vulnerable to StrandHogg 2.0 task hijacking vulnerability (CWE-1021)"
+              }
+            },
+            {
+              "id": "android_prevent_screenshot",
+              "help": {
+                "text": "This app does not have capabilities to prevent against Screenshots from Recent Task History/ Now On Tap etc.\n\nReference: https://github.com/MobSF/owasp-mstg/blob/master/Document/0x05d-Testing-Data-Storage.md#finding-sensitive-information-in-auto-generated-screenshots-mstg-storage-9"
+              },
+              "name": "This app does not have capabilities to prevent against Screenshots from Recent Task History/ Now On Tap etc (CWE-200)",
+              "properties": {
+                "tags": [
+                  "security",
+                  "external/cwe/cwe-200",
+                  "owasp-mobile/m2",
+                  "masvs/storage-9"
+                ],
+                "precision": "medium",
+                "security-severity": "2.0",
+                "problem.severity": "note"
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "fullDescription": {
+                "text": "This app does not have capabilities to prevent against Screenshots from Recent Task History/ Now On Tap etc."
+              },
+              "helpUri": "https://github.com/MobSF/owasp-mstg/blob/master/Document/0x05d-Testing-Data-Storage.md#finding-sensitive-information-in-auto-generated-screenshots-mstg-storage-9",
+              "shortDescription": {
+                "text": "This app does not have capabilities to prevent against Screenshots from Recent Task History/ Now On Tap etc (CWE-200)"
+              }
+            },
+            {
+              "id": "android_safetynet_api",
+              "help": {
+                "text": "This app does not uses SafetyNet Attestation API that provides cryptographically-signed attestation, assessing the device's integrity. This check helps to ensure that the servers are interacting with the genuine app running on a genuine Android device. \n\nReference: https://github.com/MobSF/owasp-mstg/blob/master/Document/0x05j-Testing-Resiliency-Against-Reverse-Engineering.md#testing-root-detection-mstg-resilience-1"
+              },
+              "name": "This app does not uses SafetyNet Attestation API that provides cryptographically-signed attestation, assessing the device's integrity (CWE-353)",
+              "properties": {
+                "tags": [
+                  "security",
+                  "external/cwe/cwe-353",
+                  "owasp-mobile/m8",
+                  "masvs/resilience-1"
+                ],
+                "precision": "medium",
+                "security-severity": "2.0",
+                "problem.severity": "note"
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "fullDescription": {
+                "text": "This app does not uses SafetyNet Attestation API that provides cryptographically-signed attestation, assessing the device's integrity. This check helps to ensure that the servers are interacting with the genuine app running on a genuine Android device. "
+              },
+              "helpUri": "https://github.com/MobSF/owasp-mstg/blob/master/Document/0x05j-Testing-Resiliency-Against-Reverse-Engineering.md#testing-root-detection-mstg-resilience-1",
+              "shortDescription": {
+                "text": "This app does not uses SafetyNet Attestation API that provides cryptographically-signed attestation, assessing the device's integrity (CWE-353)"
+              }
+            },
+            {
+              "id": "android_certificate_pinning",
+              "help": {
+                "text": "This app does not use a TLS/SSL certificate or public key pinning in code to detect or prevent MITM attacks in secure communication channel. Please verify if pinning is enabled in `network_security_config.xml`.\n\nReference: https://github.com/MobSF/owasp-mstg/blob/master/Document/0x05g-Testing-Network-Communication.md#testing-custom-certificate-stores-and-certificate-pinning-mstg-network-4"
+              },
+              "name": "This app does not use a TLS/SSL certificate or public key pinning in code to detect or prevent MITM attacks in secure communication channel (CWE-295)",
+              "properties": {
+                "tags": [
+                  "security",
+                  "external/cwe/cwe-295",
+                  "owasp-mobile/m3",
+                  "masvs/network-4"
+                ],
+                "precision": "medium",
+                "security-severity": "2.0",
+                "problem.severity": "note"
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "fullDescription": {
+                "text": "This app does not use a TLS/SSL certificate or public key pinning in code to detect or prevent MITM attacks in secure communication channel. Please verify if pinning is enabled in `network_security_config.xml`."
+              },
+              "helpUri": "https://github.com/MobSF/owasp-mstg/blob/master/Document/0x05g-Testing-Network-Communication.md#testing-custom-certificate-stores-and-certificate-pinning-mstg-network-4",
+              "shortDescription": {
+                "text": "This app does not use a TLS/SSL certificate or public key pinning in code to detect or prevent MITM attacks in secure communication channel (CWE-295)"
+              }
+            },
+            {
+              "id": "android_certificate_transparency",
+              "help": {
+                "text": "This app does not enforce TLS Certificate Transparency that helps to detect SSL certificates that have been mistakenly issued by a certificate authority or maliciously acquired from an otherwise unimpeachable certificate authority.\n\nReference: https://github.com/MobSF/owasp-mstg/blob/master/Document/0x05g-Testing-Network-Communication.md#testing-custom-certificate-stores-and-certificate-pinning-mstg-network-4"
+              },
+              "name": "This app does not enforce TLS Certificate Transparency that helps to detect SSL certificates that have been mistakenly issued by a certificate authority or maliciously acquired from an otherwise unimpeachable certificate authority (CWE-295)",
+              "properties": {
+                "tags": [
+                  "security",
+                  "external/cwe/cwe-295",
+                  "owasp-mobile/m3",
+                  "masvs/network-4"
+                ],
+                "precision": "medium",
+                "security-severity": "2.0",
+                "problem.severity": "note"
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "fullDescription": {
+                "text": "This app does not enforce TLS Certificate Transparency that helps to detect SSL certificates that have been mistakenly issued by a certificate authority or maliciously acquired from an otherwise unimpeachable certificate authority."
+              },
+              "helpUri": "https://github.com/MobSF/owasp-mstg/blob/master/Document/0x05g-Testing-Network-Communication.md#testing-custom-certificate-stores-and-certificate-pinning-mstg-network-4",
+              "shortDescription": {
+                "text": "This app does not enforce TLS Certificate Transparency that helps to detect SSL certificates that have been mistakenly issued by a certificate authority or maliciously acquired from an otherwise unimpeachable certificate authority (CWE-295)"
+              }
+            }
+          ],
+          "version": "1.2.0",
+          "informationUri": "https://github.com/MobSF/mobsfscan",
+          "semanticVersion": "1.2.0"
+        }
+      },
+      "invocations": [
+        {
+          "executionSuccessful": true,
+          "endTimeUtc": "2026-11-22T10:06:21Z"
+        }
+      ],
+      "results": [
+        {
+          "message": {
+            "text": "Ensure that javascript interface is implemented securely. Execution of user controlled code in WebView is a  critical Security issue."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "region": {
+                  "snippet": {
+                    "text": "            webView.addJavascriptInterface(stockfishEngine, \"AndroidBridge\");"
+                  },
+                  "endColumn": 77,
+                  "endLine": 492,
+                  "startColumn": 13,
+                  "startLine": 492
+                },
+                "artifactLocation": {
+                  "uri": "src/main/java/com/Regalia/MainActivity.java"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "owasp-mobile": "M1: Improper Platform Usage",
+            "masvs": "MSTG-PLATFORM-7",
+            "cwe": "CWE-749: Exposed Dangerous Method or Function",
+            "reference": "https://github.com/MobSF/owasp-mstg/blob/master/Document/0x05h-Testing-Platform-Interaction.md#determining-whether-java-objects-are-exposed-through-webviews-mstg-platform-7",
+            "security-severity": "5.5"
+          },
+          "ruleId": "webview_javascript_interface",
+          "ruleIndex": 0
+        },
+        {
+          "message": {
+            "text": "Ensure that javascript interface is implemented securely. Execution of user controlled code in WebView is a  critical Security issue."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "region": {
+                  "snippet": {
+                    "text": "                        webView.addJavascriptInterface(stockfishEngine, \"AndroidBridge\");"
+                  },
+                  "endColumn": 89,
+                  "endLine": 542,
+                  "startColumn": 25,
+                  "startLine": 542
+                },
+                "artifactLocation": {
+                  "uri": "src/main/java/com/Regalia/MainActivity.java"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "owasp-mobile": "M1: Improper Platform Usage",
+            "masvs": "MSTG-PLATFORM-7",
+            "cwe": "CWE-749: Exposed Dangerous Method or Function",
+            "reference": "https://github.com/MobSF/owasp-mstg/blob/master/Document/0x05h-Testing-Platform-Interaction.md#determining-whether-java-objects-are-exposed-through-webviews-mstg-platform-7",
+            "security-severity": "5.5"
+          },
+          "ruleId": "webview_javascript_interface",
+          "ruleIndex": 0
+        },
+        {
+          "message": {
+            "text": "Ensure that javascript interface is implemented securely. Execution of user controlled code in WebView is a  critical Security issue."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "region": {
+                  "snippet": {
+                    "text": "        webView.addJavascriptInterface(new Object() {\n            @JavascriptInterface\n            public String getStatsPayload() {\n                return statsPayload;\n            }\n\n            // v1.0.8 PHASE 22 (bug fix): Expose system dark-mode state to stats.html.\n            // Same implementation as StockfishNative.isSystemDarkMode() \u2014 reads\n            // UiModeManager to reliably detect system dark/light mode on all\n            // devices including Xiaomi HyperOS 3 where prefers-color-scheme is\n            // unreliable. stats.html init() calls this to set data-theme attribute.\n            @JavascriptInterface\n            public boolean isSystemDarkMode() {\n                try {\n                    android.app.UiModeManager umm = (android.app.UiModeManager) getSystemService(UI_MODE_SERVICE);\n                    if (umm == null) return true;\n                    int mode = umm.getNightMode();\n                    if (mode == android.app.UiModeManager.MODE_NIGHT_NO) return false;\n                    if (mode == android.app.UiModeManager.MODE_NIGHT_YES) return true;\n                    int curMode = getResources().getConfiguration().uiMode\n                            & android.content.res.Configuration.UI_MODE_NIGHT_MASK;\n                    return curMode == android.content.res.Configuration.UI_MODE_NIGHT_YES;\n                } catch (Throwable e) {\n                    return true;\n                }\n            }\n\n            @JavascriptInterface\n            public void closeStatsPage() {\n                // v1.2.3 round-44 (E4): \u7f6e\u4f4d\u6807\u5fd7\u4ee5\u53d6\u6d88 BACK \u952e\u7684 250ms \u8d85\u65f6\u515c\u5e95\u3002\n                backCloseHandled.set(true);\n                runOnUiThread(new Runnable() {\n                    @Override\n                    public void run() {\n                        finish();\n                    }\n                });\n            }\n\n            // v1.2.3 round-46 (PR53 CR#26): BACK \u952e\u7684\u300c\u5df2\u5904\u7406\u4f46\u7559\u5728\u672c\u9875\u300d\u56de\u6267\u3002\n            //   handleStatsBackPress() \u6709\u591a\u6761\u5408\u6cd5\u5206\u652f\u53ea\u5173\u5bf9\u8bdd\u6846/\u53d6\u6d88\u5bfc\u5165\u800c\n            //   \u4e0d\u5173\u95ed\u9875\u9762\uff08\u4e0d\u8c03\u7528 closeStatsPage\uff09\u2014\u2014\u539f\u8bbe\u8ba1\u91cc\u8fd9\u4e9b\u5206\u652f\u4e0d\u4f1a\n            //   \u7f6e\u4f4d backCloseHandled\uff0c250ms \u515c\u5e95\u4f1a\u8bef\u5224 JS \u65e0\u54cd\u5e94\u5e76 finish()\uff0c\n            //   \u628a\u6309\u300c\u53d6\u6d88\u300d\u7684\u7528\u6237\u8e22\u51fa\u7edf\u8ba1\u9875\u3002JS \u5728\u6bcf\u6761\u6d88\u8d39\u5206\u652f\u672b\u5c3e\u5fc5\u987b\u8c03\u7528\n            //   \u672c\u65b9\u6cd5\u56de\u6267\uff08\u7f6e\u4f4d\u4f46\u4e0d finish\uff09\u3002\n            @JavascriptInterface\n            public void ackStatsBackHandled() {\n                backCloseHandled.set(true);\n            }\n\n            // v1.0.2: Haptic feedback for stats page buttons.\n            // v1.0.2 FIX: Respect the user's haptic preference (read from the\n            // same \"RegaliaEngine\" prefs that StockfishNative.saveLangPref and\n            // the haptic toggle use). Previously this always vibrated, ignoring\n            // both the in-app haptic setting and the system haptic setting \u2014\n            // users who disabled haptic in main app settings still felt\n            // vibration from stats page buttons. Also upgraded to VibrationEffect\n            // on API 26+ to match StockfishNative's pattern (deprecated\n            // vibrate(long) on newer APIs).\n            @JavascriptInterface\n            public void performHaptic(String type) {\n                // v1.2.3 round-30 (redundant): delegate to HapticManager.\n                //   Previously this method reimplemented the haptic-enabled\n                //   check + VibrationEffect fallback chain inline, duplicating\n                //   HapticManager's logic. The duplication created two sources\n                //   of truth that could diverge (e.g. round-30's 5s setting\n                //   cache would have needed to be applied in both places).\n                //   The stats page only uses BUTTON_PRESS-style feedback, so\n                //   the single 20ms pulse is sufficient. We delegate to\n                //   HapticManager.performHaptic, which handles the gating +\n                //   vibrator lookup + API-level dispatch centrally.\n                try {\n                    // v1.2.3 round-44 (E5): \u61d2\u521d\u59cb\u5316\u6539 DCL\u3002performHaptic \u4ece JS\n                    //   binder \u7ebf\u7a0b\u8c03\u7528\uff0c\u65e7\u7684\u65e0\u9501 check-then-act \u5728\u5feb\u901f\u8fde\u70b9\u65f6\u53ef\n                    //   \u6784\u9020\u4e24\u4e2a HapticManager\uff08\u540e\u8005\u8986\u76d6\u524d\u8005\uff0c\u529f\u80fd\u65e0\u5bb3\u4f46\u6d6a\u8d39\uff0c\n                    //   \u4e14\u5b57\u6bb5\u53d1\u5e03\u65e0 happens-before \u4fdd\u8bc1\uff09\u3002\u5b57\u6bb5\u5df2\u662f volatile\uff0c\n                    //   \u6b64\u5904\u8865 synchronized \u53cc\u68c0\u3002\n                    HapticManager hm = _statsHapticManager;\n                    if (hm == null) {\n                        synchronized (StatsActivity.this) {\n                            hm = _statsHapticManager;\n                            if (hm == null) {\n                                hm = new HapticManager(\n                                    StatsActivity.this,\n                                    getSharedPreferences(\"RegaliaEngine\", MODE_PRIVATE),\n                                    new android.os.Handler(android.os.Looper.getMainLooper())\n                                );\n                                _statsHapticManager = hm;\n                            }\n                        }\n                    }\n                    hm.performHaptic(type);\n                } catch (Throwable e) {\n                    Log.w(TAG, \"performHaptic failed\", e);\n                }\n            }\n\n            @JavascriptInterface\n            public void exportStatsHTML(String html) {\n                pendingExportHTML = html;\n                runOnUiThread(new Runnable() {\n                    @Override\n                    public void run() {\n                        try {\n                            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);\n                            intent.addCategory(Intent.CATEGORY_OPENABLE);\n                            intent.setType(\"text/html\");\n                            intent.putExtra(Intent.EXTRA_TITLE, \"Regalia_stats.html\");\n                            startActivityForResult(intent, REQUEST_CODE_EXPORT_HTML);\n                        } catch (Throwable e) {\n                            Log.e(TAG, \"exportStatsHTML picker failed\", e);\n                            pendingExportHTML = null;\n                        }\n                    }\n                });\n            }\n\n            // v1.0.2 FIX: Direct SAF file picker for PGN import from stats page.\n            // Previously, the stats import dialog's \"Select PGN File\" button called\n            // statsRequestImport() which finished the stats activity and bounced the\n            // user back to the main activity before opening the picker \u2014 jarring UX.\n            // Now we open ACTION_OPEN_DOCUMENT directly from StatsActivity, read the\n            // file in onActivityResult, and pass the content back to stats.html via\n            // the onStatsPGNFileRead(content) JS callback so the stats page can\n            // re-render with the imported PGN without leaving the stats view.\n            //\n            // v1.0.2 CLEANUP: The old statsRequestImport() bridge method, the\n            // MainActivity.pendingStatsImportRequest flag, and the main-WebView\n            // onStatsRequestImport() handler have all been removed \u2014 the entire\n            // import flow now stays inside StatsActivity, eliminating the round-trip.\n            @JavascriptInterface\n            public void statsSelectPGNFile() {\n                runOnUiThread(new Runnable() {\n                    @Override\n                    public void run() {\n                        try {\n                            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);\n                            intent.addCategory(Intent.CATEGORY_OPENABLE);\n                            intent.setType(\"*/*\");\n                            intent.putExtra(Intent.EXTRA_MIME_TYPES,\n                                    new String[]{\"application/x-chess-pgn\", \"text/plain\", \"application/octet-stream\"});\n                            startActivityForResult(intent, REQUEST_CODE_IMPORT_PGN);\n                        } catch (Throwable e) {\n                            Log.e(TAG, \"statsSelectPGNFile picker failed\", e);\n                            // round-54 (PR56 CR#11): explicit failure callback.\n                            evalJs(\"if(typeof onStatsPGNFileError==='function'){onStatsPGNFileError();}\"\n                                    + \"else if(typeof onStatsPGNFileRead==='function'){onStatsPGNFileRead('');}\");\n                        }\n                    }\n                });\n            }\n\n            @JavascriptInterface\n            public void statsRequestReview() {\n                // Close stats page and notify main WebView to enter review mode\n                runOnUiThread(new Runnable() {\n                    @Override\n                    public void run() {\n                        // round-47 (S2696 kept): \u8de8 Activity \u4e00\u6b21\u6027\u8bf7\u6c42\u6807\u8bb0\uff08\u6b64\u5904\u5199\u3001MainActivity.onResume \u6d88\u8d39\uff09\uff0c\u6709\u610f\u5199 static \u5b57\u6bb5\u3002\n                        MainActivity.pendingStatsReviewRequest = true;\n                        finish();\n                    }\n                });\n            }\n\n            // v1.0.3: Load an asset file as base64 \u2014 used for GPL v3 logo in export dialog\n            @JavascriptInterface\n            public String loadAssetAsBase64(String assetPath) {\n                // v1.2.3 round-30 (robustness): path-traversal check, mirroring\n                //   FileIoHelper.loadAssetAsBase64. AssetManager.open\n                //   itself rejects \"..\" traversal, but the explicit guard is\n                //   defense-in-depth and matches the parallel implementation.\n                // v1.2.3 round-56: aligned with FileIoHelper's segment-wise\n                //   exact match (round-44 D6) \u2014 the old contains(\"..\") substring\n                //   check both over-rejected legitimate names like\n                //   \"icons..v2/x.png\" and diverged from the parallel guard.\n                if (assetPath == null || assetPath.isEmpty()) return null;\n                for (String seg : assetPath.split(\"/\")) {\n                    if (seg.isEmpty() || seg.equals(\".\") || seg.equals(\"..\")) {\n                        Log.w(TAG, \"loadAssetAsBase64: blocked path traversal: \" + assetPath); // mobsf-ignore: android_logging\n                        return null;\n                    }\n                }\n                // v1.0.5 Rev61: try-with-resources guarantees InputStream is closed\n                // even if baos.write throws (e.g. OOM on a huge asset).\n                try (java.io.InputStream is = getAssets().open(assetPath)) {\n                    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();\n                    byte[] buffer = new byte[4096];\n                    int len;\n                    while ((len = is.read(buffer)) != -1) {\n                        baos.write(buffer, 0, len);\n                    }\n                    return android.util.Base64.encodeToString(baos.toByteArray(), android.util.Base64.NO_WRAP);\n                } catch (Throwable e) {\n                    Log.w(TAG, \"loadAssetAsBase64 failed: \" + assetPath, e); // mobsf-ignore: android_logging\n                    return null;\n                }\n            }\n\n            // v1.0.4 Rev28: Record the PGN text imported on the stats page (via\n            // \ud83d\uddc3\ufe0f Paste PGN or \ud83d\udcc2 Select PGN File). Called from stats.html's\n            // _statsPastePGN() and onStatsPGNFileRead() handlers. The imported\n            // PGN is stashed in the static importedPGNOnStats field; when the\n            // user returns to MainActivity, MainActivity.onResume() checks this\n            // field and prompts \"\ud83d\uddc3\ufe0f Import PGN to game?\" if non-null.\n            // One-shot: MainActivity clears the field after reading it.\n            @JavascriptInterface\n            public void setImportedPGN(String pgnText) {\n                // round-47 (S2696 kept): importedPGNOnStats \u4e3a\u8de8 Activity \u9759\u6001\u63e1\u624b\u5b57\u6bb5\uff08\u6b64\u5904 stash\u3001MainActivity.onResume \u8bfb\u53d6\u540e\u6e05\u96f6\uff09\uff0c\u6709\u610f\u5199 static \u5b57\u6bb5\u3002\n                importedPGNOnStats = pgnText;\n                Log.i(TAG, \"Recorded imported PGN on stats page (\" +\n                        (pgnText != null ? pgnText.length() : 0) + \" chars)\"); // mobsf-ignore: android_logging\n            }\n\n            // v1.0.4 Round-5 Rev27: Open an external http(s) URL in the system default\n            // browser. Called from JS when the user taps any hyperlink in stats.html\n            // (e.g. license links). Same security model as StockfishNative.openUrlInBrowser:\n            // only http(s) URLs are allowed; all other schemes are silently rejected.\n            @JavascriptInterface\n            public void openUrlInBrowser(String url) {\n                if (url == null) return;\n                String trimmed = url.trim();\n                // v1.2.1 round-10 (review-E P2): case-insensitive scheme check\n                //   (mirrors StockfishNative.isHttpUrl). RFC 3986 \u00a73.1: scheme\n                //   is case-insensitive \u2014 accept \"HTTP://...\", \"Https://...\", etc.\n                // v1.2.1 round-10 regression: reuse `parsed` for the Intent instead\n                //   of re-parsing (was a redundant second Uri.parse call).\n                Uri parsed = Uri.parse(trimmed);\n                String scheme = parsed.getScheme();\n                if (!\"http\".equalsIgnoreCase(scheme) && !\"https\".equalsIgnoreCase(scheme)) {\n                    Log.w(TAG, \"openUrlInBrowser rejected non-http(s) URL: \" + trimmed); // mobsf-ignore: android_logging\n                    return;\n                } // mobsf-ignore: android_logging\n                try {\n                    Intent intent = new Intent(Intent.ACTION_VIEW, parsed);\n                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);\n                    startActivity(intent);\n                    Log.i(TAG, \"Opened external URL in browser: \" + trimmed); // mobsf-ignore: android_logging\n                } catch (Throwable e) {\n                    Log.e(TAG, \"openUrlInBrowser failed for: \" + trimmed, e); // mobsf-ignore: android_logging\n                } // mobsf-ignore: android_logging\n            }\n        }, \"AndroidBridge\");"
+                  },
+                  "endColumn": 28,
+                  "endLine": 508,
+                  "startColumn": 9,
+                  "startLine": 266
+                },
+                "artifactLocation": {
+                  "uri": "src/main/java/com/Regalia/StatsActivity.java"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "owasp-mobile": "M1: Improper Platform Usage",
+            "masvs": "MSTG-PLATFORM-7",
+            "cwe": "CWE-749: Exposed Dangerous Method or Function",
+            "reference": "https://github.com/MobSF/owasp-mstg/blob/master/Document/0x05h-Testing-Platform-Interaction.md#determining-whether-java-objects-are-exposed-through-webviews-mstg-platform-7",
+            "security-severity": "5.5"
+          },
+          "ruleId": "webview_javascript_interface",
+          "ruleIndex": 0
+        },
+        {
+          "message": {
+            "text": "Activity is found to be vulnerable to StrandHogg 2.0 task hijacking vulnerability. When vulnerable, it is possible for other applications to place a malicious activity on top of the activity stack of the vulnerable application. This makes the application an easy target for phishing attacks. The vulnerability can be remediated by setting the launch mode attribute to \"singleInstance\" and by setting an empty taskAffinity (taskAffinity=\"\"). You can also update the target SDK version (26) of the app to 29 or higher to fix this issue at platform level."
+          },
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "region": {
+                  "snippet": {
+                    "text": "Activity exported, targetSdk<29 and launchMode != singleInstance or taskAffinity is not empty"
+                  },
+                  "endColumn": 1,
+                  "endLine": 1,
+                  "startColumn": 1,
+                  "startLine": 1
+                },
+                "artifactLocation": {
+                  "uri": "src/main/AndroidManifest.xml"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "owasp-mobile": "m1",
+            "masvs": "platform-1",
+            "cwe": "cwe-1021",
+            "reference": "https://github.com/OWASP/owasp-mastg/blob/master/Document/0x05a-Platform-Overview.md",
+            "security-severity": "9.0"
+          },
+          "ruleId": "android_task_hijacking2",
+          "ruleIndex": 1
+        },
+        {
+          "message": {
+            "text": "This app does not have capabilities to prevent against Screenshots from Recent Task History/ Now On Tap etc."
+          },
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "region": {
+                  "snippet": {
+                    "text": "Missing Best Practice"
+                  },
+                  "endColumn": 1,
+                  "endLine": 1,
+                  "startColumn": 1,
+                  "startLine": 1
+                },
+                "artifactLocation": {
+                  "uri": "src/main/java"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "owasp-mobile": "M2: Insecure Data Storage",
+            "masvs": "MSTG-STORAGE-9",
+            "cwe": "CWE-200: Information Exposure",
+            "reference": "https://github.com/MobSF/owasp-mstg/blob/master/Document/0x05d-Testing-Data-Storage.md#finding-sensitive-information-in-auto-generated-screenshots-mstg-storage-9",
+            "security-severity": "2.0"
+          },
+          "ruleId": "android_prevent_screenshot",
+          "ruleIndex": 2
+        },
+        {
+          "message": {
+            "text": "This app does not uses SafetyNet Attestation API that provides cryptographically-signed attestation, assessing the device's integrity. This check helps to ensure that the servers are interacting with the genuine app running on a genuine Android device. "
+          },
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "region": {
+                  "snippet": {
+                    "text": "Missing Best Practice"
+                  },
+                  "endColumn": 1,
+                  "endLine": 1,
+                  "startColumn": 1,
+                  "startLine": 1
+                },
+                "artifactLocation": {
+                  "uri": "src/main/java"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "owasp-mobile": "M8: Code Tampering",
+            "masvs": "MSTG-RESILIENCE-1",
+            "cwe": "CWE-353: Missing Support for Integrity Check",
+            "reference": "https://github.com/MobSF/owasp-mstg/blob/master/Document/0x05j-Testing-Resiliency-Against-Reverse-Engineering.md#testing-root-detection-mstg-resilience-1",
+            "security-severity": "2.0"
+          },
+          "ruleId": "android_safetynet_api",
+          "ruleIndex": 3
+        },
+        {
+          "message": {
+            "text": "This app does not use a TLS/SSL certificate or public key pinning in code to detect or prevent MITM attacks in secure communication channel. Please verify if pinning is enabled in `network_security_config.xml`."
+          },
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "region": {
+                  "snippet": {
+                    "text": "Missing Best Practice"
+                  },
+                  "endColumn": 1,
+                  "endLine": 1,
+                  "startColumn": 1,
+                  "startLine": 1
+                },
+                "artifactLocation": {
+                  "uri": "src/main/java"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "owasp-mobile": "M3: Insecure Communication",
+            "masvs": "MSTG-NETWORK-4",
+            "cwe": "CWE-295: Improper Certificate Validation",
+            "reference": "https://github.com/MobSF/owasp-mstg/blob/master/Document/0x05g-Testing-Network-Communication.md#testing-custom-certificate-stores-and-certificate-pinning-mstg-network-4",
+            "security-severity": "2.0"
+          },
+          "ruleId": "android_certificate_pinning",
+          "ruleIndex": 4
+        },
+        {
+          "message": {
+            "text": "This app does not enforce TLS Certificate Transparency that helps to detect SSL certificates that have been mistakenly issued by a certificate authority or maliciously acquired from an otherwise unimpeachable certificate authority."
+          },
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "region": {
+                  "snippet": {
+                    "text": "Missing Best Practice"
+                  },
+                  "endColumn": 1,
+                  "endLine": 1,
+                  "startColumn": 1,
+                  "startLine": 1
+                },
+                "artifactLocation": {
+                  "uri": "src/main/java"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "owasp-mobile": "M3: Insecure Communication",
+            "masvs": "MSTG-NETWORK-4",
+            "cwe": "CWE-295: Improper Certificate Validation",
+            "reference": "https://github.com/MobSF/owasp-mstg/blob/master/Document/0x05g-Testing-Network-Communication.md#testing-custom-certificate-stores-and-certificate-pinning-mstg-network-4",
+            "security-severity": "2.0"
+          },
+          "ruleId": "android_certificate_transparency",
+          "ruleIndex": 5
+        }
+      ]
+    }
+  ],
+  "version": "2.1.0",
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
+}

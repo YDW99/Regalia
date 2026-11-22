@@ -174,3 +174,24 @@ SHA 前缀 `ffd8fc20`/100,695,968B 双验；签名四变量自 upload/keystore-i
 - **2598 引擎行诊断未去敏化**：T-logE 记档接受；如需是单行跟进。
 - **guava CVE-2026-118042**：上游修复仍不可用（round-69 T-g 结论不变；
   警报如仍在需 alert 详情分诊）。
+
+
+## round-71 ERRATUM (2026-11-22; appended, historical evidence retained)
+
+- CR-1: the recovery guide said 13 underscore-prefixed methods; the actual tree
+  contains 12. Only those 12 declarations and call sites were renamed.
+- Suppression boundary: a NEW unmarked Log statement can alert, but editing an
+  already marked statement may remain suppressed and needs renewed review.
+- Engine Log.e diagnostics accepted in round-70 may contain PV moves; they do
+  not contain FEN or user identity data. Prior wording is narrowed accordingly.
+- Licensing: src/main/java/com/Regalia contains mixed AGPL v3 and GPL v3 files;
+  the seven/twelve classification is recorded in the per-file ledger.
+- PMD: project-ruleset baseline/final counts are 422/410 total and 12/0
+  MethodNamingConventions. Unmodified quickstart is not the project gate.
+- CR-2: round-70's claim that no C/C++ source is tracked was incorrect;
+  src/main/cpp/engine_jni.cpp and CMakeLists.txt are tracked and now scanned
+  with CodeQL c-cpp build-mode:none. CR-3/4 cover credential persistence,
+  scanner pinning, dependency update automation and gradlew's executable bit.
+- Recovery: the original round-71 temporary worktree and its run logs were lost
+  when the execution environment was recreated. Persisted tool-output excerpts
+  are recovery evidence only; final acceptance is rerun with fresh honest logs.

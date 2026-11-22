@@ -1,0 +1,7 @@
+timestamp_start=2026-11-22T09:55:33Z
+timestamp_end=2026-11-22T09:55:33Z
+cwd=/tmp/regalia-r71/repo
+command=python3 verifier/v6/rename-only-proof.py 
+exit_code=0
+--- output ---
+RENAME-ONLY PROOF V2 OK: 12 methods, 3 files, no other byte changes

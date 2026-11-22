@@ -1,0 +1,30 @@
+timestamp_start=2026-11-22T10:46:26Z
+timestamp_end=2026-11-22T10:46:27Z
+cwd=/tmp/regalia-r71/repo
+command=bash -c python3\ verifier/v7/source-gate.py\ \&\&\ python3\ verifier/v6/rename-only-proof.py\ \&\&\ git\ diff\ --check\ \&\&\ git\ diff\ --cached\ --check 
+exit_code=0
+--- output ---
+PASS 01: CodeQL c-cpp no-build coverage
+PASS 02: CodeQL checkout credentials disabled
+PASS 03: tracked native sources acknowledged
+PASS 04: MobSF scanner pinned
+PASS 05: Dependabot ecosystems and schedules
+PASS 06: gradlew executable index mode
+PASS 07: project PMD ruleset preserved
+PASS 08: unchanged build dependencies and configuration
+PASS 09: protected license archive
+PASS 10: SDK/NDK contract
+PASS 11: version contract
+PASS 12: arm64-only ABI
+PASS 13: permissions unchanged
+PASS 14: AGPL seven-file ledger
+PASS 15: GPL twelve-file ledger
+PASS 16: mixed license correction
+PASS 17: MobSF comment-only config and review boundary
+PASS 18: old Java identifiers absent
+PASS 19: no unrelated Java edits
+PASS 20: round-70 audit erratum appended
+PASS 21: recovery honesty record
+PASS 22: no engine or signing material tracked
+SOURCE-V7-GATE OK (22 checks)
+RENAME-ONLY PROOF V2 OK: 12 methods, 3 files, no other byte changes

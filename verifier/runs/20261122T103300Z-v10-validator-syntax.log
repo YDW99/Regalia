@@ -1,0 +1,6 @@
+timestamp_start=2026-11-22T10:33:00Z
+timestamp_end=2026-11-22T10:33:00Z
+cwd=/tmp/regalia-r71/repo
+command=bash -c python3\ -m\ py_compile\ verifier/v10/verify-apk.py\ verifier/v10/source_archive.py\ verifier/v10/secret_scan.py\ \&\&\ bash\ -n\ verifier/v10/run-and-log.sh 
+exit_code=0
+--- output ---

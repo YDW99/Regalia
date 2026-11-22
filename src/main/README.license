@@ -1,3 +1,27 @@
+v1.2.3 round-71 (2026.11.22): PR#59 follow-up — PMD naming, scanner boundaries and CI repair.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - CR-1: twelve actually present underscore-prefixed Java methods renamed
+    mechanically in StockfishNative, StatsActivity and EngineService (the guide's
+    "13 methods" was an off-by-one; see per-file ledger). Behavior and license
+    classification unchanged; no reflection or JNI identifier was renamed.
+  - PMD 7.4.0 with config/pmd-ruleset.xml: 422 baseline results including 12
+    MethodNamingConventions -> 410 results including 0 naming findings. The
+    project ruleset (quickstart minus ControlStatementBraces), not unmodified
+    quickstart, is the sole acceptance configuration.
+  - MobSF audit boundary corrected: new unmarked logging can alert, but editing
+    an already marked statement may remain suppressed and requires renewed
+    review. Accepted engine diagnostics may contain PV moves, never FEN or user
+    identity data. mobsfscan 1.2.0 execution-success and current/stripped scans
+    are mandatory evidence; finding counts alone are insufficient.
+  - java/*.java (15 files, Mixed AGPL v3 and GPL v3; see per-file ledger).
+  - CR-2/3/4: CodeQL c-cpp no-build coverage restored for tracked JNI sources;
+    checkout credentials disabled; MobSF tool version pinned; Dependabot added;
+    gradlew executable bit recorded in Git. No dependency version was upgraded.
+  - Delivery: uploaded signing identity used only through build-time environment
+    variables. Passwords never enter documents or deliverables; keystore and
+    passwords never enter the repository, archive or guide. HyperOS 3 support is
+    static compatibility verification only, not a physical-device test claim.
+
 v1.2.3 round-70 (2026.11.22): PR#59 review triage — per-line mobsf migration + callback-payload root fix.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - java/com/Regalia/StockfishNative.java: _postJsCallbackDirect's catch
@@ -8,7 +32,7 @@ v1.2.3 round-70 (2026.11.22): PR#59 review triage — per-line mobsf migration +
     round-69 sendUciCommand way: the message now carries the callback
     EVENT NAME (text before the first '(' — new helper _callbackEventName)
     and the payload LENGTH only; payload text never enters logcat.
-  - java/*.java (15 files, AGPL v3): the mobsfscan android_logging
+  - java/*.java (15 files, Mixed AGPL v3 and GPL v3; see per-file ledger): the mobsfscan android_logging
     suppression migrates from the global .mobsf ignore-rule to per-line
     `// mobsf-ignore: android_logging` markers at every flagged line
     (223 unique sites covering all 259 findings; CodeRabbit PR#59 #2).

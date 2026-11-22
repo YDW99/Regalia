@@ -12,9 +12,9 @@
 #   ROOT: static message + command.length() only. (Debug builds keep a
 #   documented Log.d of the full command — release-stripped, diagnostic-only.)
 # round-70 (CodeRabbit PR#59 #1): the second game-content-capable path —
-#   _postJsCallbackDirect's Log.e("Error posting JS callback: " + cleanJs),
+#   postJsCallbackDirect's Log.e("Error posting JS callback: " + cleanJs),
 #   whose onEngineEval payload embeds the FEN as 8th argument — root-fixed the
-#   same way (event name + payload length only, see _callbackEventName). The
+#   same way (event name + payload length only, see callbackEventName). The
 #   remaining release Log.e output is engine paths, thread/setting names,
 #   exit codes and static labels (site-by-site review, round70-audit §T-logE).
 #
@@ -24,8 +24,13 @@
 #   comment on any line of the flagged span (verified empirically in-sandbox:
 #   annotated lines suppressed, unannotated flagged). All 259 findings were
 #   reviewed and now carry the marker at the flagged line, so any FUTURE
-#   unsafe Log line — new code or refactors — will ALERT in the MobSF SARIF
-#   instead of being silently swallowed by a global rule here. This file
+#   unsafe Log line will ALERT in the MobSF SARIF instead of being silently
+#   swallowed by a global rule here. Review boundary (round-71): editing an
+#   already marked statement may remain suppressed; every such edit therefore
+#   requires renewed line-level review. Accepted engine diagnostics may contain
+#   PV moves, but no FEN or user identity data. Current/stripped mobsfscan 1.2.0
+#   double-scan: android_logging 0/259; both runs must report successful execution.
+#   This file
 #   intentionally carries NO active directives; it survives as the audit
 #   trail for the stance. If code scanning shows android_logging findings:
 #   they are NEW, read them, do not blanket-ignore them here.

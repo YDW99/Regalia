@@ -1,0 +1,8 @@
+timestamp_start=2026-11-22T10:05:49Z
+timestamp_end=2026-11-22T10:05:57Z
+cwd=/tmp/regalia-r71/repo
+command=bash -c set\ +e\;\ mobsfscan\ src/main/java\ src/main/AndroidManifest.xml\ --type\ android\ --sarif\ --output\ verifier/runs/recovered-mobsf-current.sarif\;\ rc=\$\?\;\ set\ -e\;\ echo\ mobsfscan_exit=\$rc\;\ test\ \$rc\ -eq\ 0 
+exit_code=1
+--- output ---
+[33mInvalid YAML, ignoring config from .mobsf[0m
+mobsfscan_exit=1

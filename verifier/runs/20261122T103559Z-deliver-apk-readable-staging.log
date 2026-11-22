@@ -1,0 +1,8 @@
+timestamp_start=2026-11-22T10:35:59Z
+timestamp_end=2026-11-22T10:36:48Z
+cwd=/tmp/regalia-r71/repo
+command=bash -c cp\ build/outputs/apk/release/Regalia-release.apk\ /mnt/agents/output/.Regalia-v1.2.3-round71-release.payload.bin\ \&\&\ chmod\ 0644\ /mnt/agents/output/.Regalia-v1.2.3-round71-release.payload.bin\ \&\&\ cmp\ build/outputs/apk/release/Regalia-release.apk\ /mnt/agents/output/.Regalia-v1.2.3-round71-release.payload.bin\ \&\&\ sha256sum\ /mnt/agents/output/.Regalia-v1.2.3-round71-release.payload.bin\ \&\&\ stat\ -c\ \"staged_inode=%i\ staged_bytes=%s\"\ /mnt/agents/output/.Regalia-v1.2.3-round71-release.payload.bin 
+exit_code=0
+--- output ---
+644919d57c690b54c56b26ed0ce91ec785d67a68e8e58eeaa6aed2946a5533fb  /mnt/agents/output/.Regalia-v1.2.3-round71-release.payload.bin
+staged_inode=15924 staged_bytes=81552289

@@ -384,7 +384,7 @@ public class StockfishNative {
     //   this helper so they take _restartLock — matching the locked =true writes
     //   in recoverEngine/restartEngine. Previously the bare writes raced with
     //   concurrent =true writes (review-D P2).
-    private void _clearRestartInProgress() {
+    private void clearRestartInProgress() {
         synchronized (_restartLock) {
             _restartInProgress = false;
         }
@@ -415,9 +415,9 @@ public class StockfishNative {
     // initEngine/recoverEngine/restartEngine from multiple threads. Without
     // volatile, one thread's reassignment may not be visible to another thread
     // that then calls .execute() on the old (already-shutdown) executor.
-    private volatile ExecutorService _engineExecutor = _createEngineExecutor();
+    private volatile ExecutorService _engineExecutor = createEngineExecutor();
 
-    private static ExecutorService _createEngineExecutor() {
+    private static ExecutorService createEngineExecutor() {
         return Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "SF-Exec");
             t.setPriority(Thread.NORM_PRIORITY);
@@ -431,7 +431,7 @@ public class StockfishNative {
      * otherwise propagate to the WebView JS thread and leave JS-side loading flags stuck
      * (e.g. _evalLoading=true forever). On rejection, fire onEngineError so JS resets.
      */
-    private void _safeExecute(Runnable r, String tag) {
+    private void safeExecute(Runnable r, String tag) {
         try {
             _engineExecutor.execute(r);
         } catch (java.util.concurrent.RejectedExecutionException e) {
@@ -452,7 +452,7 @@ public class StockfishNative {
      *   the engine observes stop-before-go order and the search below is not
      *   orphaned.
      */
-    private void _compensateRacedStop(long enqueuedSeq, String tag) {
+    private void compensateRacedStop(long enqueuedSeq, String tag) {
         if (_lastStopSeq >= enqueuedSeq) {
             Log.d(TAG, tag + ": stop raced ahead of queued go (seq=" + enqueuedSeq + ") — re-issuing stop"); // mobsf-ignore: android_logging
             sendUciCommand("stop");
@@ -659,7 +659,7 @@ public class StockfishNative {
             @Override public void applySettings() { StockfishNative.this.applySettings(); }
             @Override public void notifyEngineInfo() { StockfishNative.this.notifyEngineInfo(); }
             @Override public void postJsCallback(String jsExpression) { StockfishNative.this.postJsCallback(jsExpression); }
-            @Override public void safeExecute(Runnable r, String tag) { StockfishNative.this._safeExecute(r, tag); }
+            @Override public void safeExecute(Runnable r, String tag) { StockfishNative.this.safeExecute(r, tag); }
         });
         // v1.2.0 Phase 81: Engine config helper — Callbacks provide raw field access
         // (field + persist, no UCI command) so the helper owns all UCI command dispatch.
@@ -761,13 +761,13 @@ public class StockfishNative {
         // FIX: After shutdown(), _engineExecutor is terminated. Recreate it before use.
         try {
             if (_engineExecutor.isShutdown()) {
-                _engineExecutor = _createEngineExecutor();
+                _engineExecutor = createEngineExecutor();
             }
         } catch (Exception e) {
-            _engineExecutor = _createEngineExecutor();
+            _engineExecutor = createEngineExecutor();
         }
         initStarted = true;
-        _clearRestartInProgress(); // Reset lock for fresh init
+        clearRestartInProgress(); // Reset lock for fresh init
         // v1.2.3 round-44 (A1): reset the shutdown flags for a fresh init.
         //   shutdown() sets shutdownRequested=true (plus the round-40
         //   _externalShutdownRequested twin); without this reset, a later
@@ -794,14 +794,14 @@ public class StockfishNative {
                         Log.e(TAG, "Failed to initialize engine", e);
                         initStarted = false;
                         engineReady = false;
-                        _clearRestartInProgress();
+                        clearRestartInProgress();
                         postJsCallback("onEngineError(" + escapeJsString(e.getMessage() != null ? e.getMessage() : "Unknown error") + ")");
                     }
                 }
             });
         } catch (java.util.concurrent.RejectedExecutionException e) {
             Log.w(TAG, "initEngine: executor rejected, recreating");
-            _engineExecutor = _createEngineExecutor();
+            _engineExecutor = createEngineExecutor();
             _engineExecutor.execute(new Runnable() {
                 public void run() {
                     try {
@@ -810,7 +810,7 @@ public class StockfishNative {
                         Log.e(TAG, "initEngine retry failed", t);
                         initStarted = false;
                         engineReady = false;
-                        _clearRestartInProgress();
+                        clearRestartInProgress();
                         postJsCallback("onEngineError(" + escapeJsString(t.getMessage() != null ? t.getMessage() : "Unknown error") + ")");
                     }
                 }
@@ -922,7 +922,7 @@ public class StockfishNative {
      */
     @JavascriptInterface
     public void engineGoDepth(final String fen, final int depth) {
-        // v1.0.2 FIX (audit): use _safeExecute to catch RejectedExecutionException
+        // v1.0.2 FIX (audit): use safeExecute to catch RejectedExecutionException
         // v1.2.3 round-30 (robustness): clamp depth to [1, MAX_REASONABLE_DEPTH]
         //   before sending to the engine. A JS bug passing depth=0 would cause
         //   the engine to return instantly with a poor move; depth>60 would
@@ -931,13 +931,13 @@ public class StockfishNative {
         //   clamping the go command.
         final int safeDepth = Math.max(1, Math.min(MAX_REASONABLE_DEPTH, depth));
         final long enqSeq = _cmdSeq.incrementAndGet(); // v1.2.3 round-44 (A3/A4)
-        _safeExecute(new Runnable() { // tag: engineGoDepth
+        safeExecute(new Runnable() { // tag: engineGoDepth
             public void run() {
                 if (!engineReady) {
                     postJsCallback("onEngineError(" + escapeJsString("Engine not ready") + ")");
                     return;
                 }
-                _compensateRacedStop(enqSeq, "engineGoDepth"); // v1.2.3 round-44 (A3/A4)
+                compensateRacedStop(enqSeq, "engineGoDepth"); // v1.2.3 round-44 (A3/A4)
                 stopAndWaitForBestmove("engineGoDepth");
 
                 synchronized (stateLock) {
@@ -973,7 +973,7 @@ public class StockfishNative {
         //   _lastEvalFen — a mislabeled stale result that passes even the
         //   round-49/52 fen identity checks. Real residue is already cleared by
         //   the latch-consumption path, the reader discard path, and
-        //   _resetEngineRuntimeState() on engine restart.
+        //   resetEngineRuntimeState() on engine restart.
         if (currentState == STATE_NONE && !_isPondering) {
             return;
         }
@@ -1101,15 +1101,15 @@ public class StockfishNative {
     }
 
     private void engineGoInternal(final String fen, final int level, final boolean needNewGame) {
-        // v1.0.2 FIX (audit): use _safeExecute to catch RejectedExecutionException
+        // v1.0.2 FIX (audit): use safeExecute to catch RejectedExecutionException
         final long enqSeq = _cmdSeq.incrementAndGet(); // v1.2.3 round-44 (A3/A4)
-        _safeExecute(new Runnable() { // tag: engineGoInternal
+        safeExecute(new Runnable() { // tag: engineGoInternal
             public void run() {
                 if (!engineReady) {
                     postJsCallback("onEngineError(" + escapeJsString("Engine not ready") + ")");
                     return;
                 }
-                _compensateRacedStop(enqSeq, "engineGoInternal"); // v1.2.3 round-44 (A3/A4)
+                compensateRacedStop(enqSeq, "engineGoInternal"); // v1.2.3 round-44 (A3/A4)
                 stopAndWaitForBestmove("engineGoInternal");
 
                 synchronized (stateLock) {
@@ -1170,7 +1170,7 @@ public class StockfishNative {
                                final long wtimeMs, final long btimeMs,
                                final long wincMs, final long bincMs) {
         // v1.2.3 round-33 (PR52 v3 #4.1.2): capture the call timestamp BEFORE
-        //   _safeExecute so the queue wait is INCLUDED in setupElapsedMs. The
+        //   safeExecute so the queue wait is INCLUDED in setupElapsedMs. The
         //   previous code captured _callTimeMs inside the executor runnable,
         //   which meant any time spent waiting in the single-thread executor
         //   queue (e.g., behind another engineGoTimed call) was excluded —
@@ -1180,7 +1180,7 @@ public class StockfishNative {
         //   time since JS called us.
         final long _callTimeMs = SystemClock.elapsedRealtime();
         final long enqSeq = _cmdSeq.incrementAndGet(); // v1.2.3 round-44 (A3/A4)
-        _safeExecute(new Runnable() { // tag: engineGoTimed
+        safeExecute(new Runnable() { // tag: engineGoTimed
             public void run() {
                 if (!engineReady) {
                     postJsCallback("onEngineError(" + escapeJsString("Engine not ready") + ")");
@@ -1195,9 +1195,9 @@ public class StockfishNative {
                 // 1s for stopAndWait, up to 5s for ucinewgame+readyok). The engine
                 // then over-allocates search time, searching past the GUI's 0-mark.
                 // v1.2.3 round-33: _callTimeMs is now captured OUTSIDE the runnable
-                //   (above _safeExecute) so the queue wait is included.
+                //   (above safeExecute) so the queue wait is included.
 
-                _compensateRacedStop(enqSeq, "engineGoTimed"); // v1.2.3 round-44 (A3/A4)
+                compensateRacedStop(enqSeq, "engineGoTimed"); // v1.2.3 round-44 (A3/A4)
                 stopAndWaitForBestmove("engineGoTimed");
 
                 synchronized (stateLock) {
@@ -1266,15 +1266,15 @@ public class StockfishNative {
 
     @JavascriptInterface
     public void engineHint(final String fen) {
-        // v1.0.2 FIX (audit): use _safeExecute to catch RejectedExecutionException
+        // v1.0.2 FIX (audit): use safeExecute to catch RejectedExecutionException
         final long enqSeq = _cmdSeq.incrementAndGet(); // v1.2.3 round-44 (A3/A4)
-        _safeExecute(new Runnable() { // tag: engineHint
+        safeExecute(new Runnable() { // tag: engineHint
             public void run() {
                 if (!engineReady) {
                     postJsCallback("onEngineError(" + escapeJsString("Engine not ready") + ")");
                     return;
                 }
-                _compensateRacedStop(enqSeq, "engineHint"); // v1.2.3 round-44 (A3/A4)
+                compensateRacedStop(enqSeq, "engineHint"); // v1.2.3 round-44 (A3/A4)
                 stopAndWaitForBestmove("engineHint");
 
                 synchronized (stateLock) {
@@ -1289,15 +1289,15 @@ public class StockfishNative {
 
     @JavascriptInterface
     public void engineEval(final String fen) {
-        // v1.0.2 FIX (audit): use _safeExecute to catch RejectedExecutionException
+        // v1.0.2 FIX (audit): use safeExecute to catch RejectedExecutionException
         final long enqSeq = _cmdSeq.incrementAndGet(); // v1.2.3 round-44 (A3/A4)
-        _safeExecute(new Runnable() { // tag: engineEval
+        safeExecute(new Runnable() { // tag: engineEval
             public void run() {
                 if (!engineReady) {
                     postJsCallback("onEngineError(" + escapeJsString("Engine not ready") + ")");
                     return;
                 }
-                _compensateRacedStop(enqSeq, "engineEval"); // v1.2.3 round-44 (A3/A4)
+                compensateRacedStop(enqSeq, "engineEval"); // v1.2.3 round-44 (A3/A4)
                 stopAndWaitForBestmove("engineEval");
 
                 synchronized (stateLock) {
@@ -1327,15 +1327,15 @@ public class StockfishNative {
 
     @JavascriptInterface
     public void engineEvalDeep(final String fen) {
-        // v1.0.2 FIX (audit): use _safeExecute to catch RejectedExecutionException
+        // v1.0.2 FIX (audit): use safeExecute to catch RejectedExecutionException
         final long enqSeq = _cmdSeq.incrementAndGet(); // v1.2.3 round-44 (A3/A4)
-        _safeExecute(new Runnable() { // tag: engineEvalDeep
+        safeExecute(new Runnable() { // tag: engineEvalDeep
             public void run() {
                 if (!engineReady) {
                     postJsCallback("onEngineError(" + escapeJsString("Engine not ready") + ")");
                     return;
                 }
-                _compensateRacedStop(enqSeq, "engineEvalDeep"); // v1.2.3 round-44 (A3/A4)
+                compensateRacedStop(enqSeq, "engineEvalDeep"); // v1.2.3 round-44 (A3/A4)
                 stopAndWaitForBestmove("engineEvalDeep");
 
                 synchronized (stateLock) {
@@ -1383,7 +1383,7 @@ public class StockfishNative {
     @JavascriptInterface
     public void engineEvalDeepBeginBatch() {
         _evalDeepBatchActive = true;
-        _safeExecute(new Runnable() { // tag: engineEvalDeepBeginBatch
+        safeExecute(new Runnable() { // tag: engineEvalDeepBeginBatch
             public void run() {
                 if (!engineReady) {
                     // Flag stays set; engineEvalDeep will fail-fast.
@@ -1427,7 +1427,7 @@ public class StockfishNative {
     @JavascriptInterface
     public void engineEvalDeepEndBatch() {
         _evalDeepBatchActive = false;
-        _safeExecute(new Runnable() { // tag: engineEvalDeepEndBatch
+        safeExecute(new Runnable() { // tag: engineEvalDeepEndBatch
             public void run() {
                 // v1.2.3 round-61 (R61-d): the round-51 (BG-1) Activity
                 //   notification below is now dispatched BEFORE the
@@ -1668,7 +1668,7 @@ public class StockfishNative {
         }
         _pendingChess960 = enabled;
         if (engineSupportsOption("UCI_Chess960")) {
-            _safeExecute(new Runnable() { // tag: setChess960Mode
+            safeExecute(new Runnable() { // tag: setChess960Mode
                 public void run() {
                     stopAndWaitForBestmove("setChess960Mode");
                     sendSetOptionAndWait("UCI_Chess960", enabled ? "true" : "false");
@@ -1863,7 +1863,7 @@ public class StockfishNative {
         //   the user asked to quit, leaking the new process and its executor.
         if (shutdownRequested) {
             Log.i(TAG, "startEngineInternal: shutdownRequested — aborting engine start");
-            _clearRestartInProgress();
+            clearRestartInProgress();
             // v1.2.3 round-44 (A1): notify JS — otherwise it waits forever for
             //   an onEngineReady() that will never arrive (exit→reinit race).
             postJsCallback("onEngineError", "shutdown_in_progress");
@@ -1887,7 +1887,7 @@ public class StockfishNative {
         if (stockfishBin == null) {
             Log.e(TAG, "Engine binary resolution failed — resetting initStarted for retry");
             initStarted = false;
-            _clearRestartInProgress(); // v1.0.8 PHASE 30: clear restart lock so future recoverEngine() calls can proceed
+            clearRestartInProgress(); // v1.0.8 PHASE 30: clear restart lock so future recoverEngine() calls can proceed
             postJsCallback("onEngineError(" + escapeJsString(isEnglishMode() ? "Engine file not found, will use offline mode" : "\u5f15\u64ce\u6587\u4ef6\u672a\u627e\u5230\uff0c\u5c06\u4f7f\u7528\u79bb\u7ebf\u6a21\u5f0f") + ")");
             return;
         }
@@ -1903,7 +1903,7 @@ public class StockfishNative {
         if (!started) {
             Log.e(TAG, "Engine process start failed");
             initStarted = false;
-            _clearRestartInProgress(); // v1.0.8 PHASE 30: clear restart lock so future recoverEngine() calls can proceed
+            clearRestartInProgress(); // v1.0.8 PHASE 30: clear restart lock so future recoverEngine() calls can proceed
             postJsCallback("onEngineError(" + escapeJsString(isEnglishMode() ? "Engine start failed - please reinstall" : "\u5f15\u64ce\u542f\u52a8\u5931\u8d25 - \u8bf7\u91cd\u65b0\u5b89\u88c5\u5e94\u7528") + ")");
             return;
         }
@@ -2030,7 +2030,7 @@ public class StockfishNative {
         postJsCallback("onInitProgress(90, " + escapeJsString(isEnglishMode() ? "Engine ready!" : "\u5f15\u64ce\u5c31\u7eea\uff01") + ")");
         Log.i(TAG, "Stockfish engine ready: " + engineName); // mobsf-ignore: android_logging
         _engineHealthMonitor.resetRecoveryCount();
-        _clearRestartInProgress(); // Clear restart lock on successful start
+        clearRestartInProgress(); // Clear restart lock on successful start
         clearEngineThreadDeadFlag(); // v1.2.1: 引擎成功启动，清除前次死亡标记
         postJsCallback("onEngineReady()");
 
@@ -2165,7 +2165,7 @@ public class StockfishNative {
      *     them); clearing here would briefly expose an empty option set to JS
      *     callers querying during teardown.
      */
-    private void _resetEngineRuntimeState() {
+    private void resetEngineRuntimeState() {
         _isPondering = false;
         _evalDeepBatchActive = false;
         synchronized (_discardFlagLock) {
@@ -2239,12 +2239,12 @@ public class StockfishNative {
         // (manifesting as "AI never moves" after recovery). Also clear latch
         // holders so a stale latch from the dead engine doesn't block the new
         // engine's isready handshake.
-        // v1.2.3 round-44 (A2/A5): extracted to _resetEngineRuntimeState() —
+        // v1.2.3 round-44 (A2/A5): extracted to resetEngineRuntimeState() —
         //   resets _isPondering, _evalDeepBatchActive (round-13 P1 rationale
         //   preserved on the method), _discardingPonderBestmove (under
         //   _discardFlagLock), _multiPVData, sEngineThreadDied and _stopLatch
         //   (now under _stopLatchLock).
-        _resetEngineRuntimeState();
+        resetEngineRuntimeState();
         _lastPonderMove = null;
         readyOkLatchHolder = null;
         uciOkLatchHolder = null;
@@ -2286,7 +2286,7 @@ public class StockfishNative {
 
         if (_engineHealthMonitor.getRecoveryCount() >= MAX_AUTO_RECOVERY) {
             Log.e(TAG, "Auto-recovery limit reached (" + MAX_AUTO_RECOVERY + "), giving up. Reason: " + reason); // mobsf-ignore: android_logging
-            _clearRestartInProgress();
+            clearRestartInProgress();
             postJsCallback("onEngineError(" + escapeJsString(userMessage) + ")");
             return;
         }
@@ -2306,10 +2306,10 @@ public class StockfishNative {
         // Ensure executor is available — recreate if shutdown
         try {
             if (_engineExecutor.isShutdown()) {
-                _engineExecutor = _createEngineExecutor();
+                _engineExecutor = createEngineExecutor();
             }
         } catch (Exception e) {
-            _engineExecutor = _createEngineExecutor();
+            _engineExecutor = createEngineExecutor();
         }
         // v1.2.1 round-10 (review-D P2): re-check shutdownRequested AFTER
         //   recreating the executor but BEFORE scheduling the delayed task.
@@ -2318,7 +2318,7 @@ public class StockfishNative {
         //   leaked (no shutdown hook registered). Bail out cleanly instead.
         if (shutdownRequested) {
             Log.i(TAG, "recoverEngine: shutdownRequested after executor recreation — aborting (" + reason + ")"); // mobsf-ignore: android_logging
-            _clearRestartInProgress();
+            clearRestartInProgress();
             return;
         }
 
@@ -2337,7 +2337,7 @@ public class StockfishNative {
                         _lastRecoveryTimestamp = SystemClock.elapsedRealtime();
                         attemptNum = _engineHealthMonitor.getRecoveryCount();
                         Thread.sleep(delay);
-                        if (shutdownRequested) { _clearRestartInProgress(); return; }
+                        if (shutdownRequested) { clearRestartInProgress(); return; }
                         Log.i(TAG, "Auto-recovery attempt " + attemptNum + "/" + MAX_AUTO_RECOVERY + " (" + reason + ")"); // mobsf-ignore: android_logging
                         cleanupEngineResources();
                         // v1.0.8 PHASE 24 (bug fix): shut down the current executor
@@ -2345,7 +2345,7 @@ public class StockfishNative {
                         //   cycle leaked an ExecutorService (and its non-daemon
                         //   thread) because the old executor was never shut down.
                         try { _engineExecutor.shutdown(); } catch (Exception tsh) {}
-                        _engineExecutor = _createEngineExecutor(); // Fresh executor after cleanup
+                        _engineExecutor = createEngineExecutor(); // Fresh executor after cleanup
                         _engineExecutor.execute(new Runnable() {
                             public void run() {
                                 try {
@@ -2356,7 +2356,7 @@ public class StockfishNative {
                                         postJsCallback("onEngineError(" + escapeJsString(userMessage) + ")");
                                     }
                                 } finally {
-                                    _clearRestartInProgress();
+                                    clearRestartInProgress();
                                 }
                             }
                         });
@@ -2373,12 +2373,12 @@ public class StockfishNative {
                         //   (potential zombie). Restore the flag and bail out
                         //   cleanly so the executor can be torn down promptly.
                         Thread.currentThread().interrupt();
-                        _clearRestartInProgress();
+                        clearRestartInProgress();
                         Log.i(TAG, "Auto-recovery sleep interrupted — aborting attempt " + attemptNum + " (" + reason + ")"); // mobsf-ignore: android_logging
                         return;
                     } catch (Throwable t) {
                         Log.e(TAG, "Auto-recovery attempt " + attemptNum + " failed (" + reason + ")", t); // mobsf-ignore: android_logging
-                        _clearRestartInProgress();
+                        clearRestartInProgress();
                         if (attemptNum >= MAX_AUTO_RECOVERY) {
                             postJsCallback("onEngineError(" + escapeJsString(userMessage) + ")");
                         }
@@ -2392,7 +2392,7 @@ public class StockfishNative {
             //   task never ran its first line, so no attempt was counted. The
             //   retry task performs the increment itself if (and only if) it
             //   actually runs.
-            _engineExecutor = _createEngineExecutor();
+            _engineExecutor = createEngineExecutor();
             try {
                 _engineExecutor.execute(new Runnable() {
                     public void run() {
@@ -2408,12 +2408,12 @@ public class StockfishNative {
                                 postJsCallback("onEngineError(" + escapeJsString(userMessage) + ")");
                             }
                         } finally {
-                            _clearRestartInProgress();
+                            clearRestartInProgress();
                         }
                     }
                 });
             } catch (Throwable t2) {
-                _clearRestartInProgress();
+                clearRestartInProgress();
                 Log.e(TAG, "Recovery retry also failed (" + reason + ")", t2); // mobsf-ignore: android_logging
             }
         }
@@ -3159,7 +3159,7 @@ public class StockfishNative {
         }
         // v1.2.3 round-44 (A11): coalesce onEngineProgress — stash the latest
         //   payload and let the scheduled flush deliver it (at most one flush
-        //   per 16ms window). The flush calls _postJsCallbackDirect to avoid
+        //   per 16ms window). The flush calls postJsCallbackDirect to avoid
         //   re-entering this throttle branch (which would defer forever).
         if (jsExpression.startsWith("onEngineProgress(")) {
             _pendingProgressJs = jsExpression;
@@ -3171,14 +3171,14 @@ public class StockfishNative {
                         final String js = _pendingProgressJs;
                         _pendingProgressJs = null;
                         if (js != null) {
-                            _postJsCallbackDirect(js);
+                            postJsCallbackDirect(js);
                         }
                     }
                 }, PROGRESS_THROTTLE_MS);
             }
             return;
         }
-        _postJsCallbackDirect(jsExpression);
+        postJsCallbackDirect(jsExpression);
     }
 
     /**
@@ -3186,7 +3186,7 @@ public class StockfishNative {
      *   postJsCallback). All callbacks except throttled onEngineProgress land
      *   here directly; the progress-flush runnable lands here too.
      */
-    private void _postJsCallbackDirect(final String jsExpression) {
+    private void postJsCallbackDirect(final String jsExpression) {
         final String cleanJs = jsExpression;
         try {
             mainHandler.post(new Runnable() {
@@ -3224,7 +3224,7 @@ public class StockfishNative {
                         //   FEN (the whole game state), and Log.e SURVIVES the release
                         //   proguard strip (proguard-rules.pro:135-139). Log the event
                         //   name + payload length only; payload text never enters logcat.
-                        Log.e(TAG, "Error posting JS callback (event=" + _callbackEventName(cleanJs)
+                        Log.e(TAG, "Error posting JS callback (event=" + callbackEventName(cleanJs)
                                 + ", length=" + cleanJs.length() + ")", e); // mobsf-ignore: android_logging
                     }
                 }
@@ -3241,7 +3241,7 @@ public class StockfishNative {
      *   whole game state) via onEngineEval's 8th argument, so logs may carry the
      *   event name and the payload length — never the payload text itself.
      */
-    private static String _callbackEventName(String js) {
+    private static String callbackEventName(String js) {
         if (js == null) {
             return "?";
         }
@@ -3418,7 +3418,7 @@ public class StockfishNative {
         // v1.2.3 round-44 (A2): reset runtime flags on full shutdown too, so a
         //   later initEngine() in the same process starts from a clean slate
         //   (the countDown above releases any waiter before the latch is nulled).
-        _resetEngineRuntimeState();
+        resetEngineRuntimeState();
 
         engineReader = null;
         initStarted = false;
@@ -3607,10 +3607,10 @@ public class StockfishNative {
         // Ensure executor is available — recreate if shutdown (common after recoverEngine)
         try {
             if (_engineExecutor.isShutdown()) {
-                _engineExecutor = _createEngineExecutor();
+                _engineExecutor = createEngineExecutor();
             }
         } catch (Exception e) {
-            _engineExecutor = _createEngineExecutor();
+            _engineExecutor = createEngineExecutor();
         }
 
         final ExecutorService executor = _engineExecutor;
@@ -3646,7 +3646,7 @@ public class StockfishNative {
                     // Re-check: did a concurrent shutdown happen during the sleep?
                     if (genAtShutdown != _lifecycleGeneration.get()) {
                         Log.i(TAG, "Restart aborted — concurrent shutdown detected (gen " + genAtShutdown + " → " + _lifecycleGeneration.get() + ")"); // mobsf-ignore: android_logging
-                        _clearRestartInProgress();
+                        clearRestartInProgress();
                         return;
                     } // mobsf-ignore: android_logging
                     // v1.2.3 round-34 (PR52 v4 #4.2.1): also abort if the thread
@@ -3670,13 +3670,13 @@ public class StockfishNative {
                     if (Thread.currentThread().isInterrupted()) {
                         if (_externalShutdownRequested) {
                             Log.i(TAG, "Restart aborted — thread interrupted during sleep (shutdownNow)");
-                            _clearRestartInProgress();
+                            clearRestartInProgress();
                             return;
                         }
                         Thread.interrupted(); // clear the self-induced interrupt bit
                     }
                     // Recreate the executor since shutdown() destroyed it
-                    _engineExecutor = _createEngineExecutor();
+                    _engineExecutor = createEngineExecutor();
                     initStarted = false;
                     // v1.2.3 round-34 (PR52 v4 #4.2.1): FINAL generation re-check
                     //   BEFORE resetting shutdownRequested. A concurrent shutdown()
@@ -3688,7 +3688,7 @@ public class StockfishNative {
                     //   window that CodeRabbit identified in v4 review.
                     if (genAtShutdown != _lifecycleGeneration.get()) {
                         Log.i(TAG, "Restart aborted — concurrent shutdown detected post-executor-recreation (gen " + genAtShutdown + " → " + _lifecycleGeneration.get() + ")"); // mobsf-ignore: android_logging
-                        _clearRestartInProgress();
+                        clearRestartInProgress();
                         return;
                     } // mobsf-ignore: android_logging
                     // v1.2.3 round-13 (P0): shutdown() sets shutdownRequested=true.
@@ -3716,7 +3716,7 @@ public class StockfishNative {
                                 Log.e(TAG, "Engine restart failed", e);
                                 postJsCallback("onEngineError(" + escapeJsString((isEnglishMode() ? "Engine restart failed: " : "\u5f15\u64ce\u91cd\u542f\u5931\u8d25: ") + (e.getMessage() != null ? e.getMessage() : "Unknown")) + ")");
                             } finally {
-                                _clearRestartInProgress();
+                                clearRestartInProgress();
                             }
                         }
                     });
@@ -3732,10 +3732,10 @@ public class StockfishNative {
             //   avoid launching a new engine after the user exited.
             if (shutdownRequested) {
                 Log.i(TAG, "Restart retry aborted — shutdownRequested is true (concurrent shutdown)");
-                _clearRestartInProgress();
+                clearRestartInProgress();
                 return;
             }
-            _engineExecutor = _createEngineExecutor();
+            _engineExecutor = createEngineExecutor();
             _engineExecutor.execute(new Runnable() {
                 public void run() {
                     try {
@@ -3746,7 +3746,7 @@ public class StockfishNative {
                         Log.e(TAG, "Engine restart retry failed", t);
                         postJsCallback("onEngineError(" + escapeJsString((isEnglishMode() ? "Engine restart failed: " : "\u5f15\u64ce\u91cd\u542f\u5931\u8d25: ") + (t.getMessage() != null ? t.getMessage() : "Unknown")) + ")");
                     } finally {
-                        _clearRestartInProgress();
+                        clearRestartInProgress();
                     }
                 }
             });
@@ -3978,9 +3978,9 @@ public class StockfishNative {
                              final long wtimeMs, final long btimeMs,
                              final long wincMs, final long bincMs) {
         if (!engineReady || !enginePonder) return;
-        // v1.0.2 FIX (audit): use _safeExecute to catch RejectedExecutionException
+        // v1.0.2 FIX (audit): use safeExecute to catch RejectedExecutionException
         final long enqSeq = _cmdSeq.incrementAndGet(); // v1.2.3 round-44 (A3/A4)
-        _safeExecute(new Runnable() { // tag: startPonder
+        safeExecute(new Runnable() { // tag: startPonder
             public void run() {
                 // v1.2.3 round-44 (A3/A4): a direct engineStop()/stopPonder()
                 //   raced ahead of this queued ponder — its "stop" reached an
@@ -4105,7 +4105,7 @@ public class StockfishNative {
         Log.i(TAG, "engineStop — forcing engine to stop immediately");
         // v1.2.3 round-44 (A3/A4): snapshot the submission counter BEFORE the
         //   direct "stop" below — every go-task enqueued up to this point
-        //   re-issues stop before its go (see _compensateRacedStop).
+        //   re-issues stop before its go (see compensateRacedStop).
         _lastStopSeq = _cmdSeq.get();
         // v1.0.4 Rev36 FIX: Only set _discardingPonderBestmove when the engine
         // is actually in an active state (GO/HINT/EVAL/PONDER). If the engine
@@ -4163,7 +4163,7 @@ public class StockfishNative {
                     + command.trim().replace("\r", "\\r").replace("\n", "\\n")); // mobsf-ignore: android_logging
             return;
         }
-        _safeExecute(new Runnable() {
+        safeExecute(new Runnable() {
             public void run() {
                 if (!engineReady) return;
                 try {
@@ -4673,7 +4673,7 @@ public class StockfishNative {
         //   Uri.parse + equalsIgnoreCase accepts "HTTP://...", "Https://..."
         //   which are valid per RFC 3986 §3.1 (scheme is case-insensitive).
         //   The previous case-sensitive startsWith() rejected these URLs.
-        if (!_isHttpUrl(trimmed)) {
+        if (!isHttpUrl(trimmed)) {
             Log.w(TAG, "openUrlInBrowser rejected non-http(s) URL: " + trimmed); // mobsf-ignore: android_logging
             return;
         } // mobsf-ignore: android_logging
@@ -4694,7 +4694,7 @@ public class StockfishNative {
     // v1.2.1 round-10 (review-E P2): case-insensitive http(s) scheme check.
     //   Used by StockfishNative.openUrlInBrowser; mirrored in StatsActivity
     //   and ChessWebViewClient via the same Uri.parse + equalsIgnoreCase idiom.
-    private static boolean _isHttpUrl(String url) {
+    private static boolean isHttpUrl(String url) {
         // v1.2.3 round-44 (A13): regionMatches prefix check instead of Uri.parse
         //   scheme extraction — no Uri allocation per call, and exotic forms
         //   like "http:example" (no "//", which Uri.parse resolves to a scheme)

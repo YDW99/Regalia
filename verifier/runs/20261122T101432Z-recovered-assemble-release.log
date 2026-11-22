@@ -1,0 +1,309 @@
+timestamp_start=2026-11-22T10:14:32Z
+timestamp_end=2026-11-22T10:29:07Z
+cwd=/tmp/regalia-r71/repo
+command=gradle assembleRelease --no-daemon --stacktrace --console=plain 
+exit_code=0
+--- output ---
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.11.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Parallel Configuration Cache is an incubating feature.
+Calculating task graph as no cached configuration is available for tasks: assembleRelease
+> Task :preBuild UP-TO-DATE
+> Task :preReleaseBuild UP-TO-DATE
+> Task :generateReleaseBuildConfig FROM-CACHE
+> Task :javaPreCompileRelease FROM-CACHE
+> Task :generateReleaseResValues FROM-CACHE
+> Task :mapReleaseSourceSetPaths
+> Task :checkReleaseAarMetadata
+> Task :generateReleaseResources FROM-CACHE
+> Task :createReleaseCompatibleScreenManifests
+> Task :mergeReleaseResources FROM-CACHE
+> Task :extractDeepLinksRelease
+> Task :packageReleaseResources
+
+> Task :processReleaseMainManifest
+/tmp/regalia-r71/repo/src/main/AndroidManifest.xml:92:9-41 Warning:
+	android:extractNativeLibs should not be specified in this source AndroidManifest.xml file. See https://d.android.com/guide/topics/manifest/application-element#extractNativeLibs for more information.
+The AGP Upgrade Assistant can remove the attribute from the AndroidManifest.xml file and update the build file accordingly. See https://d.android.com/studio/build/agp-upgrade-assistant for more information.
+
+> Task :processReleaseManifest
+> Task :processReleaseManifestForPackage
+> Task :extractProguardFiles
+> Task :parseReleaseLocalResources
+> Task :processReleaseResources
+
+> Task :configureCMakeRelease[arm64-v8a]
+C/C++: CMake Deprecation Warning at /mnt/agents/buildenv/sdk/ndk/27.2.12479018/build/cmake/android.toolchain.cmake:35 (cmake_minimum_required):
+C/C++:   Compatibility with CMake < 3.10 will be removed from a future version of
+C/C++:   CMake.
+C/C++:   Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+C/C++:   to tell CMake that the project requires at least <min> but has been updated
+C/C++:   to work with policies introduced by <max> or earlier.
+C/C++: Call Stack (most recent call first):
+C/C++:   /mnt/agents/buildenv/sdk/cmake/3.31.6/share/cmake-3.31/Modules/CMakeDetermineSystem.cmake:146 (include)
+C/C++:   CMakeLists.txt:19 (project)
+C/C++: CMake Deprecation Warning at /mnt/agents/buildenv/sdk/ndk/27.2.12479018/build/cmake/android-legacy.toolchain.cmake:35 (cmake_minimum_required):
+C/C++:   Compatibility with CMake < 3.10 will be removed from a future version of
+C/C++:   CMake.
+C/C++:   Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+C/C++:   to tell CMake that the project requires at least <min> but has been updated
+C/C++:   to work with policies introduced by <max> or earlier.
+C/C++: Call Stack (most recent call first):
+C/C++:   /mnt/agents/buildenv/sdk/ndk/27.2.12479018/build/cmake/android.toolchain.cmake:55 (include)
+C/C++:   /mnt/agents/buildenv/sdk/cmake/3.31.6/share/cmake-3.31/Modules/CMakeDetermineSystem.cmake:146 (include)
+C/C++:   CMakeLists.txt:19 (project)
+C/C++: CMake Deprecation Warning at /mnt/agents/buildenv/sdk/ndk/27.2.12479018/build/cmake/android.toolchain.cmake:35 (cmake_minimum_required):
+C/C++:   Compatibility with CMake < 3.10 will be removed from a future version of
+C/C++:   CMake.
+C/C++:   Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+C/C++:   to tell CMake that the project requires at least <min> but has been updated
+C/C++:   to work with policies introduced by <max> or earlier.
+C/C++: Call Stack (most recent call first):
+C/C++:   /tmp/regalia-r71/repo/.cxx/Release/6n5e2d72/arm64-v8a/CMakeFiles/3.31.6/CMakeSystem.cmake:6 (include)
+C/C++:   CMakeLists.txt:19 (project)
+
+> Task :compileReleaseJavaWithJavac
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/PermissionHelper.java:177: warning: [deprecation] VIBRATOR_SERVICE in Context has been deprecated
+                    context.getSystemService(Context.VIBRATOR_SERVICE);
+                                                    ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/StockfishNative.java:4039: warning: [dep-ann] deprecated item is not annotated with @Deprecated
+    public void startPonder(final String fenWithPonderMove) {
+                ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/HapticManager.java:107: warning: [deprecation] HAPTIC_FEEDBACK_ENABLED in System has been deprecated
+                    android.provider.Settings.System.HAPTIC_FEEDBACK_ENABLED, 1
+                                                    ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/HapticManager.java:155: warning: [deprecation] VIBRATOR_SERVICE in Context has been deprecated
+                vibrator = (android.os.Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
+                                                                                 ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/HapticManager.java:538: warning: [deprecation] vibrate(long) in Vibrator has been deprecated
+                vibrator.vibrate(durationMs);
+                        ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/MainActivity.java:300: warning: [deprecation] FLAG_FULLSCREEN in LayoutParams has been deprecated
+                        WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                                                  ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/MainActivity.java:301: warning: [deprecation] FLAG_FULLSCREEN in LayoutParams has been deprecated
+                        WindowManager.LayoutParams.FLAG_FULLSCREEN
+                                                  ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/MainActivity.java:374: warning: [deprecation] setAllowFileAccessFromFileURLs(boolean) in WebSettings has been deprecated
+            webSettings.setAllowFileAccessFromFileURLs(false);
+                       ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/MainActivity.java:375: warning: [deprecation] setAllowUniversalAccessFromFileURLs(boolean) in WebSettings has been deprecated
+            webSettings.setAllowUniversalAccessFromFileURLs(false);
+                       ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/MainActivity.java:391: warning: [deprecation] FORCE_DARK_OFF in WebSettings has been deprecated
+                    webSettings.setForceDark(WebSettings.FORCE_DARK_OFF);
+                                                        ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/MainActivity.java:391: warning: [deprecation] setForceDark(int) in WebSettings has been deprecated
+                    webSettings.setForceDark(WebSettings.FORCE_DARK_OFF);
+                               ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/MainActivity.java:787: warning: [deprecation] setDecorFitsSystemWindows(boolean) in Window has been deprecated
+                    getWindow().setDecorFitsSystemWindows(false);
+                               ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/MainActivity.java:796: warning: [deprecation] setDecorFitsSystemWindows(boolean) in Window has been deprecated
+                        getWindow().setDecorFitsSystemWindows(false);
+                                   ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/MainActivity.java:821: warning: [deprecation] SYSTEM_UI_FLAG_IMMERSIVE_STICKY in View has been deprecated
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/MainActivity.java:822: warning: [deprecation] SYSTEM_UI_FLAG_LAYOUT_STABLE in View has been deprecated
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                              ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/MainActivity.java:823: warning: [deprecation] SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION in View has been deprecated
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                              ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/MainActivity.java:824: warning: [deprecation] SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN in View has been deprecated
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                              ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/MainActivity.java:825: warning: [deprecation] SYSTEM_UI_FLAG_HIDE_NAVIGATION in View has been deprecated
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                              ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/MainActivity.java:826: warning: [deprecation] SYSTEM_UI_FLAG_FULLSCREEN in View has been deprecated
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+                              ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/MainActivity.java:820: warning: [deprecation] setSystemUiVisibility(int) in View has been deprecated
+        decorView.setSystemUiVisibility(
+                 ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/MainActivity.java:1279: warning: [deprecation] TRIM_MEMORY_MODERATE in ComponentCallbacks2 has been deprecated
+        if (level >= TRIM_MEMORY_MODERATE) {
+                     ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/MainActivity.java:1495: warning: [deprecation] locale in Configuration has been deprecated
+                    sys = getResources().getConfiguration().locale;
+                                                           ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/StabilizationHelper.java:240: warning: [deprecation] getDefaultDisplay() in WindowManager has been deprecated
+            return windowManager.getDefaultDisplay().getRotation();
+                                ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/ChessWebViewClient.java:64: warning: [deprecation] shouldOverrideUrlLoading(WebView,String) in WebViewClient has been deprecated
+    public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                   ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/StatsActivity.java:204: warning: [deprecation] FLAG_FULLSCREEN in LayoutParams has been deprecated
+            getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                                                           ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/StatsActivity.java:205: warning: [deprecation] FLAG_FULLSCREEN in LayoutParams has been deprecated
+                    WindowManager.LayoutParams.FLAG_FULLSCREEN);
+                                              ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/StatsActivity.java:243: warning: [deprecation] setAllowFileAccessFromFileURLs(boolean) in WebSettings has been deprecated
+        settings.setAllowFileAccessFromFileURLs(false);
+                ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/StatsActivity.java:244: warning: [deprecation] setAllowUniversalAccessFromFileURLs(boolean) in WebSettings has been deprecated
+        settings.setAllowUniversalAccessFromFileURLs(false);
+                ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/StatsActivity.java:646: warning: [deprecation] setDecorFitsSystemWindows(boolean) in Window has been deprecated
+                    getWindow().setDecorFitsSystemWindows(false);
+                               ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/StatsActivity.java:667: warning: [deprecation] SYSTEM_UI_FLAG_IMMERSIVE_STICKY in View has been deprecated
+                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                            ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/StatsActivity.java:668: warning: [deprecation] SYSTEM_UI_FLAG_LAYOUT_STABLE in View has been deprecated
+                                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                                      ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/StatsActivity.java:669: warning: [deprecation] SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION in View has been deprecated
+                                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                                      ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/StatsActivity.java:670: warning: [deprecation] SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN in View has been deprecated
+                                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                                      ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/StatsActivity.java:671: warning: [deprecation] SYSTEM_UI_FLAG_HIDE_NAVIGATION in View has been deprecated
+                                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                                      ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/StatsActivity.java:672: warning: [deprecation] SYSTEM_UI_FLAG_FULLSCREEN in View has been deprecated
+                                | View.SYSTEM_UI_FLAG_FULLSCREEN
+                                      ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/StatsActivity.java:666: warning: [deprecation] setSystemUiVisibility(int) in View has been deprecated
+                decorView.setSystemUiVisibility(
+                         ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/EngineService.java:469: warning: [deprecation] PRIORITY_LOW in Notification has been deprecated
+                    .setPriority(Notification.PRIORITY_LOW);
+                                             ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/EngineService.java:469: warning: [deprecation] setPriority(int) in Builder has been deprecated
+                    .setPriority(Notification.PRIORITY_LOW);
+                    ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/EngineService.java:479: warning: [deprecation] PRIORITY_LOW in Notification has been deprecated
+                    .setPriority(Notification.PRIORITY_LOW);
+                                             ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/EngineService.java:474: warning: [deprecation] Builder(Context) in Builder has been deprecated
+            Notification.Builder builder = new Notification.Builder(context)
+                                           ^
+/tmp/regalia-r71/repo/src/main/java/com/Regalia/EngineService.java:479: warning: [deprecation] setPriority(int) in Builder has been deprecated
+                    .setPriority(Notification.PRIORITY_LOW);
+                    ^
+41 warnings
+
+> Task :generateReleaseLintVitalReportModel
+
+> Task :configureCMakeRelease[arm64-v8a]
+C/C++: CMake Deprecation Warning at /mnt/agents/buildenv/sdk/ndk/27.2.12479018/build/cmake/flags.cmake:18 (cmake_minimum_required):
+C/C++:   Compatibility with CMake < 3.10 will be removed from a future version of
+C/C++:   CMake.
+C/C++:   Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+C/C++:   to tell CMake that the project requires at least <min> but has been updated
+C/C++:   to work with policies introduced by <max> or earlier.
+C/C++: Call Stack (most recent call first):
+C/C++:   /mnt/agents/buildenv/sdk/cmake/3.31.6/share/cmake-3.31/Modules/Platform/Android-Clang.cmake:23 (include)
+C/C++:   /mnt/agents/buildenv/sdk/cmake/3.31.6/share/cmake-3.31/Modules/Platform/Android-Clang-C.cmake:1 (include)
+C/C++:   /mnt/agents/buildenv/sdk/cmake/3.31.6/share/cmake-3.31/Modules/CMakeCInformation.cmake:48 (include)
+C/C++:   CMakeLists.txt:19 (project)
+C/C++: CMake Deprecation Warning at /mnt/agents/buildenv/sdk/ndk/27.2.12479018/build/cmake/android.toolchain.cmake:35 (cmake_minimum_required):
+C/C++:   Compatibility with CMake < 3.10 will be removed from a future version of
+C/C++:   CMake.
+C/C++:   Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+C/C++:   to tell CMake that the project requires at least <min> but has been updated
+C/C++:   to work with policies introduced by <max> or earlier.
+C/C++: Call Stack (most recent call first):
+C/C++:   /tmp/regalia-r71/repo/.cxx/Release/6n5e2d72/arm64-v8a/CMakeFiles/3.31.6/CMakeSystem.cmake:6 (include)
+C/C++:   /tmp/regalia-r71/repo/.cxx/Release/6n5e2d72/arm64-v8a/CMakeFiles/CMakeScratch/TryCompile-CB9lIz/CMakeLists.txt:2 (project)
+C/C++: CMake Deprecation Warning at /mnt/agents/buildenv/sdk/ndk/27.2.12479018/build/cmake/android-legacy.toolchain.cmake:35 (cmake_minimum_required):
+C/C++:   Compatibility with CMake < 3.10 will be removed from a future version of
+C/C++:   CMake.
+C/C++:   Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+C/C++:   to tell CMake that the project requires at least <min> but has been updated
+C/C++:   to work with policies introduced by <max> or earlier.
+C/C++: Call Stack (most recent call first):
+C/C++:   /mnt/agents/buildenv/sdk/ndk/27.2.12479018/build/cmake/android.toolchain.cmake:55 (include)
+C/C++:   /tmp/regalia-r71/repo/.cxx/Release/6n5e2d72/arm64-v8a/CMakeFiles/3.31.6/CMakeSystem.cmake:6 (include)
+C/C++:   /tmp/regalia-r71/repo/.cxx/Release/6n5e2d72/arm64-v8a/CMakeFiles/CMakeScratch/TryCompile-CB9lIz/CMakeLists.txt:2 (project)
+C/C++: CMake Deprecation Warning at /mnt/agents/buildenv/sdk/ndk/27.2.12479018/build/cmake/flags.cmake:18 (cmake_minimum_required):
+C/C++:   Compatibility with CMake < 3.10 will be removed from a future version of
+C/C++:   CMake.
+C/C++:   Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+C/C++:   to tell CMake that the project requires at least <min> but has been updated
+C/C++:   to work with policies introduced by <max> or earlier.
+C/C++: Call Stack (most recent call first):
+C/C++:   /mnt/agents/buildenv/sdk/cmake/3.31.6/share/cmake-3.31/Modules/Platform/Android-Clang.cmake:23 (include)
+C/C++:   /mnt/agents/buildenv/sdk/cmake/3.31.6/share/cmake-3.31/Modules/Platform/Android-Clang-C.cmake:1 (include)
+C/C++:   /mnt/agents/buildenv/sdk/cmake/3.31.6/share/cmake-3.31/Modules/CMakeCInformation.cmake:48 (include)
+C/C++:   /tmp/regalia-r71/repo/.cxx/Release/6n5e2d72/arm64-v8a/CMakeFiles/CMakeScratch/TryCompile-CB9lIz/CMakeLists.txt:2 (project)
+
+> Task :lintVitalAnalyzeRelease
+
+> Task :configureCMakeRelease[arm64-v8a]
+C/C++: CMake Deprecation Warning at /mnt/agents/buildenv/sdk/ndk/27.2.12479018/build/cmake/android.toolchain.cmake:35 (cmake_minimum_required):
+C/C++:   Compatibility with CMake < 3.10 will be removed from a future version of
+C/C++:   CMake.
+C/C++:   Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+C/C++:   to tell CMake that the project requires at least <min> but has been updated
+C/C++:   to work with policies introduced by <max> or earlier.
+C/C++: Call Stack (most recent call first):
+C/C++:   /tmp/regalia-r71/repo/.cxx/Release/6n5e2d72/arm64-v8a/CMakeFiles/3.31.6/CMakeSystem.cmake:6 (include)
+C/C++:   /tmp/regalia-r71/repo/.cxx/Release/6n5e2d72/arm64-v8a/CMakeFiles/CMakeScratch/TryCompile-w94ElI/CMakeLists.txt:2 (project)
+C/C++: CMake Deprecation Warning at /mnt/agents/buildenv/sdk/ndk/27.2.12479018/build/cmake/android-legacy.toolchain.cmake:35 (cmake_minimum_required):
+C/C++:   Compatibility with CMake < 3.10 will be removed from a future version of
+C/C++:   CMake.
+C/C++:   Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+C/C++:   to tell CMake that the project requires at least <min> but has been updated
+C/C++:   to work with policies introduced by <max> or earlier.
+C/C++: Call Stack (most recent call first):
+C/C++:   /mnt/agents/buildenv/sdk/ndk/27.2.12479018/build/cmake/android.toolchain.cmake:55 (include)
+C/C++:   /tmp/regalia-r71/repo/.cxx/Release/6n5e2d72/arm64-v8a/CMakeFiles/3.31.6/CMakeSystem.cmake:6 (include)
+C/C++:   /tmp/regalia-r71/repo/.cxx/Release/6n5e2d72/arm64-v8a/CMakeFiles/CMakeScratch/TryCompile-w94ElI/CMakeLists.txt:2 (project)
+C/C++: CMake Deprecation Warning at /mnt/agents/buildenv/sdk/ndk/27.2.12479018/build/cmake/flags.cmake:18 (cmake_minimum_required):
+C/C++:   Compatibility with CMake < 3.10 will be removed from a future version of
+C/C++:   CMake.
+C/C++:   Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+C/C++:   to tell CMake that the project requires at least <min> but has been updated
+C/C++:   to work with policies introduced by <max> or earlier.
+C/C++: Call Stack (most recent call first):
+C/C++:   /mnt/agents/buildenv/sdk/cmake/3.31.6/share/cmake-3.31/Modules/Platform/Android-Clang.cmake:23 (include)
+C/C++:   /mnt/agents/buildenv/sdk/cmake/3.31.6/share/cmake-3.31/Modules/Platform/Android-Clang-CXX.cmake:1 (include)
+C/C++:   /mnt/agents/buildenv/sdk/cmake/3.31.6/share/cmake-3.31/Modules/CMakeCXXInformation.cmake:48 (include)
+C/C++:   /tmp/regalia-r71/repo/.cxx/Release/6n5e2d72/arm64-v8a/CMakeFiles/CMakeScratch/TryCompile-w94ElI/CMakeLists.txt:2 (project)
+
+> Task :buildCMakeRelease[arm64-v8a]
+> Task :mergeReleaseJniLibFolders
+> Task :mergeReleaseNativeLibs
+> Task :stripReleaseDebugSymbols
+> Task :extractReleaseNativeSymbolTables
+> Task :mergeReleaseNativeDebugMetadata
+> Task :checkReleaseDuplicateClasses
+> Task :mergeReleaseArtProfile
+> Task :expandReleaseArtProfileWildcards
+> Task :mergeReleaseGeneratedProguardFiles
+> Task :processReleaseJavaRes NO-SOURCE
+> Task :mergeReleaseJavaResource
+> Task :mergeReleaseStartupProfile
+> Task :minifyReleaseWithR8
+> Task :lintVitalReportRelease
+> Task :lintVitalRelease
+> Task :mergeReleaseShaders
+> Task :compileReleaseShaders NO-SOURCE
+> Task :generateReleaseAssets UP-TO-DATE
+> Task :mergeReleaseAssets
+> Task :compressReleaseAssets
+> Task :extractReleaseVersionControlInfo
+> Task :convertLinkedResourcesToProtoRelease
+> Task :collectReleaseDependencies
+> Task :sdkReleaseDependencyData
+> Task :validateSigningRelease
+> Task :writeReleaseAppMetadata
+> Task :writeReleaseSigningConfigVersions
+> Task :compileReleaseArtProfile
+> Task :shrinkReleaseRes
+> Task :convertShrunkResourcesToBinaryRelease
+> Task :optimizeReleaseResources
+> Task :packageRelease
+> Task :assembleRelease
+> Task :createReleaseApkListingFileRedirect
+[Incubating] Problems report is available at: file:///tmp/regalia-r71/repo/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 14m 24s
+51 actionable tasks: 46 executed, 5 from cache
+Configuration cache entry stored.

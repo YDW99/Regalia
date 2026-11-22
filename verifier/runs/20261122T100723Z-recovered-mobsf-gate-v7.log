@@ -1,0 +1,7 @@
+timestamp_start=2026-11-22T10:07:23Z
+timestamp_end=2026-11-22T10:07:24Z
+cwd=/tmp/regalia-r71/repo
+command=python3 verifier/v7/mobsf-gate.py verifier/runs/recovered-mobsf-current.sarif verifier/runs/recovered-mobsf-stripped.sarif 
+exit_code=0
+--- output ---
+MOBSF-V7-GATE OK: version=1.2.0 markers=223 current_total=8 current_logging=0 stripped_logging=259

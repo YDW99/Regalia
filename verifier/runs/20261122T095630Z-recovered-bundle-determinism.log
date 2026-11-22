@@ -1,0 +1,11 @@
+timestamp_start=2026-11-22T09:56:30Z
+timestamp_end=2026-11-22T09:56:30Z
+cwd=/tmp/regalia-r71/repo
+command=bash -c set\ -e\;\ python3\ build-chess.py\;\ cp\ src/main/assets/chess.html\ /tmp/regalia-r71/chess-first.html\;\ python3\ build-chess.py\;\ cmp\ /tmp/regalia-r71/chess-first.html\ src/main/assets/chess.html\;\ test\ \"\$\(stat\ -c\ %s\ src/main/assets/chess.html\)\"\ =\ 1500732\;\ test\ \"\$\(sha256sum\ src/main/assets/chess.html\ \|\ cut\ -d\"\ \"\ -f1\)\"\ =\ cc69b869077a72dc1367461c6567a47fea159d292fd5e3d207a2afef84f167b5\;\ stat\ -c\ \"bundle_bytes=%s\"\ src/main/assets/chess.html\;\ sha256sum\ src/main/assets/chess.html\;\ echo\ BUNDLE-DETERMINISM-OK 
+exit_code=0
+--- output ---
+Built chess.html (24393 lines, 1500732 bytes)
+Built chess.html (24393 lines, 1500732 bytes)
+bundle_bytes=1500732
+cc69b869077a72dc1367461c6567a47fea159d292fd5e3d207a2afef84f167b5  src/main/assets/chess.html
+BUNDLE-DETERMINISM-OK

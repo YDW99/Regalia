@@ -1,0 +1,14 @@
+timestamp_start=2026-11-22T10:05:25Z
+timestamp_end=2026-11-22T10:05:30Z
+cwd=/tmp/regalia-r71/repo
+command=bash -c set\ +e\;\ /tmp/regalia-r71/tools/pmd-7.4.0/bin/pmd\ check\ -d\ src/main/java\ -R\ config/pmd-ruleset.xml\ -f\ sarif\ -r\ verifier/runs/recovered-pmd-final.sarif\ --no-cache\;\ rc=\$\?\;\ set\ -e\;\ echo\ pmd_exit=\$rc\;\ test\ \$rc\ -eq\ 0\ -o\ \$rc\ -eq\ 4\;\ python3\ verifier/v5/pmd-sarif-check.py\ verifier/runs/recovered-pmd-final.sarif\ 410\ 0 
+exit_code=0
+--- output ---
+Processing files   0% [                ]  0/19 (0:00:00) Violations:0, Errors:0Processing files   5% [                ]  1/19 (0:00:00) Violations:5, Errors:0Processing files   5% [                ]  1/19 (0:00:01) Violations:5, Errors:0Processing files  10% [=               ]  2/19 (0:00:01) Violations:7, Errors:0Processing files  15% [==             ]  3/19 (0:00:01) Violations:13, Errors:0Processing files  21% [===            ]  4/19 (0:00:01) Violations:17, Errors:0Processing files  26% [===            ]  5/19 (0:00:01) Violations:18, Errors:0Processing files  31% [====           ]  6/19 (0:00:01) Violations:34, Errors:0Processing files  36% [=====          ]  7/19 (0:00:01) Violations:41, Errors:0Processing files  42% [======         ]  8/19 (0:00:01) Violations:63, Errors:0Processing files  47% [=======        ]  9/19 (0:00:01) Violations:81, Errors:0Processing files  52% [=======        ] 10/19 (0:00:01) Violations:88, Errors:0Processing files  52% [=======        ] 10/19 (0:00:02) Violations:88, Errors:0Processing files  57% [========      ] 11/19 (0:00:02) Violations:155, Errors:0Processing files  63% [========      ] 12/19 (0:00:02) Violations:160, Errors:0Processing files  68% [=========     ] 13/19 (0:00:02) Violations:171, Errors:0Processing files  73% [==========    ] 14/19 (0:00:02) Violations:174, Errors:0Processing files  78% [===========   ] 15/19 (0:00:02) Violations:188, Errors:0Processing files  84% [===========   ] 16/19 (0:00:02) Violations:204, Errors:0Processing files  89% [============  ] 17/19 (0:00:02) Violations:245, Errors:0Processing files  89% [============  ] 17/19 (0:00:03) Violations:245, Errors:0Processing files  94% [============= ] 18/19 (0:00:03) Violations:407, Errors:0Processing files 100% [==============] 19/19 (0:00:03) Violations:410, Errors:0Processing files 100% [==============] 19/19 (0:00:03) Violations:410, Errors:0Processing files 100% [==============] 19/19 (0:00:03) Violations:410, Errors:0
+Processing files 100% [==============] 19/19 (0:00:03) Violations:410, Errors:0Processing files 100% [==============] 19/19 (0:00:03) Violations:410, Errors:0
+pmd_exit=4
+PMD-SARIF OK: total=410 MethodNamingConventions=0
+ControlStatementBraces=0
+MethodNamingConventions=0
+UnusedPrivateMethod=1
+SingularField=3
