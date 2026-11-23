@@ -30,6 +30,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # v1.2.3 round-79 (ROB-07 residue, CodeRabbit PR#60): match codeql.yml —
+          #   this workflow never pushes, so it needs no git credentials.
+          persist-credentials: false
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -37,17 +41,33 @@ jobs:
           python-version: "3.11"
 
       - name: Install mobsfscan
-        run: pip install mobsfscan
+        run: pip install mobsfscan==1.2.0
 
       - name: Run mobsfscan
         run: |
+          # v1.2.3 round-79 (ROB-07 residue): the old `|| true` swallowed every
+          #   failure mode alike. mobsfscan exiting non-zero WITH a produced
+          #   SARIF is the expected findings path (per the recovery guide,
+          #   findings-driven exit 1 is accepted when SARIF execution is
+          #   successful) — that keeps going and is uploaded below. The
+          #   scanner crashing WITHOUT a report is a tool failure and must
+          #   fail closed instead of silently reporting a green scan.
+          set +e
           mobsfscan \
             src/main/java \
             src/main/AndroidManifest.xml \
             --type android \
             --sarif \
-            --output mobsf-results.sarif \
-            || true
+            --output mobsf-results.sarif
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ] && [ ! -f mobsf-results.sarif ]; then
+            echo "::error::mobsfscan exited $status without producing a SARIF report (tool failure)"
+            exit 1
+          fi
+          if [ "$status" -ne 0 ]; then
+            echo "::warning::mobsfscan exited $status with findings; the SARIF report was produced and will be uploaded"
+          fi
 
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v3
