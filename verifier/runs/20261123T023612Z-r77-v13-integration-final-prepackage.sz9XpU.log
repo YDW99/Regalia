@@ -1,0 +1,31 @@
+timestamp_start=2026-11-23T02:36:12Z
+timestamp_end=2026-11-23T02:36:21Z
+cwd=/tmp/regalia-r77/repo
+command=python3 verifier/v13/integration-tests.py 
+exit_code=1
+--- output ---
+PASS V13-I01: complete current source payload packs and verifies
+PASS V13-I02: unexpected archive member is rejected by exact manifest comparison
+PASS V13-I03: missing archive member is rejected by exact manifest comparison
+PASS V13-I04: same-name modified content is rejected by per-member SHA-256
+PASS V13-I05: pack detects actual ZIP content and rejects nested ELF before publication
+PASS V13-I06: source-ZIP member budget rejects before digest or CRC decompression
+PASS V13-I07: required-entry gate rejects removal of build.gradle
+PASS V13-I08: required-entry gate rejects removal of gradlew
+PASS V13-I09: required-entry gate rejects removal of src/main/java/com/Regalia/MainActivity.java
+PASS V13-I10: required-entry gate rejects removal of verifier/v13/source-gate.py
+PASS V13-I11: required-entry gate rejects removal of verifier/v13/verify-apk.py
+PASS V13-I12: valid manually updated license archive passes without historical size/hash lock
+PASS V13-I13: in-tree repack excludes previous ZIP, lock and temporary artifacts
+PASS V13-I14: preexisting output lock fails closed without touching output or owner lock
+Traceback (most recent call last):
+  File "/tmp/regalia-r77/repo/verifier/v13/integration-tests.py", line 255, in <module>
+    main()
+  File "/tmp/regalia-r77/repo/verifier/v13/integration-tests.py", line 249, in main
+    test_source_gate()
+  File "/tmp/regalia-r77/repo/verifier/v13/integration-tests.py", line 207, in test_source_gate
+    clean = run_source_gate(worktree)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/regalia-r77/repo/verifier/v13/integration-tests.py", line 66, in run_source_gate
+    raise AssertionError("REGALIA_R77_BASE is required for source-gate integration")
+AssertionError: REGALIA_R77_BASE is required for source-gate integration

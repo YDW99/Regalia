@@ -277,3 +277,40 @@ round-72 新源码 ZIP 包含当前许可包、v1–v11、完整审计与诚实�
 修复后 v11 原语负测 **27/27**、隔离集成测试 **18/18**、固定基线 source gate **27/27**、rename-only 十二项通过。隔离集成使用仅本地验证提交完成干净检出检查，未推送远端。既有 v1 **44/44**、v2 **27/27**、v3 **51/51**，r62 十三门全绿，r67-bench PASS，JS 10 模块语法通过，管道 stdin 实测通过。网页包两次构建与构建前逐字节一致，大小 1,500,732 B，SHA-256 仍为 `cc69b869077a72dc1367461c6567a47fea159d292fd5e3d207a2afef84f167b5`。
 
 本轮仅交付仓库相对路径补丁 ZIP，不生成 APK；补丁自身哈希不写入本日志，避免自引用。
+
+
+# Regalia v1.2.3 — round-77 持久化原子性与 Release 重建工作日志（2026-11-23 UTC）
+
+## 基线与范围
+
+权威起点为远端 `upload@6fe34dde16767b6b31fa2f8f1a6d3ab5e6f907b6`，固定源码比较基线仍为 `f78317919818a02c1fa169a99b85cad6ebf8a1fe`。环境重置后使用精确提交的 CRC 校验归档重建工作树；本地恢复提交不冒充上游哈希。按已审内容恢复 Dependabot、CodeQL、MobSF 和 gradlew 100755，保留当前远端 `LICENSE&NOTICE.zip`，未用历史副本覆盖。
+
+本轮只处理 eval/PGN/tags 覆盖写、持久化失败结果传播和网页并发构建临时文件竞态。不重写引擎生命周期、UI 或 Binder，不做无 profiling 支撑的性能改造，不改变依赖、SDK、NDK、ABI、版本或权限，不执行远端写操作。
+
+## 实施
+
+- 新增 GPL v3 `AtomicFileStore.java`：在目标同目录创建唯一临时文件，完整 UTF-8 写入后执行 flush、文件描述符 sync 和 API 23 可用的 `android.system.Os.rename` 原子替换。替换成功前不删除或截断旧文件；失败只清理由本次调用拥有的临时文件，不使用 API 26 才有的 NIO 路径。
+- eval 缓存及 PGN、tags 的三处直接覆盖写统一改用该共享原语，保留原有缓存入口、LRU、读取上限和外层异常语义。
+- `persistentSetSync` 改为返回 `SharedPreferences.Editor.commit()` 的真实布尔结果。JS 只有在专用文件或同步 SharedPreferences 至少一个明确成功时才清除 dirty；localStorage 单独成功仍只是 best-effort。失败保留 dirty，后续 flush 或 mutation 可重试，不新增无限自动重试。
+- `build-chess.py` 使用每进程唯一的同目录临时文件，flush、fsync 后 `os.replace`，避免并发进程共享或清理同一个 `chess.html.tmp`。
+- 更新两级许可台账：AGPL 保持 7 个文件，GPL 增为 13 个文件，Java 总数增为 16；历史 Round-71 计数不改写。
+
+## 已执行验证
+
+源码接线 **24/24**；JS 持久化 **19/19**；真实生产 `AtomicFileStore` 经 host-only Android 替身测试 **11/11**，含 96 路并发、Unicode、完整覆盖和注入 rename 失败保留旧字节。40 对、80 个并发网页构建进程 failures=0、temporary_residuals=0，结果确定；当前 bundle 为 1,500,801 B、24,391 行，SHA-256 `ae15d2b699624e549745582b5835d35418ff77b51a08ae704915a0d643e6c9e0`。
+
+既有 v1 **44/44**、v2 **27/27**、v3 **51/51**，r62 十三门、r67-bench 和 v11 原语负测 **27/27** 均通过。v13 source gate **31/31**、v13 隔离集成 **18/18**。历史 v11 集成在 Round-72 恢复树上通过 **15/15**；归档通道缺失的 Dependabot 及回退的 CodeQL/MobSF 元数据先按已审字节恢复，首次失败和诊断日志均保留，未修改历史验证器或删除失败证据。
+
+语法检查覆盖 10 个 chess.src JS 模块、1 个真实生成内联脚本及全部 11 个 v13 Python 文件。签名环境下 `compileReleaseJavaWithJavac` 的真实 runner 记录为 exit 0、BUILD SUCCESSFUL；既有弃用警告未作为新缺陷隐藏。所有验证均由 v13 runner 保存带时间戳的命令、退出码和输出，外层通道超时没有被伪记为数字退出码。
+
+NDK 受损安装缺少整个 `build/` 目录；官方 ZIP 的大小与 SHA-256 已匹配，恢复目录内 88 个 regular files 时逐成员读取并通过 ZIP CRC，随后 NDK revision、clang、正确 aarch64 libc++ 路径及 CMake toolchain 布局门通过。完整 ZIP CRC、Release APK 与最终交付验收以各自最终 runner 记录为准；未进行物理澎湃 OS 3 设备测试。
+
+## Release 构建与最终 APK 验收
+
+官方 NDK ZIP 的完整 CRC 已在独立 runner 中完成，exit 0；9,277 个成员、revision 27.2.12479018、CMake toolchain、clang 与正确 aarch64 libc++ 路径均通过。签名环境下 `assembleRelease --no-daemon --stacktrace` 的真实记录为 exit 0、BUILD SUCCESSFUL（25m17s，51 个 actionable tasks）。未把进程启动、缓冲日志或阶段输出当作构建成功。
+
+构建产物及交付 inode 均通过 v13 实际 APK 门：Release 非 debuggable，`com.Regalia`／10203／1.2.3，minSdk 23、targetSdk 35、arm64-v8a，八项权限不变；原生库精确为 Stockfish、engine_bridge、libc++_shared 三个，引擎和当前 chess.html 逐字节匹配。v1/v2/v3 均为 true，单 signer，证书 SHA-256 与上传 key 对应值一致，v2/v3 Signing Block 结构存在且通过 apksigner。APK 为 81,552,039 B，SHA-256 `f7999994cb601a2d8892f14788e73e9ab26ee366e1f5cb74891085dddd1c9c0a`。
+
+交付挂载当前对以 `.apk` 命名的文件读回返回 EIO，历史 APK 也呈现相同行为，而旧源码 ZIP 与 NDK 可读。首次最终路径验收失败记录完整保留，没有将其伪称为通过。随后对交付文件本身仅以非 APK 别名改名，确认 dev/inode 不变后读回并重新运行完整 v13 APK 门，exit 0、摘要与构建产物一致；最后只 rename 回正式 APK 文件名，dev/inode/size 保持一致，没有复制、覆盖或替换已验收字节。该记录不构成物理设备测试；澎湃 OS 3 仍仅完成静态兼容性核验。
+
+源码 ZIP 验收器另将 gradlew 的归档模式收紧为必须恰好 0755；收紧后语法检查、v13 集成 **18/18** 和固定基线源码门 **31/31** 已重新通过。最终源码包与秘密扫描结果以各自交付后 runner 记录为准，源码 ZIP 自身哈希不写入本日志，避免自引用。

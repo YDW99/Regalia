@@ -1,0 +1,77 @@
+timestamp_start=2026-11-23T03:05:43Z
+timestamp_end=2026-11-23T03:06:34Z
+cwd=/tmp/regalia-r77/repo
+command=python3 verifier/v13/verify-apk.py build/outputs/apk/release/Regalia-release.apk 
+exit_code=0
+--- output ---
+$ apksigner verify --verbose --print-certs /tmp/regalia-r77/repo/build/outputs/apk/release/Regalia-release.apk
+Verifies
+Verified using v1 scheme (JAR signing): true
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): true
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+Signer #1 certificate DN: CN=Regalia, OU=Regalia, O=Regalia, L=Beijing, ST=Beijing, C=CN
+Signer #1 certificate SHA-256 digest: 45bc6d36c9fcff8ef9e55f510b43bce44cb854ea4b2f235a0f4955da05a8d8bc
+Signer #1 certificate SHA-1 digest: 891549beeae3c1ccd77f478f7817b81e8d7d567d
+Signer #1 certificate MD5 digest: 2605d6cc3b7b180933d6948b7b7e7d75
+Signer #1 key algorithm: RSA
+Signer #1 key size (bits): 4096
+Signer #1 public key SHA-256 digest: aa5e989f5a3d9884af5cbf2b44600fbe86dbb619a0b0f66f3198ff8b325bb2c1
+Signer #1 public key SHA-1 digest: 413f4dd5081b9d3f181f75c0a59c43d281e5d5d8
+Signer #1 public key MD5 digest: 6ea8e6f2160a855e06e2c99dc545b17b
+WARNING: META-INF/com/android/build/gradle/app-metadata.properties not protected by signature. Unauthorized modifications to this JAR entry will not be detected. Delete or move the entry outside of META-INF/.
+WARNING: META-INF/version-control-info.textproto not protected by signature. Unauthorized modifications to this JAR entry will not be detected. Delete or move the entry outside of META-INF/.
+
+$ aapt dump badging /tmp/regalia-r77/repo/build/outputs/apk/release/Regalia-release.apk
+package: name='com.Regalia' versionCode='10203' versionName='1.2.3' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'
+sdkVersion:'23'
+targetSdkVersion:'35'
+uses-permission: name='android.permission.INTERNET'
+uses-permission: name='android.permission.WAKE_LOCK'
+uses-permission: name='android.permission.VIBRATE'
+uses-permission: name='android.permission.WRITE_EXTERNAL_STORAGE' maxSdkVersion='28'
+uses-permission: name='android.permission.READ_EXTERNAL_STORAGE' maxSdkVersion='32'
+uses-permission: name='android.permission.FOREGROUND_SERVICE'
+uses-permission: name='android.permission.FOREGROUND_SERVICE_SPECIAL_USE'
+uses-permission: name='android.permission.POST_NOTIFICATIONS'
+application-label:'Regalia v1.2.3'
+application-icon-160:'res/9w.png'
+application-icon-240:'res/yn.png'
+application-icon-320:'res/FS.png'
+application-icon-480:'res/RJ.png'
+application-icon-640:'res/o-.png'
+application: label='Regalia v1.2.3' icon='res/9w.png'
+launchable-activity: name='com.Regalia.MainActivity'  label='' icon=''
+feature-group: label=''
+  uses-feature-not-required: name='android.hardware.screen.landscape'
+  uses-feature-not-required: name='android.hardware.screen.portrait'
+  uses-feature: name='android.hardware.faketouch'
+  uses-implied-feature: name='android.hardware.faketouch' reason='default feature for all apps'
+main
+other-activities
+other-services
+supports-screens: 'small' 'normal' 'large' 'xlarge'
+supports-any-density: 'true'
+locales: '--_--'
+densities: '160' '240' '320' '480' '640'
+native-code: 'arm64-v8a'
+
+signing_block_offset=81541461
+signing_block_bytes=8192
+signing_block_id=0x42726577 value_bytes=2686
+signing_block_id=0x504b4453 value_bytes=224
+signing_block_id=0x7109871a value_bytes=2601
+signing_block_id=0xf05368c0 value_bytes=2601
+zip_entries=34 crc_ok=true duplicate_entries=0
+native_libraries=lib/arm64-v8a/libc++_shared.so,lib/arm64-v8a/libengine_bridge.so,lib/arm64-v8a/libstockfish.so
+engine_bytes=100695968
+engine_sha256=ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8
+bundle_bytes=1500801
+bundle_sha256=ae15d2b699624e549745582b5835d35418ff77b51a08ae704915a0d643e6c9e0
+apk_bytes=81552039
+apk_sha256=f7999994cb601a2d8892f14788e73e9ab26ee366e1f5cb74891085dddd1c9c0a
+APK-V13-GATE OK: actual Round-77 bytes; release, v1+v2+v3, certificate, version, SDK, ABI, baseline permissions, signing blocks, current bundle and exact engine
+HYPEROS3-STATIC-ONLY: no physical HyperOS 3 device test was performed

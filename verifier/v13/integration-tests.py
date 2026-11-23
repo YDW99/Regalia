@@ -1,0 +1,255 @@
+#!/usr/bin/env python3
+"""Round-77 archive integration and direct fixed-baseline source-gate tests."""
+from __future__ import annotations
+
+import contextlib
+import io
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+import zipfile
+from unittest import mock
+
+import source_archive
+from source_archive import pack, payload_files, verify
+
+ROOT = Path(__file__).resolve().parents[2]
+PREFIX = "Regalia-v1.2.3-round77/"
+checks = 0
+
+
+def passed(name: str) -> None:
+    global checks
+    checks += 1
+    print(f"PASS V13-I{checks:02d}: {name}")
+
+
+def quiet(call):
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        result = call()
+    return result, output.getvalue()
+
+
+def expect_assertion(call, marker: str | None = None) -> str:
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            call()
+    except AssertionError as exc:
+        message = str(exc)
+        if marker is not None and marker not in message:
+            raise AssertionError(f"expected failure marker absent: {marker}; actual={message}")
+        return message
+    raise AssertionError("integration negative fixture was accepted")
+
+
+def copy_payload(destination: Path) -> None:
+    for source in payload_files(ROOT):
+        relative = source.relative_to(ROOT)
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+
+
+def pruned_archive(source: Path, destination: Path, remove: str) -> None:
+    with zipfile.ZipFile(source) as original, zipfile.ZipFile(destination, "w") as rewritten:
+        for info in original.infolist():
+            if info.filename != PREFIX + remove:
+                rewritten.writestr(info, original.read(info.filename))
+
+
+def run_source_gate(root: Path) -> subprocess.CompletedProcess:
+    base = os.environ.get("REGALIA_R77_BASE")
+    if not base:
+        raise AssertionError("REGALIA_R77_BASE is required for source-gate integration")
+    return subprocess.run(
+        ["python3", str(root / "verifier/v13/source-gate.py"), "--base", base],
+        cwd=root, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    )
+
+
+def test_archives() -> None:
+    with tempfile.TemporaryDirectory(prefix="v11-archive-integration-") as temporary:
+        base = Path(temporary)
+        source = base / "source"
+        source.mkdir()
+        copy_payload(source)
+        baseline_zip = base / "baseline.zip"
+        quiet(lambda: pack(source, baseline_zip))
+        _, output = quiet(lambda: verify(source, baseline_zip))
+        if "manifest_exact=true" not in output or "SOURCE-ZIP-V13-GATE OK" not in output:
+            raise AssertionError("baseline complete archive did not pass")
+        passed("complete current source payload packs and verifies")
+
+        unexpected_zip = base / "unexpected.zip"
+        shutil.copyfile(baseline_zip, unexpected_zip)
+        with zipfile.ZipFile(unexpected_zip, "a") as archive:
+            archive.writestr(PREFIX + "unexpected.txt", b"unexpected")
+        expect_assertion(lambda: verify(source, unexpected_zip), "complete source manifest mismatch")
+        passed("unexpected archive member is rejected by exact manifest comparison")
+
+        missing_zip = base / "missing.zip"
+        pruned_archive(baseline_zip, missing_zip, "build.gradle")
+        expect_assertion(lambda: verify(source, missing_zip), "complete source manifest mismatch")
+        passed("missing archive member is rejected by exact manifest comparison")
+
+        changed_zip = base / "changed.zip"
+        pruned_archive(baseline_zip, changed_zip, "build.gradle")
+        with zipfile.ZipFile(changed_zip, "a") as archive:
+            archive.writestr(PREFIX + "build.gradle", b"changed content\n")
+        expect_assertion(lambda: verify(source, changed_zip), "source content digest mismatch")
+        passed("same-name modified content is rejected by per-member SHA-256")
+
+        nested_elf = io.BytesIO()
+        with zipfile.ZipFile(nested_elf, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("engine.bin", b"\x7fELF" + b"\x00" * 63)
+        (source / "payload.dat").write_bytes(
+            b"#!/bin/sh\n# valid ZIP with leading data and a neutral suffix\n" + nested_elf.getvalue()
+        )
+        blocked_output = base / "blocked-nested-elf.zip"
+        expect_assertion(lambda: pack(source, blocked_output), "ELF content detected")
+        if blocked_output.exists() or blocked_output.with_name(blocked_output.name + ".lock").exists():
+            raise AssertionError("rejected nested ELF payload was published or left a lock")
+        (source / "payload.dat").unlink()
+        passed("pack detects actual ZIP content and rejects nested ELF before publication")
+
+        bomb_zip = base / "oversized-before-digest.zip"
+        with zipfile.ZipFile(baseline_zip) as original, \
+             zipfile.ZipFile(bomb_zip, "w", compression=zipfile.ZIP_DEFLATED,
+                             compresslevel=9, allowZip64=True) as rewritten:
+            for info in original.infolist():
+                if info.filename != PREFIX + "build.gradle":
+                    rewritten.writestr(info, original.read(info.filename))
+            with rewritten.open(PREFIX + "build.gradle", "w") as stream:
+                chunk = b"\x00" * (1024 * 1024)
+                for _ in range(129):
+                    stream.write(chunk)
+        original_testzip = zipfile.ZipFile.testzip
+
+        def guarded_testzip(archive):
+            filename = getattr(archive, "filename", None)
+            if filename is not None and Path(filename).resolve() == bomb_zip.resolve():
+                raise AssertionError("source-ZIP CRC ran before the bounded scanner")
+            return original_testzip(archive)
+
+        with mock.patch.object(source_archive.hashlib, "file_digest",
+                               side_effect=AssertionError("member digest ran before the bounded scanner")) as digest, \
+             mock.patch.object(zipfile.ZipFile, "testzip", guarded_testzip):
+            expect_assertion(lambda: verify(source, bomb_zip), "archive member size limit exceeded")
+        if digest.called:
+            raise AssertionError("a source member digest was attempted before budget rejection")
+        passed("source-ZIP member budget rejects before digest or CRC decompression")
+
+        for relative in (
+            "build.gradle", "gradlew", "src/main/java/com/Regalia/MainActivity.java",
+            "verifier/v13/source-gate.py", "verifier/v13/verify-apk.py",
+        ):
+            original_bytes = (source / relative).read_bytes()
+            original_mode = (source / relative).stat().st_mode
+            case_zip = base / ("required-" + relative.replace("/", "_") + ".zip")
+            pruned_archive(baseline_zip, case_zip, relative)
+            (source / relative).unlink()
+            try:
+                expect_assertion(lambda: verify(source, case_zip), "missing required source entries")
+            finally:
+                (source / relative).write_bytes(original_bytes)
+                (source / relative).chmod(original_mode)
+            passed(f"required-entry gate rejects removal of {relative}")
+
+        original_license = (source / "LICENSE&NOTICE.zip").read_bytes()
+        updated_license = base / "manual-license-update.zip"
+        with zipfile.ZipFile(updated_license, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("LICENSE&NOTICE/MANUAL-UPDATE.txt",
+                             "Maintainer update: different bytes and a different size.\n" * 7)
+        (source / "LICENSE&NOTICE.zip").write_bytes(updated_license.read_bytes())
+        updated_source_zip = base / "manual-license-source.zip"
+        quiet(lambda: pack(source, updated_source_zip))
+        _, update_output = quiet(lambda: verify(source, updated_source_zip))
+        if "current_byte_identical=true" not in update_output:
+            raise AssertionError("manual license update was not accepted as current bytes")
+        passed("valid manually updated license archive passes without historical size/hash lock")
+        (source / "LICENSE&NOTICE.zip").write_bytes(original_license)
+
+        self_zip = source / "verifier/runs/round77-selftest-source.zip"
+        quiet(lambda: pack(source, self_zip))
+        quiet(lambda: pack(source, self_zip))
+        quiet(lambda: verify(source, self_zip))
+        with zipfile.ZipFile(self_zip) as archive:
+            names = archive.namelist()
+        forbidden_output_members = [name for name in names if name.endswith("round77-selftest-source.zip") or ".tmp-" in name or name.endswith(".lock")]
+        if forbidden_output_members:
+            raise AssertionError("source archive contains its previous output or temporary file")
+        passed("in-tree repack excludes previous ZIP, lock and temporary artifacts")
+
+        locked_output = base / "locked.zip"
+        locked_output.write_bytes(b"preexisting approved bytes")
+        lock = base / "locked.zip.lock"
+        lock.write_text("owned by another test process", encoding="utf-8")
+        expect_assertion(lambda: pack(source, locked_output), "output lock")
+        if locked_output.read_bytes() != b"preexisting approved bytes" or not lock.is_file():
+            raise AssertionError("contended output or another owner's lock was modified")
+        passed("preexisting output lock fails closed without touching output or owner lock")
+
+
+def test_source_gate() -> None:
+    with tempfile.TemporaryDirectory(prefix="v13-source-gate-integration-") as temporary:
+        worktree = Path(temporary) / "worktree"
+        worktree.mkdir()
+        shutil.copytree(ROOT / ".git", worktree / ".git")
+        for source in payload_files(ROOT):
+            relative = source.relative_to(ROOT)
+            target = worktree / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+
+        clean = run_source_gate(worktree)
+        if clean.returncode != 0 or "SOURCE-V13-GATE OK (31 checks)" not in clean.stdout:
+            raise AssertionError("current complete source copy failed fixed-base source gate\n" + clean.stdout)
+        passed("complete current source copy passes with a direct external baseline")
+
+        main_activity = worktree / "src/main/java/com/Regalia/MainActivity.java"
+        original = main_activity.read_bytes()
+        main_activity.write_bytes(original + b"\n// unapproved integration-test edit\n")
+        changed = run_source_gate(worktree)
+        if changed.returncode == 0 or "Java changes are an allowed subset" not in changed.stdout:
+            raise AssertionError("uncommitted extra Java edit was accepted")
+        subprocess.run(["git", "add", "src/main/java/com/Regalia/MainActivity.java"], cwd=worktree, check=True)
+        subprocess.run(["git", "-c", "user.name=V13 Negative Test", "-c", "user.email=negative@localhost",
+                        "commit", "-m", "negative test committed extra edit"],
+                       cwd=worktree, check=True, stdout=subprocess.DEVNULL)
+        committed = run_source_gate(worktree)
+        if committed.returncode == 0 or "Java changes are an allowed subset" not in committed.stdout:
+            raise AssertionError("committed extra Java edit was accepted")
+        main_activity.write_bytes(original)
+        passed("uncommitted and committed out-of-scope Java edits both fail")
+
+        build = worktree / "build.gradle"
+        original_build = build.read_bytes()
+        build.write_bytes(original_build + b"\n// protected configuration negative test\n")
+        protected = run_source_gate(worktree)
+        if protected.returncode == 0 or "unchanged build dependencies and configuration" not in protected.stdout:
+            raise AssertionError("protected build configuration edit was accepted")
+        build.write_bytes(original_build)
+        passed("protected build configuration edit fails against fixed base")
+
+        license_path = worktree / "LICENSE&NOTICE.zip"
+        original_license = license_path.read_bytes()
+        with zipfile.ZipFile(license_path, "w") as archive:
+            archive.writestr("LICENSE&NOTICE/NEW.txt", "new maintainer bytes\n" * 11)
+        updated = run_source_gate(worktree)
+        if updated.returncode == 0 or "current remote license archive bounded scan, CRC and identity" not in updated.stdout:
+            raise AssertionError("replacement of the current remote license bytes was accepted")
+        license_path.write_bytes(original_license)
+        passed("source gate protects the current remote license identity without rollback")
+
+def main() -> None:
+    test_archives()
+    test_source_gate()
+    assert checks == 18, checks
+    print(f"V13-INTEGRATION OK: {checks}/{checks}")
+
+
+if __name__ == "__main__":
+    main()

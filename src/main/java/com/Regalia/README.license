@@ -1,3 +1,23 @@
+v1.2.3 round-77 (2026.11.23): crash-safe cache persistence and truthful synchronous results.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - AtomicFileStore.java NEW (GPL v3, project-original): shared API-23-compatible
+    UTF-8 writer using a unique same-directory temporary file, complete write,
+    flush, file-descriptor sync and Os.rename replacement. The previous target
+    remains in place unless replacement succeeds; failed calls clean up only
+    their own temporary file.
+  - StockfishNative.java (GPL v3): saveEvalCacheSync delegates to the shared
+    writer; persistentSetSync now returns the actual SharedPreferences.commit()
+    result instead of discarding it.
+  - PgnCacheManager.java (GPL v3): PGN saves and both empty/nonempty tags writes
+    delegate to the same writer. Rename, copy-delete, LRU and read logic unchanged.
+  - License classification: AGPL v3 (7) unchanged — ChessApp,
+    ChessWebViewClient, EngineService, MainActivity, RootDetector,
+    StabilizationHelper, TlsSecurityHelper. GPL v3 (13): AtomicFileStore,
+    EngineConfigHelper, EngineHealthMonitor, EngineProcessManager,
+    EngineSettingsHelper, FileIoHelper, HapticManager, JsBridgeGateway,
+    PermissionHelper, PgnCacheManager, SafPickerHelper, StatsActivity,
+    StockfishNative.
+
 v1.2.3 round-71 (2026.11.22): mechanical PMD MethodNamingConventions remediation.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - Twelve methods renamed, with every declaration/call site updated and no

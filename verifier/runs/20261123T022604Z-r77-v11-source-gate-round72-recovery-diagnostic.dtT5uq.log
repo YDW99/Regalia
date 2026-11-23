@@ -1,0 +1,15 @@
+timestamp_start=2026-11-23T02:26:04Z
+timestamp_end=2026-11-23T02:26:04Z
+cwd=/tmp/regalia-r77/repo
+command=python3 /tmp/regalia-r77/round72-cc05/verifier/v11/source-gate.py 
+exit_code=1
+--- output ---
+PASS 01: comparison baseline is independent of current HEAD
+Traceback (most recent call last):
+  File "/tmp/regalia-r77/round72-cc05/verifier/v11/source-gate.py", line 150, in <module>
+    main()
+  File "/tmp/regalia-r77/round72-cc05/verifier/v11/source-gate.py", line 50, in main
+    check("CodeQL c-cpp no-build coverage", bool(re.search(r"- language: c-cpp\s+build-mode: none", codeql)))
+  File "/tmp/regalia-r77/round72-cc05/verifier/v11/source-gate.py", line 24, in check
+    raise AssertionError(name)
+AssertionError: CodeQL c-cpp no-build coverage

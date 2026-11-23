@@ -7050,8 +7050,7 @@ let _reviewEvalCache=new function(){
     if(_saveTimer){clearTimeout(_saveTimer);_saveTimer=null;}
     if(forceSync){
       // Synchronous write — blocks until fsync + rename complete
-      _writeToDiskNow();
-      _dirty=false;
+      if(_writeToDiskNow())_dirty=false; else _dirty=true;
       return;
     }
     // Debounced write — coalesces rapid set() calls into one disk write.
@@ -7059,8 +7058,7 @@ let _reviewEvalCache=new function(){
     _saveTimer=setTimeout(function(){
       _saveTimer=null;
       if(_dirty){
-        _writeToDiskNow();
-        _dirty=false;
+        if(_writeToDiskNow())_dirty=false;
       }
     },DEBOUNCE_MS);
   }
@@ -7068,25 +7066,25 @@ let _reviewEvalCache=new function(){
     const arr=Array.from(m.entries());
     const json=JSON.stringify(arr);
     // Primary: dedicated eval cache file (atomic write, fsync, never cleared by HyperOS)
-    let fileOk=false;
+    let fileOk=false,legacyOk=false;
     try{
       if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveEvalCacheSync){
-        fileOk=!!AndroidBridge.saveEvalCacheSync(json);
+        fileOk=AndroidBridge.saveEvalCacheSync(json)===true;
       }
     }catch(e){_warnEvalCache('save (file path)',e);}
     // Always write to localStorage as a fast in-memory read cache (best-effort)
     try{localStorage.setItem(STORAGE_KEY,json);}catch(e){_warnEvalCache('save (localStorage path)',e);}
     // Also write to SharedPreferences persistentGet backing store (legacy compat)
     if(!fileOk){
-      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSetSync)AndroidBridge.persistentSetSync(STORAGE_KEY,json);}catch(e){_warnEvalCache('save (legacy path)',e);}
+      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSetSync)legacyOk=AndroidBridge.persistentSetSync(STORAGE_KEY,json)===true;}catch(e){_warnEvalCache('save (legacy path)',e);}
     }
+    return fileOk||legacyOk;
   }
   // Public flush method — called from Java onPause/onStop/onUserLeaveHint
   // and from JS pagehide/visibilitychange/beforeunload handlers.
   this._flushSync=function(){
     if(_saveTimer){clearTimeout(_saveTimer);_saveTimer=null;}
-    if(_dirty)_writeToDiskNow();
-    _dirty=false;
+    if(_dirty&&_writeToDiskNow())_dirty=false;
   };
   this.get=function(k){if(m.has(k)){const v=m.get(k);m.delete(k);m.set(k,v);return v;}return undefined;};
   // v1.0.2 PERF: peek() reads without refreshing LRU order. Use this in

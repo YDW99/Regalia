@@ -1,0 +1,60 @@
+timestamp_start=2026-11-23T01:48:41Z
+timestamp_end=2026-11-23T01:48:41Z
+cwd=/tmp/regalia-r77/repo
+command=node verifier/v3/round54-pr56-triage.js 
+exit_code=0
+--- output ---
+PASS G1a requiredVersionKeys present
+PASS G1b missing/blank key treated as fallback
+PASS G1c versionCode/Name derivation untouched (10203 contract)
+PASS G2a timed engineGo fallback reschedules doAIMove (both throw branches)
+PASS G2b untimed engineGo branches reschedule doAIMove
+PASS G2c retry counter NOT incremented in catch branches (round-55 single-counter)
+PASS G2d doAIMove keeps its entry increment + >=3 give-up cap
+PASS G3a dlgChess960SPID reset to -1
+PASS G3b no dlgChess960SPID=null reset remains
+PASS G4a notification uses per-batch completed count (_reviewAnalyzeStep)
+PASS G4b cache size no longer feeds the progress notification
+PASS G4c openStatsPage re-checks payload after annotation drop
+PASS G5a en-passant victim-pawn validation present
+PASS G5b explicit PGN failure callback exists
+PASS G5c pgn_read_failed i18n entry (zh+en)
+PASS G6a waitForBounded helper present with API-26 gate
+PASS G6b no raw timed waitFor calls outside the waitForBounded helper
+PASS G6c both call sites routed through waitForBounded
+PASS G6d no dangling Javadoc (round-54b, S8491) — every /** attaches to a declaration
+PASS G6e S7741 — no typeof _reviewAnalyzeStep guard (same-module binding)
+PASS G7a FileIoHelper.readCappedText: prevWasCr CR/LF/CRLF counting (sole implementation)
+PASS G7b SafPickerHelper + StatsActivity wired to the shared CR-aware reader
+PASS G8a setReferenceCounted(false) before acquire in acquireEngineWakeLock
+PASS G9a isPathBrowsable gate present
+PASS G9b listFiles uses browse gate
+PASS G9c getParentPath uses browse gate
+PASS G9d read/write still on strict sandbox
+PASS G9e getDefaultPaths carries filesDir
+PASS G9f JS browser: no hardcoded /sdcard entry buttons, SAF button present
+PASS G9g settings i18n entries (zh+en)
+PASS H1a getParentPath re-gates the resolved parent
+PASS H2a chess.src ledger: no AGPL tag on GPL-classified modules
+PASS H2b java ledger: no AGPL tag on GPL-classified classes
+PASS H2c NOTICE: no live AGPL tags on GPL-classified files (StatsActivity/HapticManager/index.html.tpl)
+PASS H2d src/main + assets ledgers: game-logic/pgn-standard not tagged AGPL
+PASS H2e README.md: strict UTF-8 + round-55 section + license lists present
+PASS H2f reverse license sweep: no (GPL v3) tag on AGPL-classified classes/modules
+PASS V3-38 guide §1 privacy line accurate (skip only when guide absent)
+PASS V3-39 r62-negative-tests.sh self-discipline (line-anchored: self-resolved root, flock workspace mutex BEFORE first backup held to exit, exclusive mktemp -d backup dir covering all four mutable targets, byte-verified backup/restore/per-item cp+cmp at every site, restore-CALLING trap handlers (command shape, not mention), accumulated failures, real exit codes, no absolute paths; N8 bench gate + N8a-d benchmark self-protection negatives + N9 lock negative wired; bench runs fd-9-closed so children never inherit the workspace mutex)
+PASS H3 verifier resolves from __dirname (cwd-independent)
+PASS V3-40 engine identity cross-file consistent (Java digest == NOTICE == topmost BUILDING.md; Java size constant == NOTICE byte size)
+PASS V3-40b engine identity live-doc sweep (BUILDING live guide digest+size, release-helper SF19, PRIVACY digest, manual+README live zones clean)
+PASS V3-41 engine cache identity gate + atomic extraction commit, single shared implementation (exact-size gate + rooted-SHA gate in cachedEngineAcceptable, both rejection bodies pinned to return null; verify-SHA-then-rename adjacency inside commitExtractedEngine; reject arms share rejectExtractedEngine with the Extracted-engine literal single-sourced; label call sites ×2 each; LOG constant single-source; tmp sibling streams ×2; priority-1..3 size checks; no dead-literal wrappers)
+PASS V3-42 game-logic.js module header states true bundle order (first module; ui.js last; TDZ warning present)
+PASS V3-43 FileIoHelper.readCappedText: line-cap truncation ASSIGNMENT (appendLen = i + 1) precedes char-cap throw (declaration, assignment and throw pinned by order; old untruncated form gone)
+PASS V3-44 SafPickerHelper: Activity-null export path clears pending content/type
+PASS V3-45 PGN parsers single-pass linear (isomorphic _pgnFirstGameSplit twins byte-equal in tablebase.js+stats.html, semantic core lines pinned; lookbehind/pre-49 split forms gone; stats.html monotonic-cache scanner: next-] + ws-run start + next-
+ checked before slice, no per-candidate ] rescan, no lazy headerRe; N8 bench gate wired)
+PASS V3-46 worker-pool.js absent from tree and build (round-66 deletion pinned; build-chess.py module list carries no worker-pool entry)
+PASS V3-47 .gitignore present with never-commit exclusions (keystore.properties, *.keystore, *.jks, local.properties, build/.cxx/.gradle, src/main/jniLibs)
+PASS V3-48 tablebase probe: 5s deadline covers fetch AND response body; fail-count accounted ONCE post-race (timer outside try; clearTimeout AFTER body parse; AbortError rethrown to fail-count catch; handled-outcome sentinel; 5xx returns _TB_NETFAIL sentinel counted at the single post-race point; legacy race wraps whole chain; early-clear inner finally gone; inline 5xx counting gone)
+PASS V3-49 tablebase query callbacks ownership-gated (_tbLoadingOwner fresh-object token: manual path captures board + fresh token, lowers only-if-owning on both arms, autoSelect gated on board identity; AI path claims fresh token at arm and lowers only-if-owning on both arms; board-reference token form gone; old ungated lowering gone)
+
+===== RESULT: 51 passed, 0 failed =====

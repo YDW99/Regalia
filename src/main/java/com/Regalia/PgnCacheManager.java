@@ -37,7 +37,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
 import java.io.StringWriter;
 import java.util.regex.Pattern;
 import java.util.Arrays;
@@ -168,18 +167,7 @@ public class PgnCacheManager {
         if (safe == null) return false;
         try {
             File file = new File(getCacheDir(), safe + ".pgn");
-            try (FileOutputStream fos = new FileOutputStream(file);
-                 OutputStreamWriter writer = new OutputStreamWriter(fos, "UTF-8")) {
-                writer.write(pgn);
-                writer.flush();
-                // v1.2.3 round-18 (robustness): fsync before close so the PGN
-                //   survives a process crash right after save() returns true —
-                //   same guarantee setTags() already provides (see its
-                //   fos.getFD().sync() below).
-                try { fos.getFD().sync(); } catch (Exception ignored) {
-                    // best-effort on filesystems without fsync support
-                }
-            }
+            AtomicFileStore.writeUtf8(file, pgn);
             Log.i(TAG, "PGN cache saved: " + safe + " (" + pgn.length() + " chars)"); // mobsf-ignore: android_logging
             evictIfNeeded(); // v1.2.3 round-44 (E9): 保存成功后做 LRU 淘汰
             return true;
@@ -327,17 +315,12 @@ public class PgnCacheManager {
                 if (tagsFile.exists()) {
                     if (!tagsFile.delete()) {
                         // v1.2.3 round-44 (E3): delete() 失败（fd 占用/瞬态
-                        //   错误）→ 回退写入空数组 "[]" + fsync（getTags 解析
+                        //   错误）→ 回退原子写入空数组 "[]"（getTags 解析
                         //   后语义等价于无标签）；仍失败返回 false，让调用方
                         //   知道清空未生效，而不是静默吞掉。
                         Log.w(TAG, "setTags: delete failed, falling back to empty-array write " + safe); // mobsf-ignore: android_logging
-                        try (FileOutputStream fos = new FileOutputStream(tagsFile);
-                             OutputStreamWriter writer = new OutputStreamWriter(fos, "UTF-8")) {
-                            writer.write("[]");
-                            writer.flush();
-                            try { fos.getFD().sync(); } catch (Exception ignored) {
-                                // sync 失败不阻塞写入
-                            }
+                        try {
+                            AtomicFileStore.writeUtf8(tagsFile, "[]");
                         } catch (Exception e2) {
                             Log.w(TAG, "setTags: empty-array fallback failed " + safe, e2); // mobsf-ignore: android_logging
                             return false;
@@ -346,14 +329,7 @@ public class PgnCacheManager {
                 }
                 return true;
             }
-            try (FileOutputStream fos = new FileOutputStream(tagsFile);
-                 OutputStreamWriter writer = new OutputStreamWriter(fos, "UTF-8")) {
-                writer.write(arr.toString());
-                writer.flush();
-                try { fos.getFD().sync(); } catch (Exception ignored) {
-                    // sync 失败不阻塞写入
-                }
-            }
+            AtomicFileStore.writeUtf8(tagsFile, arr.toString());
             return true;
         } catch (Throwable e) {
             Log.w(TAG, "setTags failed for name=" + safe, e); // mobsf-ignore: android_logging

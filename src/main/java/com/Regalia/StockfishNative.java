@@ -4303,8 +4303,8 @@ public class StockfishNative {
     // PGN). Use the async persistentSet() for non-critical writes (e.g., UI
     // preferences that can be recomputed).
     @JavascriptInterface
-    public void persistentSetSync(String key, String value) {
-        if (key == null) return;
+    public boolean persistentSetSync(String key, String value) {
+        if (key == null) return false;
         try {
             SharedPreferences.Editor editor = prefs.edit();
             if (value == null) {
@@ -4312,12 +4312,10 @@ public class StockfishNative {
             } else {
                 editor.putString(KV_PREFIX + key, value);
             }
-            // commit() returns boolean — true if written successfully. We discard
-            // the result because the JS layer can't meaningfully react to a failed
-            // disk write (the data is gone regardless).
-            editor.commit();
+            return editor.commit();
         } catch (Throwable e) {
             Log.w(TAG, "persistentSetSync failed for key=" + key, e); // mobsf-ignore: android_logging
+            return false;
         }
     }
 
@@ -4372,93 +4370,20 @@ public class StockfishNative {
     }
 
     /**
-     * Synchronously write the eval cache file using atomic write (tmp + rename).
-     * Guarantees durability: blocks until fsync + rename complete.
-     * HyperOS 3 cannot kill the app fast enough to lose data — by the time
-     * this returns, the file is on disk.
+     * Synchronously replace the eval cache through the shared atomic writer.
+     * Returns true only after the complete write, fsync and rename succeed.
      */
     @JavascriptInterface
     public boolean saveEvalCacheSync(String json) {
         if (json == null) return false;
-        // v1.2.3 P1 (Round 17 P1-3): Track tmpFile in a finally-cleaned local
-        //   so it cannot leak. Previously, if Files.move failed with
-        //   AtomicMoveNotSupportedException and the legacy rename also failed
-        //   (e.g. cross-device on some OEM ROMs), the code fell through to
-        //   Files.copy() — but never deleted tmpFile afterwards. Over time
-        //   this leaked a stale .tmp on every save, and a later save could
-        //   read a half-written tmp if the FS crashed mid-write. The finally
-        //   block now guarantees tmpFile cleanup regardless of the path taken.
-        File tmpFile = new File(context.getFilesDir(), EVAL_CACHE_FILE + ".tmp");
-        boolean success = false;
         try {
-            File finalFile = new File(context.getFilesDir(), EVAL_CACHE_FILE);
-            // Write to tmp file
-            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(tmpFile);
-                 java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(fos, "UTF-8")) {
-                writer.write(json);
-                writer.flush();
-                // v1.0.4 Round-5 Rev20: sync() for crash safety.
-                // FileDescriptor.sync() is available since Java 1.0 / Android API 1.
-                // If sync fails (rare), we still proceed — the rename is atomic.
-                try { fos.getFD().sync(); } catch (Exception ignored) {}
-            }
-            // v1.0.4 Rev23: Use Files.move with ATOMIC_MOVE + REPLACE_EXISTING
-            // on API 26+ for true atomic rename. The old delete+rename sequence
-            // had a brief window where neither the old nor the new file existed
-            // (if the app crashed between delete and rename, the cache would be
-            // lost). Files.move with ATOMIC_MOVE is POSIX-atomic.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                try {
-                    java.nio.file.Files.move(tmpFile.toPath(), finalFile.toPath(),
-                            java.nio.file.StandardCopyOption.ATOMIC_MOVE,
-                            java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                    // tmpFile was consumed by the move — mark it so the finally
-                    // block does not attempt a redundant (and harmless) delete.
-                    tmpFile = null;
-                    success = true;
-                    return true;
-                } catch (java.nio.file.AtomicMoveNotSupportedException e) {
-                    // Cross-device tmp/final — fall through to legacy path.
-                    // tmpFile is still on disk; the legacy path will consume it.
-                    Log.w(TAG, "saveEvalCacheSync: ATOMIC_MOVE not supported, falling back");
-                }
-            }
-            // Legacy path (API 23-25 or cross-device fallback)
-            // v1.2.0 Phase 73 (SonarCloud B29): check delete() return value
-            if (finalFile.exists() && !finalFile.delete()) {
-                Log.w(TAG, "saveEvalCacheSync: failed to delete old cache file");
-            }
-            if (tmpFile.renameTo(finalFile)) {
-                // renameTo consumed the tmp file — mark null so finally skips.
-                tmpFile = null;
-                success = true;
-                return true;
-            }
-            // Fallback: copy tmp to final if rename fails (cross-device?)
-            Log.w(TAG, "saveEvalCacheSync: rename failed, falling back to copy");
-            java.nio.file.Files.copy(tmpFile.toPath(), finalFile.toPath(),
-                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            // copy did NOT consume tmpFile — finally will delete it.
-            success = true;
+            AtomicFileStore.writeUtf8(
+                new File(context.getFilesDir(), EVAL_CACHE_FILE), json);
             return true;
         } catch (Throwable e) {
             Log.w(TAG, "saveEvalCacheSync failed", e);
             return false;
-        } finally {
-            // v1.2.3 P1 (Round 17 P1-3): Always clean up the tmp file when it
-            //   still exists (i.e. the legacy-copy path was taken or any path
-            //   threw). Skipping when tmpFile==null avoids a spurious delete
-            //   of a file that was already consumed by move/rename.
-            if (tmpFile != null) {
-                try {
-                    if (!tmpFile.delete() && tmpFile.exists()) {
-                        Log.w(TAG, "saveEvalCacheSync: failed to clean up tmp file (success=" + success + ")"); // mobsf-ignore: android_logging
-                    }
-                } catch (Throwable ignored) {
-                    // Best-effort cleanup — never mask the original result.
-                }
-            }
-        } // mobsf-ignore: android_logging
+        }
     }
 
     // ===================== PGN CACHE MANAGER (v1.0.4 Round-5 Rev18) =====================

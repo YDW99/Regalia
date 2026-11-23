@@ -1,0 +1,31 @@
+timestamp_start=2026-11-23T01:37:35Z
+timestamp_end=2026-11-23T01:37:35Z
+cwd=/tmp/regalia-r77/repo
+command=python3 /tmp/regalia-r77/repo/verifier/v13/source-checks.py 
+exit_code=1
+--- output ---
+FAIL unique same-directory temporary file
+FAIL flush and file-descriptor sync
+FAIL API-23 atomic rename
+FAIL no NIO-only path or delete-before-replace
+FAIL eval cache uses shared writer
+FAIL PGN save and both tags writes use shared writer
+FAIL synchronous preference API returns result
+FAIL commit result is propagated
+FAIL old void preference API removed
+FAIL JS returns durable backend result
+FAIL file and legacy outcomes tracked independently
+FAIL all three dirty clears require durable success
+FAIL forced clear failure retains dirty
+FAIL web builder uses unique temporary names
+PASS engine payload remains excluded
+PASS Dependabot metadata restored
+PASS CodeQL native no-build coverage restored
+PASS CodeQL checkout credentials disabled
+PASS MobSF tool version pinned
+PASS gradlew executable on disk
+PASS gradlew executable in Git index
+FAIL new Java file added to per-file license ledger
+FAIL top-level Java count updated to 16
+PASS engine build input absent during source checks
+source-checks passed=8 total=24

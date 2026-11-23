@@ -1,0 +1,34 @@
+timestamp_start=2026-11-23T01:48:41Z
+timestamp_end=2026-11-23T01:48:55Z
+cwd=/tmp/regalia-r77/repo
+command=python3 verifier/v11/negative-tests.py 
+exit_code=0
+--- output ---
+PASS V11-N01: missing command exits nonzero and creates no run record
+PASS V11-N02: child exit code is preserved in output and process status
+PASS V11-N03: eight same-second concurrent invocations retain eight independent logs
+PASS V11-N04: TERM preserves pre-signal output, history and exit status 143
+PASS V11-N05: wrapper-only TERM promptly terminates and reaps the child before finalizing evidence
+PASS V11-N06: wrapper-only TERM terminates the isolated group including non-exec descendants
+PASS V11-N07: bounded TERM grace escalates to KILL and preserves interrupted evidence
+PASS V11-N08: watchdog remains armed until KILL after the direct child leaves a stubborn orphan
+PASS V11-N09: a signal before CHILD_PID assignment is deferred and still cleans the command
+PASS V11-N10: process-group QUIT triggers isolated cleanup and preserves status 131
+PASS V11-N11: five-level nested password is detected without path/member/value leakage
+PASS V11-N12: nested UTF-16LE/BE secret forms fail closed
+PASS V11-N13: file-open diagnostics do not copy secret-bearing paths
+PASS V11-N14: non-ZIP suffix and leading data cannot hide a compressed password
+PASS V11-N15: five-level nested engine digest is rejected
+PASS V11-N16: five-level nested keystore digest is rejected
+PASS V11-N17: five-level nested ELF magic is rejected
+PASS V11-N18: nested src/main/jniLibs content is rejected independent of suffix
+PASS V11-N19: mixed-case jniLibs matching uses normalized path components
+PASS V11-N20: archive depth overflow fails closed
+PASS V11-N21: member-size limit fails closed
+PASS V11-N22: cumulative decompressed-size limit fails closed
+PASS V11-N23: archive member-count limit fails closed
+PASS V11-N24: corrupt archive-shaped nested member fails closed
+PASS V11-N25: directory entries consume member budget and valid directories pass
+PASS V11-N26: protected license budget scan precedes CRC decompression
+PASS V11-N27: directory traversal errors invoke onerror and abort payload enumeration
+V11-NEGATIVE-PRIMITIVES OK: 27/27

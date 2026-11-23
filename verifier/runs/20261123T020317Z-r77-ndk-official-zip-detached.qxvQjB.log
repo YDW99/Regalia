@@ -1,0 +1,9 @@
+timestamp_start=2026-11-23T02:03:17Z
+timestamp_end=2026-11-23T03:04:07Z
+cwd=/tmp/regalia-r77/repo
+command=python3 verifier/v13/ndk-check.py /mnt/agents/work/regalia-r77/android-ndk-r27c-linux.zip 
+exit_code=0
+--- output ---
+NDK_ZIP bytes=663987688 sha256=59c2f6dc96743b5daf5d1626684640b20a6bd2b1d85b13156b90333741bad5cc
+NDK_REVISION=27.2.12479018 members=9277 libc++_bytes=1794776
+NDK-ZIP-V13 OK: full CRC, identity, toolchain and correct aarch64 runtime path

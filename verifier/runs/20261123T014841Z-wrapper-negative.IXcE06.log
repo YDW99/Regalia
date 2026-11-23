@@ -1,0 +1,6 @@
+timestamp_start=2026-11-23T01:48:41Z
+timestamp_end=2026-11-23T01:48:41Z
+cwd=/tmp/regalia-r77/repo
+command=sh -c exit\ 7 
+exit_code=7
+--- output ---

@@ -143,3 +143,13 @@ a TERM-accepting parent with a stubborn orphan, the pre-assignment signal window
 process-group QUIT, bringing the primitive negative suite to 27 checks. SIGKILL cannot
 be trapped, so no wrapper self-cleanup guarantee is claimed after an external KILL.
 Reviewed CI metadata and gradlew's Git index mode 100755 are restored again.
+
+Round-77 adds `v13/` without rewriting earlier acceptance or evidence. Its gates cover
+one API-23-compatible atomic UTF-8 writer for eval/PGN/tags, durable-only JavaScript
+dirty clearing, synchronous preference commit propagation, and per-process web-build
+temporary files. The suite includes fault injection, concurrent writer/build tests,
+fixed-base source and archive integration checks, official NDK identity/CRC checks,
+and direct final-APK/source-ZIP inspection. Release signing requires v1+v2+v3, the
+approved certificate and unchanged package/SDK/ABI/permission contracts. HyperOS 3
+coverage is explicitly static only; no physical-device result is claimed. Final
+post-package evidence is redirected outside the verified source archive.

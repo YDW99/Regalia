@@ -1,0 +1,26 @@
+timestamp_start=2026-11-23T01:52:21Z
+timestamp_end=2026-11-23T01:52:21Z
+cwd=/tmp/regalia-r77/repo
+command=python3 verifier/v13/syntax-checks.py 
+exit_code=0
+--- output ---
+PASS JS game-logic.js
+PASS JS chess960.js
+PASS JS pgn-standard.js
+PASS JS state-store.js
+PASS JS ai-bridge.js
+PASS JS tablebase.js
+PASS JS eco-data.js
+PASS JS ui-gameflow.js
+PASS JS ui-interactions.js
+PASS JS ui.js
+PASS JS chess-inline.js
+PASS PY archive_scan.py
+PASS PY atomic-file-store-test.py
+PASS PY build-concurrency.py
+PASS PY source-checks.py
+PASS PY source-gate.py
+PASS PY source_archive.py
+PASS PY syntax-checks.py
+PASS PY verify-apk.py
+SYNTAX-V13 OK js_modules=10 inline_scripts=1 python_files=8

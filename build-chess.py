@@ -30,6 +30,7 @@ Exit codes:
       mislabeled with the template's GPL v3 header
 """
 import os, re, sys
+import tempfile
 
 SRC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src", "main", "assets", "chess.src")
 TPL = os.path.join(SRC_DIR, "index.html.tpl")
@@ -170,22 +171,30 @@ def main():
         sys.exit(5)
     result = NEW_HEADER + result[len(tpl_header):]
 
-    # v1.2.3 round-41: atomic write — write to a temp file in the same
-    #   directory and os.replace() it into place, so an interrupted build
-    #   never leaves a truncated chess.html.
-    tmp_out = OUT + ".tmp"
+    # Write to a unique same-directory temporary file, then atomically replace
+    #   the output. Concurrent builders never share or clean up each other's file.
+    tmp_out = None
     try:
-        with open(tmp_out, 'w', encoding='utf-8') as f:
+        fd, tmp_out = tempfile.mkstemp(
+            prefix=os.path.basename(OUT) + ".", suffix=".tmp",
+            dir=os.path.dirname(OUT))
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
             f.write(result)
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp_out, OUT)
+        tmp_out = None
     except OSError as e:
         print(f"ERROR: cannot write output {OUT}: {e}", file=sys.stderr)
-        try:
-            if os.path.exists(tmp_out):
-                os.remove(tmp_out)
-        except OSError:
-            pass
         sys.exit(1)
+    finally:
+        if tmp_out is not None:
+            try:
+                os.remove(tmp_out)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                pass
 
     line_count = result.count('\n') + 1
     byte_count = len(result.encode('utf-8'))

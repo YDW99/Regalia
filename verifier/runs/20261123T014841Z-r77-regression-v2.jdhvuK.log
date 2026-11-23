@@ -1,0 +1,34 @@
+timestamp_start=2026-11-23T01:48:41Z
+timestamp_end=2026-11-23T01:48:41Z
+cwd=/tmp/regalia-r77/repo
+command=node verifier/v2/round53-sonar-triage.js 
+exit_code=0
+--- output ---
+PASS F1a Promise.all has rejection handler (_finishAnim twice)
+PASS F2a tablebase.js void importPGNAsync
+PASS F2b ui-interactions.js void importPGNAsync (stats import-back)
+PASS F2c ui-interactions.js void importPGNAsync (paste import)
+PASS F2d no remaining bare importPGNAsync( call without void/.then receiver (tb + ui)
+PASS F3a S6582 reviewStates?.length optional chain
+PASS F3b S7741 direct undefined comparison for _reviewEvalCache (same-module, spacing-tolerant)
+PASS F3c S4138 T5 ring uses for-of
+PASS F3d T5 ring logic intact (states identity + fen match + step bounds)
+PASS F4a S6201 pattern instanceof MainActivity
+PASS F4b S1181 batch-end dispatch try block has NO catch (Throwable) and ends with catch (Exception t)
+PASS F5a onCreate contains no direct wakeLock write
+PASS F5b onDestroy contains no direct wakeLock write
+PASS F5c static synchronized acquire helper present
+PASS F5d static synchronized release helper present
+PASS F5e refreshWakeLock now synchronized
+PASS F5f wakeLock field still static volatile (BG-2 design kept)
+PASS F6a _activityResumed kept + S116-kept note
+PASS F6b _webViewPausedForBatch kept
+PASS V2-20 _KING_PIECE_STYLE declared in game-logic.js, absent from ui.js, no typeof probe in ai-bridge.js
+PASS V2-21 R61-d: endBatch dispatches onEvalDeepBatchEnded before the !engineReady gate
+PASS V2-22 58b Bug A: _manualLive gate present in onEngineProgress (manual eval bar tick)
+PASS V2-23a 58b Bug F: onEngineRestarting settles loading AND disarms watchdog
+PASS V2-23b 58b Bug F: onEngineReady settles loading AND disarms watchdog
+PASS V2-23c 58b Bug F: onEngineEval settles loading+watchdog on all 3 outcome branches
+PASS V2-24 58b Bug B: _refreshReviewMoveListEvals wired on all 3 manual completion paths
+PASS V2-25 round-62 dedup: SAF launch blocks + chunked read loop single-sourced
+===== RESULT: 27 passed, 0 failed =====

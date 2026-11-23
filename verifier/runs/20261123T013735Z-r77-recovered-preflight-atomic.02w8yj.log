@@ -1,0 +1,7 @@
+timestamp_start=2026-11-23T01:37:35Z
+timestamp_end=2026-11-23T01:37:35Z
+cwd=/tmp/regalia-r77/repo
+command=python3 /tmp/regalia-r77/repo/verifier/v13/atomic-file-store-test.py 
+exit_code=1
+--- output ---
+FAIL production AtomicFileStore.java is missing

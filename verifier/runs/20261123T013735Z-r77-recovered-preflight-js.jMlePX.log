@@ -1,0 +1,26 @@
+timestamp_start=2026-11-23T01:37:35Z
+timestamp_end=2026-11-23T01:37:35Z
+cwd=/tmp/regalia-r77/repo
+command=node /tmp/regalia-r77/repo/verifier/v13/eval-persistence-test.js 
+exit_code=1
+--- output ---
+PASS file success clears forced dirty
+PASS file success skips legacy fallback
+PASS synchronous legacy success clears after file failure
+PASS legacy success clears after file exception
+FAIL all durable backends false retain dirty
+FAIL localStorage-only success is not durable
+PASS localStorage failure does not negate file success
+FAIL all write failures retain dirty
+FAIL truthy non-boolean file result is rejected
+FAIL truthy non-boolean legacy result is rejected
+FAIL later flush retries and clears on durable success
+FAIL exceptions are retryable on a later flush
+PASS debounce success clears only after write
+FAIL debounce failure retains dirty
+PASS clean flush performs no redundant write
+PASS flush cancels timer and writes once
+PASS legacy backend works when file API is absent
+FAIL file failure without legacy API retains dirty
+FAIL a later mutation retries after forced failure
+eval-persistence passed=9 total=19

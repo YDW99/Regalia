@@ -1,0 +1,34 @@
+timestamp_start=2026-11-23T03:09:31Z
+timestamp_end=2026-11-23T03:09:56Z
+cwd=/tmp/regalia-r77/repo
+command=python3 verifier/v13/verify-apk.py /mnt/agents/output/Regalia-v1.2.3-round77-release.apk 
+exit_code=1
+--- output ---
+$ apksigner verify --verbose --print-certs /mnt/agents/output/Regalia-v1.2.3-round77-release.apk
+Exception in thread "main" java.io.IOException: Input/output error
+	at java.base/sun.nio.ch.FileDispatcherImpl.read0(Native Method)
+	at java.base/sun.nio.ch.FileDispatcherImpl.read(FileDispatcherImpl.java:49)
+	at java.base/sun.nio.ch.IOUtil.readIntoNativeBuffer(IOUtil.java:330)
+	at java.base/sun.nio.ch.IOUtil.read(IOUtil.java:296)
+	at java.base/sun.nio.ch.IOUtil.read(IOUtil.java:273)
+	at java.base/sun.nio.ch.FileChannelImpl.read(FileChannelImpl.java:232)
+	at com.android.apksig.internal.util.FileChannelDataSource.copyTo(FileChannelDataSource.java:148)
+	at com.android.apksig.internal.util.FileChannelDataSource.getByteBuffer(FileChannelDataSource.java:164)
+	at com.android.apksig.internal.zip.ZipUtils.findZipEndOfCentralDirectoryRecord(ZipUtils.java:201)
+	at com.android.apksig.internal.zip.ZipUtils.findZipEndOfCentralDirectoryRecord(ZipUtils.java:152)
+	at com.android.apksig.apk.ApkUtilsLite.findZipSections(ApkUtilsLite.java:47)
+	at com.android.apksig.apk.ApkUtils.findZipSections(ApkUtils.java:60)
+	at com.android.apksig.ApkVerifier.verify(ApkVerifier.java:189)
+	at com.android.apksig.ApkVerifier.verify(ApkVerifier.java:164)
+	at com.android.apksigner.ApkSignerTool.verify(ApkSignerTool.java:602)
+	at com.android.apksigner.ApkSignerTool.main(ApkSignerTool.java:97)
+
+Traceback (most recent call last):
+  File "/tmp/regalia-r77/repo/verifier/v13/verify-apk.py", line 207, in <module>
+    main()
+  File "/tmp/regalia-r77/repo/verifier/v13/verify-apk.py", line 142, in main
+    signed = run(args.apksigner, "verify", "--verbose", "--print-certs", str(apk))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/regalia-r77/repo/verifier/v13/verify-apk.py", line 63, in run
+    raise AssertionError(f"{tool.name} exited {result.returncode}")
+AssertionError: apksigner exited 1

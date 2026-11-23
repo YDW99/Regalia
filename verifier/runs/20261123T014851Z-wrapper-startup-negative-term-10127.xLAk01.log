@@ -1,0 +1,8 @@
+timestamp_start=2026-11-23T01:48:51Z
+timestamp_end=2026-11-23T01:48:53Z
+cwd=/tmp/regalia-r77/repo
+command=bash -c exec\ sleep\ 30 
+exit_code=143
+interrupted_by=TERM
+--- output ---
+child-before-TERM

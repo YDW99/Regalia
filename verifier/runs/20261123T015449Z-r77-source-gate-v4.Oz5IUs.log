@@ -1,0 +1,16 @@
+timestamp_start=2026-11-23T01:54:49Z
+timestamp_end=2026-11-23T01:54:51Z
+cwd=/tmp/regalia-r77/repo
+command=python3 verifier/v13/source-gate.py --base /mnt/agents/work/regalia-r77/baseline-f783/tree 
+exit_code=1
+--- output ---
+PASS 01: comparison baseline is an external directory
+FIXED_BASE files=172 tree_sha256=<sha256 _hashlib.HASH object @ 0x7fe885f6e2b0>
+Traceback (most recent call last):
+  File "/tmp/regalia-r77/repo/verifier/v13/source-gate.py", line 188, in <module>
+    main()
+  File "/tmp/regalia-r77/repo/verifier/v13/source-gate.py", line 75, in main
+    check("fixed baseline complete-tree digest", base_digest == EXPECTED_BASE_TREE_SHA256)
+  File "/tmp/regalia-r77/repo/verifier/v13/source-gate.py", line 24, in check
+    raise AssertionError(name)
+AssertionError: fixed baseline complete-tree digest
