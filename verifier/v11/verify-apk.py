@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import struct
 import subprocess
+import tempfile
 import zipfile
 
 EXPECTED_CERT = "45bc6d36c9fcff8ef9e55f510b43bce44cb854ea4b2f235a0f4955da05a8d8bc"
@@ -142,72 +143,95 @@ def main() -> None:
     if not apk.is_file() or not bundle.is_file():
         raise AssertionError("APK or source bundle missing")
 
-    signed = run(args.apksigner, "verify", "--verbose", "--print-certs", str(apk))
-    for scheme in (1, 2, 3):
-        pattern = rf"Verified using v{scheme} scheme .*?: true"
-        if not re.search(pattern, signed):
-            raise AssertionError(f"apksigner v{scheme} is not true")
-    if not re.search(r"Number of signers: 1(?:\s|$)", signed):
-        raise AssertionError("APK does not have exactly one signer")
-    cert_match = re.search(r"Signer #1 certificate SHA-256 digest: ([0-9a-f]{64})", signed)
-    if not cert_match or cert_match.group(1) != EXPECTED_CERT:
-        raise AssertionError("certificate SHA-256 mismatch")
+    # v1.2.3 round-79 (CodeRabbit PR#60 #9): ONE private copy of the APK is made
+    #   before the first check; every check below — the external SDK tools, the
+    #   Signing Block parser, the ZIP checks and the reported size/SHA-256 —
+    #   runs against that fixed copy, and the original path is never re-opened
+    #   after the copy is made (a concurrent replacement of the path can no
+    #   longer make the success line attest an unchecked file).
+    with tempfile.TemporaryDirectory(prefix="apk-gate-") as work_dir:
+        private_apk = Path(work_dir) / "candidate.apk"
+        with apk.open("rb") as source_stream, private_apk.open("wb") as target_stream:
+            for chunk in iter(lambda: source_stream.read(1024 * 1024), b""):
+                target_stream.write(chunk)
+        # v1.2.3 round-79 (CodeRabbit PR#60 #27): the fixed approved identity is
+        #   checked FIRST — an APK signed with the same certificate and carrying
+        #   the same metadata but different bytes no longer runs two SDK tools,
+        #   a CRC pass and a ~100MB engine digest before being rejected.
+        if (private_apk.stat().st_size, sha256_file(private_apk)) != (
+                EXPECTED_APK_BYTES, EXPECTED_APK_SHA256):
+            raise AssertionError("delivered APK differs from the inherited round-71 approved bytes")
 
-    badging = run(args.aapt, "dump", "badging", str(apk))
-    package = re.search(r"^package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'", badging, re.M)
-    if not package or package.groups() != ("com.Regalia", "10203", "1.2.3"):
-        raise AssertionError("applicationId/version mismatch")
-    if "sdkVersion:'23'" not in badging or "targetSdkVersion:'35'" not in badging:
-        raise AssertionError("min/target SDK mismatch")
-    if "application-debuggable" in badging:
-        raise AssertionError("release APK is debuggable")
-    permissions = set(re.findall(r"^uses-permission: name='([^']+)'", badging, re.M))
-    if permissions != EXPECTED_PERMISSIONS:
-        raise AssertionError(f"baseline permission set mismatch: {sorted(permissions)}")
-    native_codes = re.findall(r"^native-code: (.+)$", badging, re.M)
-    if native_codes != ["'arm64-v8a'"]:
-        raise AssertionError(f"unexpected aapt native-code declaration: {native_codes}")
+        signed = run(args.apksigner, "verify", "--verbose", "--print-certs", str(private_apk))
+        for scheme in (1, 2, 3):
+            pattern = rf"Verified using v{scheme} scheme .*?: true"
+            if not re.search(pattern, signed):
+                raise AssertionError(f"apksigner v{scheme} is not true")
+        if not re.search(r"Number of signers: 1(?:\s|$)", signed):
+            raise AssertionError("APK does not have exactly one signer")
+        cert_match = re.search(r"Signer #1 certificate SHA-256 digest: ([0-9a-f]{64})", signed)
+        if not cert_match or cert_match.group(1) != EXPECTED_CERT:
+            raise AssertionError("certificate SHA-256 mismatch")
 
-    pairs = parse_signing_block(apk)
-    if len(pairs) < 2:
-        raise AssertionError("incomplete Signing Block")
+        badging = run(args.aapt, "dump", "badging", str(private_apk))
+        package = re.search(r"^package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'", badging, re.M)
+        if not package or package.groups() != ("com.Regalia", "10203", "1.2.3"):
+            raise AssertionError("applicationId/version mismatch")
+        if "sdkVersion:'23'" not in badging or "targetSdkVersion:'35'" not in badging:
+            raise AssertionError("min/target SDK mismatch")
+        if "application-debuggable" in badging:
+            raise AssertionError("release APK is debuggable")
+        # v1.2.3 round-79 (CodeRabbit PR#60 #8): aapt dumps SDK-23-only permissions
+        #   as uses-permission-sdk-23: — extract BOTH declaration kinds before
+        #   comparing to the baseline set (an APK declaring the eight baseline
+        #   permissions plus an sdk-23 extra must still fail the comparison).
+        permissions = set(
+            re.findall(r"^uses-permission(?:-sdk-23)?: name='([^']+)'", badging, re.M)
+        )
+        if permissions != EXPECTED_PERMISSIONS:
+            raise AssertionError(f"baseline permission set mismatch: {sorted(permissions)}")
+        native_codes = re.findall(r"^native-code: (.+)$", badging, re.M)
+        if native_codes != ["'arm64-v8a'"]:
+            raise AssertionError(f"unexpected aapt native-code declaration: {native_codes}")
 
-    with zipfile.ZipFile(apk) as archive:
-        names = archive.namelist()
-        if len(names) != len(set(names)):
-            raise AssertionError("duplicate APK ZIP entry")
-        unsafe = [name for name in names if name.startswith(("/", "\\")) or ".." in Path(name).parts]
-        if unsafe:
-            raise AssertionError("unsafe APK ZIP path")
-        corrupt = archive.testzip()
-        if corrupt is not None:
-            raise AssertionError(f"APK CRC failure: {corrupt}")
-        native = {name for name in names if name.startswith("lib/") and not name.endswith("/")}
-        if native != EXPECTED_NATIVE:
-            raise AssertionError(f"native library set mismatch: {sorted(native)}")
-        if any(not name.startswith("lib/arm64-v8a/") for name in native):
-            raise AssertionError("non-arm64 native payload")
-        engine_size, engine_hash = sha256_member(archive, "lib/arm64-v8a/libstockfish.so")
-        if (engine_size, engine_hash) != (100_695_968, EXPECTED_ENGINE):
-            raise AssertionError("embedded Stockfish identity mismatch")
-        bundle_size, bundle_hash = sha256_member(archive, "assets/chess.html")
-        if (bundle_size, bundle_hash) != (1_500_732, EXPECTED_BUNDLE):
-            raise AssertionError("embedded chess.html identity mismatch")
-        if archive.read("assets/chess.html") != bundle.read_bytes():
-            raise AssertionError("embedded/source chess.html differ")
-        if sha256_file(bundle) != EXPECTED_BUNDLE:
-            raise AssertionError("source bundle hash mismatch")
-        print(f"zip_entries={len(names)} crc_ok=true duplicate_entries=0")
-        print(f"native_libraries={','.join(sorted(native))}")
-        print(f"engine_bytes={engine_size}\nengine_sha256={engine_hash}")
-        print(f"bundle_bytes={bundle_size}\nbundle_sha256={bundle_hash}")
-    print(f"apk_bytes={apk.stat().st_size}")
-    apk_hash = sha256_file(apk)
-    print(f"apk_sha256={apk_hash}")
-    if (apk.stat().st_size, apk_hash) != (EXPECTED_APK_BYTES, EXPECTED_APK_SHA256):
-        raise AssertionError("delivered APK differs from the inherited round-71 approved bytes")
-    print("APK-V11-GATE OK: exact inherited bytes; release, v1+v2+v3, certificate, version, SDK, ABI, baseline permissions, signing blocks, bundle and engine")
-    print("HYPEROS3-STATIC-ONLY: no physical HyperOS 3 device test was performed")
+        pairs = parse_signing_block(private_apk)
+        if len(pairs) < 2:
+            raise AssertionError("incomplete Signing Block")
+
+        with zipfile.ZipFile(private_apk) as archive:
+            names = archive.namelist()
+            if len(names) != len(set(names)):
+                raise AssertionError("duplicate APK ZIP entry")
+            unsafe = [name for name in names if name.startswith(("/", "\\")) or ".." in Path(name).parts]
+            if unsafe:
+                raise AssertionError("unsafe APK ZIP path")
+            corrupt = archive.testzip()
+            if corrupt is not None:
+                raise AssertionError(f"APK CRC failure: {corrupt}")
+            native = {name for name in names if name.startswith("lib/") and not name.endswith("/")}
+            if native != EXPECTED_NATIVE:
+                raise AssertionError(f"native library set mismatch: {sorted(native)}")
+            if any(not name.startswith("lib/arm64-v8a/") for name in native):
+                raise AssertionError("non-arm64 native payload")
+            engine_size, engine_hash = sha256_member(archive, "lib/arm64-v8a/libstockfish.so")
+            if (engine_size, engine_hash) != (100_695_968, EXPECTED_ENGINE):
+                raise AssertionError("embedded Stockfish identity mismatch")
+            bundle_size, bundle_hash = sha256_member(archive, "assets/chess.html")
+            if (bundle_size, bundle_hash) != (1_500_732, EXPECTED_BUNDLE):
+                raise AssertionError("embedded chess.html identity mismatch")
+            if archive.read("assets/chess.html") != bundle.read_bytes():
+                raise AssertionError("embedded/source chess.html differ")
+            if sha256_file(bundle) != EXPECTED_BUNDLE:
+                raise AssertionError("source bundle hash mismatch")
+            print(f"zip_entries={len(names)} crc_ok=true duplicate_entries=0")
+            print(f"native_libraries={','.join(sorted(native))}")
+            print(f"engine_bytes={engine_size}\nengine_sha256={engine_hash}")
+            print(f"bundle_bytes={bundle_size}\nbundle_sha256={bundle_hash}")
+        print(f"apk_bytes={private_apk.stat().st_size}")
+        apk_hash = sha256_file(private_apk)
+        print(f"apk_sha256={apk_hash}")
+        print("APK-V11-GATE OK: exact inherited bytes; release, v1+v2+v3, certificate, version, SDK, ABI, baseline permissions, signing blocks, bundle and engine")
+        print("HYPEROS3-STATIC-ONLY: no physical HyperOS 3 device test was performed")
 
 
 if __name__ == "__main__":

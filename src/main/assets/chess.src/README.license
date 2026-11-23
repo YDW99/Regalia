@@ -1,3 +1,17 @@
+v1.2.3 round-79 (2026.11.23): cache-list refresh on partial rename + honest bridge fallbacks.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - ui.js (GPL v3): _pgnCacheRename's failure branch now refreshes the cache
+    list and re-renders (ROB-09, CodeRabbit PR#60) — a rename can be a
+    partial success (PGN renamed, tags lost -> Java returns false), and the
+    old-name list entry no longer exists on disk.
+  - ai-bridge.js (GPL v3): openEngineConfig's two best-effort bridge reads
+    log swallowed exceptions (SonarCloud S2486) instead of silently falling
+    back; the eval-cache write-strategy comment block is consolidated into a
+    single current narrative (Rev23 hybrid + MAX_ENTRIES=2000 scale; RED-01
+    item 4 — the stale 60k-entry/~12MB figures are not restated as current).
+  - assets/chess.html: rebuilt deterministically from these sources (24,388
+    lines / 1,500,518 bytes; two consecutive builds byte-identical).
+
 v1.2.3 round-69 (2026.11.22): tablebase ownership token + fail-count single accounting (PR#57 review triage).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - tablebase.js (GPL v3, DroidFish-derived lineage): (1) probeTablebase —

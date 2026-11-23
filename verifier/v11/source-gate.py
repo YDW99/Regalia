@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 
 from source_archive import protected_license_metadata
 
@@ -27,6 +28,40 @@ def check(name: str, condition: bool) -> None:
 
 def git(*args: str, text: bool = True):
     return subprocess.check_output(["git", *args], cwd=ROOT, text=text)
+
+
+def git_paths(*args: str) -> set[str]:
+    """v1.2.3 round-79 (CodeRabbit PR#60 #25): read NUL-separated raw paths.
+
+    git quotes-and-escapes unusual pathnames in its text output; splitlines()
+    keeps the ESCAPED text, so such a path never matched an allowlist and the
+    gate mis-rejected a legitimate commit (e.g. a verifier/v11/说明.md added
+    inside the allowed prefix). Callers place "-z" at its correct position in
+    the argument list; entries are decoded with os.fsdecode, which round-trips
+    arbitrary bytes exactly.
+    """
+    raw = subprocess.check_output(["git", *args], cwd=ROOT)
+    return {os.fsdecode(entry) for entry in raw.split(b"\0") if entry}
+
+
+def manifest_permissions(source: str) -> set[tuple[str, str, str]]:
+    """v1.2.3 round-79 (CodeRabbit PR#60 #24): parse the manifest as XML.
+
+    Compares the permission ELEMENTS — both uses-permission and
+    uses-permission-sdk-23, with android:maxSdkVersion where present — instead
+    of regexing only <uses-permission android:name="...">, which left an added
+    sdk-23-only permission element invisible to the comparison (Android
+    honors it on API 23+).
+    """
+    root = ET.fromstring(source)
+    android = "{http://schemas.android.com/apk/res/android}"
+    found: set[tuple[str, str, str]] = set()
+    for tag in ("uses-permission", "uses-permission-sdk-23"):
+        for element in root.iter(tag):
+            name = element.get(f"{android}name") or element.get("name") or ""
+            max_sdk = element.get(f"{android}maxSdkVersion") or element.get("maxSdkVersion")
+            found.add((tag, name, "" if max_sdk is None else str(max_sdk)))
+    return found
 
 
 def text(rel: str) -> str:
@@ -70,8 +105,9 @@ def main() -> None:
     version_name = f"{components.get('VERSION_MAJOR')}.{components.get('VERSION_MINOR')}.{components.get('VERSION_PATCH')}"
     check("version contract", computed_code == 10203 and version_name == "1.2.3")
     check("arm64-only ABI", build.count("abiFilters 'arm64-v8a'") == 1 and "armeabi-v7a" not in re.sub(r"//.*", "", build))
-    permission_re = re.compile(r'<uses-permission\s+android:name="([^"]+)"')
-    check("permissions unchanged from fixed base", permission_re.findall(text("src/main/AndroidManifest.xml")) == permission_re.findall(base_text(base, "src/main/AndroidManifest.xml")))
+    check("permissions unchanged from fixed base",
+          manifest_permissions(text("src/main/AndroidManifest.xml"))
+          == manifest_permissions(base_text(base, "src/main/AndroidManifest.xml")))
 
     ledger = text("src/main/java/com/Regalia/README.license")
     round71 = ledger.split("v1.2.3 round-68", 1)[0]
@@ -98,8 +134,8 @@ def main() -> None:
     changed_java = "".join(text(f"src/main/java/com/Regalia/{name}.java") for name in ("StockfishNative", "StatsActivity", "EngineService"))
     check("old Java identifiers absent", not any(re.search(r"(?<![A-Za-z0-9_$])" + re.escape(name) + r"(?![A-Za-z0-9_$])", changed_java) for name in old_names))
 
-    java_diff = set(git("diff", "--name-only", base, "--", "src/main/java/com/Regalia").splitlines())
-    java_untracked = set(git("ls-files", "--others", "--exclude-standard", "--", "src/main/java/com/Regalia").splitlines())
+    java_diff = git_paths("diff", "--name-only", "-z", base, "--", "src/main/java/com/Regalia")
+    java_untracked = git_paths("ls-files", "--others", "--exclude-standard", "-z", "--", "src/main/java/com/Regalia")
     allowed_java = {
         "src/main/java/com/Regalia/StockfishNative.java", "src/main/java/com/Regalia/StatsActivity.java",
         "src/main/java/com/Regalia/EngineService.java", "src/main/java/com/Regalia/README.license",
@@ -116,16 +152,31 @@ def main() -> None:
         "LICENSE&NOTICE.zip",  # Manual updates are allowed; never restore the old bytes.
     }
     allowed_prefixes = ("verifier/v11/", "verifier/runs/round72", "verifier/runs/recovery-round72", "verifier/runs/v11-", "verifier/runs/2026")
-    changed = set(git("diff", "--name-only", base).splitlines())
-    untracked = set(git("ls-files", "--others", "--exclude-standard").splitlines())
+    changed = git_paths("diff", "--name-only", "-z", base)
+    untracked = git_paths("ls-files", "--others", "--exclude-standard", "-z")
     all_changed = changed | untracked
+
+    def index_mode(path: str) -> str | None:
+        entry = git("ls-files", "-s", "--", path).strip()
+        return entry.split()[0] if entry else None
+
+    def tree_mode(revision: str, path: str) -> str | None:
+        entry = git("ls-tree", revision, "--", path).strip()
+        return entry.split()[0] if entry else None
 
     def inherited_unchanged(path: str) -> bool:
         try:
             inherited = subprocess.check_output(["git", "show", f"{ROUND72_START}:{path}"], cwd=ROOT)
-            return (ROOT / path).read_bytes() == inherited
+            if (ROOT / path).read_bytes() != inherited:
+                return False
         except (subprocess.CalledProcessError, OSError):
             return False
+        # v1.2.3 round-79 (CodeRabbit PR#60 #26): content equality alone let a
+        #   mode-only change (100644 -> 100755) pass as "unchanged" — git lists
+        #   the path as changed while read_bytes() still equals the blob. The
+        #   gate now requires BOTH the content and the index/tree mode to
+        #   match the starting commit; unchanged content AND mode still pass.
+        return index_mode(path) == tree_mode(ROUND72_START, path)
 
     out_of_scope = sorted(
         path for path in all_changed
@@ -138,7 +189,7 @@ def main() -> None:
     check("v9 marked superseded without deleting history", "superseded by v10" in text("verifier/v9/round71-acceptance.md").lower())
     check("round-72 twenty-comment triage exists", (ROOT / "verifier/runs/round72-audit.md").is_file())
 
-    tracked = git("ls-files").splitlines()
+    tracked = git_paths("ls-files", "-z")
     forbidden_tracked = [p for p in tracked if p.lower().startswith("src/main/jnilibs/") or p.endswith("libstockfish.so") or p.lower().endswith((".jks", ".keystore")) or p in ("keystore-info.txt", "keystore.properties", "local.properties")]
     check("no engine or signing material tracked", not forbidden_tracked)
     assert checks == 27, checks

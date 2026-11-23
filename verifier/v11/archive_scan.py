@@ -3,11 +3,24 @@
 
 Labels are opaque caller-supplied identifiers. Diagnostics never include input
 paths or archive member names, which may themselves contain sensitive text.
+
+v1.2.3 round-79 (CodeRabbit PR#60 hardening):
+- The central directory is bounded BEFORE zipfile.ZipFile() parses it into
+  memory (an EOCD tail preflight), and the member-count cap is applied to the
+  ACTUAL parsed record count before traversal — a hostile ZIP declaring a
+  huge central directory or tens of thousands of members can no longer spend
+  unbounded parse memory before a cap fires.
+- Duplicate-member detection covers directory entries as well.
+- Every member — directories included — is validated for path safety and
+  encryption BEFORE any skip; a directory entry that carries payload bytes
+  (file_size != 0) is rejected instead of silently skipped.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import PurePosixPath
+import struct
 import tempfile
 from typing import BinaryIO, Callable, Iterable
 import zipfile
@@ -22,6 +35,10 @@ class ArchiveLimits:
     max_total_bytes: int = 512 * MIB
     max_members: int = 20_000
     max_nested_archive_bytes: int = 128 * MIB
+    # round-79 (CodeRabbit PR#60): bound the central directory itself before
+    # zipfile materializes every ZipInfo into memory. 8 MiB accommodates the
+    # 20k-member cap with generously-sized names.
+    max_central_directory_bytes: int = 8 * MIB
 
 
 class Budget:
@@ -56,6 +73,54 @@ def _looks_like_zip_name(name: str) -> bool:
     return name.lower().endswith((".zip", ".jar", ".apk", ".aab"))
 
 
+def _read_tail(source, tail_bytes: int) -> bytes:
+    """Read the final `tail_bytes` of a path or binary stream; restore offset 0."""
+    if isinstance(source, (str, bytes, os.PathLike)):
+        with open(source, "rb") as stream:
+            stream.seek(0, os.SEEK_END)
+            size = stream.tell()
+            start = max(0, size - tail_bytes)
+            stream.seek(start)
+            return stream.read(size - start)
+    source.seek(0, os.SEEK_END)
+    size = source.tell()
+    start = max(0, size - tail_bytes)
+    source.seek(start)
+    data = source.read(size - start)
+    source.seek(0)
+    return data
+
+
+def _central_directory_size(tail: bytes) -> int | None:
+    """Extract the central-directory size from an EOCD (or ZIP64 EOCD64) tail."""
+    index = tail.rfind(b"PK\x05\x06")
+    if index < 0 or len(tail) - index < 22:
+        return None
+    cd_size = struct.unpack_from("<I", tail, index + 12)[0]
+    if cd_size != 0xFFFFFFFF:
+        return cd_size
+    # ZIP64: the true 64-bit value lives in the EOCD64 record (PK\x06\x06),
+    # whose size-of-central-directory field sits at offset 40.
+    index64 = tail.rfind(b"PK\x06\x06")
+    if index64 < 0 or len(tail) - index64 < 48:
+        return None
+    return struct.unpack_from("<Q", tail, index64 + 40)[0]
+
+
+def _preflight_central_directory(source, limits: ArchiveLimits, label: str) -> None:
+    """round-79 (CodeRabbit PR#60): bound the central directory BEFORE
+    zipfile.ZipFile() parses it — zipfile materializes every ZipInfo while
+    constructing, so a multi-gigabyte declared central directory would spend
+    unbounded memory before any traversal-time cap could fire. Reads only the
+    tail (EOCD locator); the file offset is restored afterwards."""
+    tail = _read_tail(source, 131072)  # 64KiB comment cap + EOCD64 + locator
+    if not tail:
+        return  # empty/tiny inputs are rejected by ZipFile itself
+    cd_size = _central_directory_size(tail)
+    if cd_size is not None and cd_size > limits.max_central_directory_bytes:
+        raise AssertionError(f"central directory size limit exceeded at {label}")
+
+
 def scan_archive(
     source,
     consume: Callable[[Iterable[bytes], str, str], None],
@@ -73,26 +138,40 @@ def scan_archive(
     """
     limits = limits or ArchiveLimits()
     budget = budget or Budget(limits)
+    _preflight_central_directory(source, limits, label)
     try:
         archive_context = zipfile.ZipFile(source)
     except Exception as exc:
         raise AssertionError(f"invalid archive at {label}") from None
     with archive_context as archive:
         infos = archive.infolist()
-        file_names = [info.filename for info in infos if not info.is_dir()]
-        if len(file_names) != len(set(file_names)):
+        # round-79 (CodeRabbit PR#60): cap the ACTUAL parsed record count
+        # before any traversal — do not rely on declared counts or on the
+        # per-member budget alone.
+        if len(infos) > limits.max_members:
+            raise AssertionError(f"archive member count {len(infos)} exceeds limit at {label}")
+        # round-79 (CodeRabbit PR#60): duplicate detection covers directory
+        # entries as well — two same-named empty directories are duplicates
+        # exactly like two same-named files.
+        names_seen = [info.filename for info in infos]
+        if len(names_seen) != len(set(names_seen)):
             raise AssertionError(f"duplicate archive member at {label}")
         for info in infos:
             member_label = budget.next_label(label)
             # Directory entries consume the shared member budget even though
             # they have no payload to decompress.
             budget.reserve(info, member_label)
-            if info.is_dir():
-                continue
+            # round-79 (CodeRabbit PR#60): path safety and encryption are
+            # checked for EVERY member — directories included — before any
+            # skip; a directory entry that carries payload bytes is rejected.
             if not safe_member_name(info.filename):
                 raise AssertionError(f"unsafe archive member at {member_label}")
             if info.flag_bits & 0x1:
                 raise AssertionError(f"encrypted archive member at {member_label}")
+            if info.is_dir():
+                if info.file_size != 0:
+                    raise AssertionError(f"directory member with payload at {member_label}")
+                continue
             spool = tempfile.SpooledTemporaryFile(max_size=4 * MIB)
             try:
                 with archive.open(info) as stream:

@@ -35,8 +35,10 @@ import android.util.Log;
 import org.json.JSONObject;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -60,6 +62,27 @@ import java.util.Set;
  */
 public class EngineSettingsHelper {
     private static final String TAG = "EngineSettingsHelper";
+
+    // v1.2.3 round-79 (ROB-04, SonarCloud S1192/S2447): import diagnostics and
+    //   key names are extracted to constants — the literal fragments were
+    //   previously duplicated up to 11 times across the import paths.
+    private static final String LINE_PREFIX = "line ";
+    private static final String MSG_NOT_AN_INTEGER = "' is not an integer";
+    private static final String MSG_NOT_A_BOOLEAN = "' is not a boolean (expected true/false)";
+    private static final String MSG_HAS_NO_VALUE = "' has no value";
+
+    private static final String KEY_ENGINE_NAME = "engine.name";
+    private static final String KEY_ENGINE_PATH = "engine.path";
+    private static final String KEY_THREADS = "engine.threads";
+    private static final String KEY_HASH = "engine.hash";
+    private static final String KEY_MOVE_OVERHEAD = "engine.moveOverhead";
+    private static final String KEY_MULTI_PV = "engine.multiPV";
+    private static final String KEY_PONDER = "engine.ponder";
+    private static final String KEY_SHOW_WDL = "engine.showWDL";
+    private static final String KEY_SKILL_LEVEL = "engine.skillLevel";
+    private static final String KEY_LIMIT_STRENGTH = "engine.limitStrength";
+    private static final String KEY_ELO = "engine.elo";
+    private static final String KEY_AUTO_CONFIG = "engine.autoConfig";
 
     private final Context context;
     private final Callbacks callbacks;
@@ -161,18 +184,18 @@ public class EngineSettingsHelper {
             sb.append("# Version: ").append(callbacks.getEngineVersion()).append("\n");
             sb.append("# Export Time: ").append(timestamp).append("\n");
             sb.append("#\n");
-            sb.append("engine.name=").append(callbacks.getEngineName()).append("\n");
-            sb.append("engine.path=").append(callbacks.getCurrentEnginePath() != null ? callbacks.getCurrentEnginePath() : "").append("\n");
-            sb.append("engine.threads=").append(callbacks.getEngineThreads()).append("\n");
-            sb.append("engine.hash=").append(callbacks.getEngineHash()).append("\n");
-            sb.append("engine.moveOverhead=").append(callbacks.getEngineMoveOverhead()).append("\n");
-            sb.append("engine.multiPV=").append(callbacks.getEngineMultiPV()).append("\n");
-            sb.append("engine.ponder=").append(callbacks.getEnginePonder()).append("\n");
-            sb.append("engine.showWDL=").append(callbacks.getEngineShowWDL()).append("\n");
-            sb.append("engine.skillLevel=").append(callbacks.getEngineSkillLevel()).append("\n");
-            sb.append("engine.limitStrength=").append(callbacks.getEngineLimitElo()).append("\n");
-            sb.append("engine.elo=").append(callbacks.getEngineElo()).append("\n");
-            sb.append("engine.autoConfig=").append(callbacks.isAutoConfigEnabled()).append("\n");
+            sb.append(KEY_ENGINE_NAME + "=").append(callbacks.getEngineName()).append("\n");
+            sb.append(KEY_ENGINE_PATH + "=").append(callbacks.getCurrentEnginePath() != null ? callbacks.getCurrentEnginePath() : "").append("\n");
+            sb.append(KEY_THREADS + "=").append(callbacks.getEngineThreads()).append("\n");
+            sb.append(KEY_HASH + "=").append(callbacks.getEngineHash()).append("\n");
+            sb.append(KEY_MOVE_OVERHEAD + "=").append(callbacks.getEngineMoveOverhead()).append("\n");
+            sb.append(KEY_MULTI_PV + "=").append(callbacks.getEngineMultiPV()).append("\n");
+            sb.append(KEY_PONDER + "=").append(callbacks.getEnginePonder()).append("\n");
+            sb.append(KEY_SHOW_WDL + "=").append(callbacks.getEngineShowWDL()).append("\n");
+            sb.append(KEY_SKILL_LEVEL + "=").append(callbacks.getEngineSkillLevel()).append("\n");
+            sb.append(KEY_LIMIT_STRENGTH + "=").append(callbacks.getEngineLimitElo()).append("\n");
+            sb.append(KEY_ELO + "=").append(callbacks.getEngineElo()).append("\n");
+            sb.append(KEY_AUTO_CONFIG + "=").append(callbacks.isAutoConfigEnabled()).append("\n");
 
             return sb.toString();
         } catch (Exception e) {
@@ -186,329 +209,266 @@ public class EngineSettingsHelper {
     /**
      * 从 TXT 格式导入引擎设置。
      *
-     * 解析键值对，对每个参数应用范围钳制（Phase 71 上限），
-     * 持久化到 SharedPreferences，并在引擎就绪时下发 UCI 命令。
+     * v1.2.3 round-79 (ROB-04, two-phase validate→apply):
+     *   旧实现逐行"先应用后计数"，未知键静默跳过（返回 0），NumberFormatException
+     *   仅记日志继续，末尾无条件 success=true —— 无效输入一律报成功。
+     *   本实现分两阶段：
+     *     ① 校验阶段逐行解析全部键值（未知键 / 非法整数 / 非法布尔 / 空值
+     *        均以"行号 + 原因"拒绝整份文件，不应用任何设置，保持原子性）；
+     *     ② 全部通过后才统一应用（值已在校验阶段解析并按 Phase 71 上限钳制）。
+     *   只读元数据键 engine.name / engine.path（exportSettings() 输出）被显式
+     *   识别并跳过 —— 应用自身导出的配置必须能原样恢复导入（round-78 严格化
+     *   曾误伤这两个键，CodeRabbit PR#60 已指出）。其余未知键仍然拒绝。
+     *   布尔仅接受显式 true/false（大小写不敏感）—— 旧 Boolean.parseBoolean
+     *   把任意文本静默转为 false。0 个有效键不报成功。
      *
      * v1.0.2 FIX: 若用户显式导入 threads/hash 且 autoConfig 开启，
      *   自动禁用 autoConfig 以尊重用户显式意图（否则 detectHardwareAndConfigure
      *   会静默覆盖）。
      * v1.0.2 FIX: 引擎就绪时先 stopAndWaitForBestmove 再 applySettings，
      *   避免引擎忙于搜索时 setoption 超时。
-     * v1.2.3 round-78 (ROB-04): import is now a TWO-PHASE transaction —
-     *   validate every line first, apply nothing until the whole file parses.
-     *   Previously each line was applied as it was parsed and any invalid
-     *   value (NumberFormatException was logged only, Boolean.parseBoolean
-     *   silently mapped every misspelling to false, unknown keys returned 0)
-     *   still ended in success=true with "Imported N settings
-     *   successfully" — a file with zero valid lines imported 0 settings
-     *   "successfully", and a mid-file error left the first half applied
-     *   with no indication which keys failed. Now: booleans accept only
-     *   explicit true/false; a single invalid value or unknown key rejects
-     *   the WHOLE import before anything is persisted; the result object
-     *   carries applied / rejected / clamped counters for the JS side.
      */
     public void importSettings(String txtContent) {
         callbacks.safeExecute(new Runnable() {
             public void run() {
                 boolean success = false;
                 String message = "";
-                int appliedCount = 0;
-                int clampedCount = 0;
-                int rejectedCount = 0;
-                int skippedAutoConfigCount = 0;
 
                 try {
                     if (txtContent == null || txtContent.trim().isEmpty()) {
                         throw new IllegalArgumentException("Empty settings content");
                     }
 
-                    // 跟踪显式导入的键，用于判断是否需要禁用 autoConfig
-                    Set<String> explicitlySet = new HashSet<>();
+                    // ① 校验阶段：任何一行失败即整份拒绝（ImportRejectException 携带行号与原因）
+                    List<PendingSetting> pending = validateSettings(txtContent);
 
-                    // v1.2.3 round-78 (ROB-04): PHASE 1 — validate every line.
-                    //   Nothing is persisted until the whole file parses.
-                    java.util.List<ParsedSetting> parsed = new java.util.ArrayList<>();
-                    java.util.List<String> errors = new java.util.ArrayList<>();
-                    String[] lines = txtContent.split("\\r?\\n");
-                    for (int i = 0; i < lines.length; i++) {
-                        String line = lines[i].trim();
-                        if (line.isEmpty() || line.startsWith("#")) continue;
-
-                        int eqIndex = line.indexOf('=');
-                        // 格式宽容（与旧实现一致）：非 key=value 行径直跳过，
-                        //   不计入错误 —— 导出文件可能携带说明性文字行。
-                        if (eqIndex <= 0 || eqIndex >= line.length() - 1) continue;
-
-                        String key = line.substring(0, eqIndex).trim();
-                        String value = line.substring(eqIndex + 1).trim();
-
-                        String err = validateSettingLine(i + 1, key, value, parsed, explicitlySet);
-                        if (err != null) {
-                            errors.add(err);
-                        }
-                    }
-
-                    if (!errors.isEmpty()) {
-                        // v1.2.3 round-78 (ROB-04): fail closed — nothing applied.
-                        rejectedCount = errors.size();
+                    if (pending.isEmpty()) {
+                        // v1.2.3 round-79 (ROB-04): 0 个有效键不得报 "Imported 0 … successfully"
                         success = false;
-                        message = "Import rejected: " + errors.get(0)
-                                + (errors.size() > 1
-                                   ? " (" + (errors.size() - 1) + " more error"
-                                     + (errors.size() > 2 ? "s" : "") + ")"
-                                   : "")
-                                + " — nothing applied";
-                        Log.w(TAG, message); // mobsf-ignore: android_logging
-                        notifyImportResult(success, message, appliedCount, rejectedCount, clampedCount);
-                        return;
-                    }
-
-                    if (parsed.isEmpty()) {
-                        // v1.2.3 round-78 (ROB-04): a file whose every line was a
-                        //   comment / non-key=value line is NOT "Imported 0
-                        //   settings successfully" — report it as a failure.
-                        throw new IllegalArgumentException("No valid settings lines found");
-                    }
-
-                    // v1.2.3 round-78 (ROB-04): PHASE 2 — apply. Reached only
-                    //   when every line validated; each setter persists via
-                    //   SharedPreferences exactly as before.
-                    for (ParsedSetting p : parsed) {
-                        applyParsedSetting(p);
-                        appliedCount++;
-                        if (p.clamped) clampedCount++;
-                    }
-
-                    // 若显式导入 threads/hash 且 autoConfig 开启，禁用 autoConfig
-                    skippedAutoConfigCount = handleAutoConfigOverride(explicitlySet);
-
-                    // 引擎就绪时下发 UCI 命令
-                    if (callbacks.isEngineReady()) {
-                        try {
-                            callbacks.stopAndWaitForBestmove("importSettings");
-                        } catch (Exception t) {
-                            Log.w(TAG, "stopAndWaitForBestmove during import failed", t);
-                        }
-                        callbacks.applySettings();
-                        callbacks.notifyEngineInfo();
+                        message = "No applicable settings found (only comments, blank lines and read-only metadata)";
                     } else {
-                        Log.i(TAG, "Engine not ready — settings saved, will apply on next engineReady");
-                    }
+                        // ② 应用阶段：全部值已在校验时解析与钳制
+                        int appliedCount = 0;
+                        int clampedCount = 0;
+                        Set<String> explicitlySet = new HashSet<>();
+                        for (PendingSetting setting : pending) {
+                            applySetting(setting, explicitlySet);
+                            appliedCount++;
+                            if (setting.clamped) {
+                                clampedCount++;
+                            }
+                        }
 
-                    success = true;
-                    message = buildImportMessage(appliedCount, clampedCount, skippedAutoConfigCount);
-                    Log.i(TAG, message); // mobsf-ignore: android_logging
+                        // 若显式导入 threads/hash 且 autoConfig 开启，禁用 autoConfig
+                        int skippedAutoConfigCount = handleAutoConfigOverride(explicitlySet);
+
+                        // 引擎就绪时下发 UCI 命令
+                        if (callbacks.isEngineReady()) {
+                            try {
+                                callbacks.stopAndWaitForBestmove("importSettings");
+                            } catch (Exception t) {
+                                Log.w(TAG, "stopAndWaitForBestmove during import failed", t);
+                            }
+                            callbacks.applySettings();
+                            callbacks.notifyEngineInfo();
+                        } else {
+                            Log.i(TAG, "Engine not ready — settings saved, will apply on next engineReady");
+                        }
+
+                        success = true;
+                        message = buildImportMessage(appliedCount, skippedAutoConfigCount, clampedCount);
+                        Log.i(TAG, message); // mobsf-ignore: android_logging
+                    }
+                } catch (ImportRejectException e) {
+                    // 校验失败：不应用任何设置（原子性），消息含首个错误的行号与原因
+                    success = false;
+                    message = e.getMessage();
                 } catch (Throwable e) {
-                    Log.e(TAG, "Error importing settings", e); // mobsf-ignore: android_logging
+                    Log.e(TAG, "Error importing settings", e);
                     message = e.getMessage() != null ? e.getMessage() : "Import failed";
                 } // mobsf-ignore: android_logging
 
-                notifyImportResult(success, message, appliedCount, rejectedCount, clampedCount);
+                notifyImportResult(success, message);
             }
         }, "importSettings");
     }
 
-    /** v1.2.3 round-78 (ROB-04): validate 阶段的解析结果 —— 一个已解析、
-        已范围钳制的待应用行。value 只可能是 Integer 或 Boolean。 */
-    private static final class ParsedSetting {
-        final String key;
-        final Object value;
-        final boolean clamped; // 数值被钳制到范围/硬件上限（原始值越界）
-        ParsedSetting(String key, Object value, boolean clamped) {
-            this.key = key;
-            this.value = value;
-            this.clamped = clamped;
+    /**
+     * v1.2.3 round-79 (ROB-04): 校验阶段。逐行解析并返回待应用设置列表（值已
+     * 解析与钳制）。任何无效输入抛出 {@link ImportRejectException}（含行号与
+     * 原因），调用方不应用任何设置。
+     */
+    private List<PendingSetting> validateSettings(String txtContent) {
+        List<PendingSetting> pending = new ArrayList<>();
+        String[] lines = txtContent.split("\\r?\\n");
+        for (int index = 0; index < lines.length; index++) {
+            String line = lines[index].trim();
+            if (line.isEmpty() || line.startsWith("#")) continue;
+
+            int eqIndex = line.indexOf('=');
+            if (eqIndex <= 0) {
+                throw new ImportRejectException(
+                        LINE_PREFIX + (index + 1) + ": malformed line (expected key=value): '" + abbreviate(line) + "'");
+            }
+            if (eqIndex >= line.length() - 1) {
+                String key = line.substring(0, eqIndex).trim();
+                throw new ImportRejectException(
+                        LINE_PREFIX + (index + 1) + ": setting '" + key + MSG_HAS_NO_VALUE);
+            }
+
+            String key = line.substring(0, eqIndex).trim();
+            String value = line.substring(eqIndex + 1).trim();
+
+            if (KEY_ENGINE_NAME.equals(key) || KEY_ENGINE_PATH.equals(key)) {
+                // v1.2.3 round-79 (ROB-04, CodeRabbit PR#60): read-only metadata keys
+                //   produced by exportSettings() — recognized and skipped (not counted
+                //   as applicable settings, never rejected) so the app can re-import
+                //   its own exports. All other unknown keys are still rejected below.
+                Log.i(TAG, "importSettings: skipping read-only metadata key " + key); // mobsf-ignore: android_logging
+                continue;
+            }
+
+            pending.add(validateSetting(key, value, index + 1));
         }
+        return pending;
     }
 
-    /**
-     * v1.2.3 round-78 (ROB-04): validate 单行设置（不持久化任何东西）。
-     * 解析成功时把钳制后的值加入 parsed 并在 explicitlySet 登记键，返回 null；
-     * 解析失败时返回错误描述（非 null），由调用方收集 —— 有任一错误则整体
-     * 拒绝导入（全或无），不静默部分应用。
-     */
-    private String validateSettingLine(int lineNumber, String key, String value,
-                                       java.util.List<ParsedSetting> parsed,
-                                       Set<String> explicitlySet) {
+    /** 校验单个键值并产出待应用设置（值已解析与钳制）。抛 {@link ImportRejectException} 表示拒绝。 */
+    private PendingSetting validateSetting(String key, String value, int lineNumber) {
         switch (key) {
-            case "engine.threads": {
-                int raw;
-                try {
-                    raw = Integer.parseInt(value);
-                } catch (NumberFormatException e) {
-                    return "line " + lineNumber + ": engine.threads value '"
-                            + value + "' is not an integer";
-                }
-                int t = Math.max(1, Math.min(1024, raw));
-                int threadsCap = Math.max(1, Runtime.getRuntime().availableProcessors() * 2);
+            case KEY_THREADS: {
+                int t = parseInteger(key, value, lineNumber);
+                int cpuCores = Runtime.getRuntime().availableProcessors();
+                int threadsCap = Math.max(1, cpuCores * 2);
+                boolean clamped = false;
                 if (t > threadsCap) {
-                    Log.w(TAG, "importSettings: engine.threads=" + t + " exceeds 2x CPU cores (" + threadsCap + "), capping"); // mobsf-ignore: android_logging
+                    Log.w(TAG, "importSettings: " + KEY_THREADS + "=" + t + " exceeds 2x CPU cores (" + threadsCap + "), capping"); // mobsf-ignore: android_logging
                     t = threadsCap;
+                    clamped = true;
                 } // mobsf-ignore: android_logging
-                parsed.add(new ParsedSetting(key, t, t != raw));
-                explicitlySet.add(key);
-                return null;
+                return new PendingSetting(KEY_THREADS, t, clamped);
             }
-            case "engine.hash": {
-                int raw;
-                try {
-                    raw = Integer.parseInt(value);
-                } catch (NumberFormatException e) {
-                    return "line " + lineNumber + ": engine.hash value '"
-                            + value + "' is not an integer";
-                }
-                int h = Math.max(1, Math.min(1048576, raw));
+            case KEY_HASH: {
+                int h = parseInteger(key, value, lineNumber);
                 long maxMemoryMB = Runtime.getRuntime().maxMemory() / (1024 * 1024);
                 long hashCap = Math.max(16, maxMemoryMB / 2);
+                boolean clamped = false;
                 if (h > hashCap) {
-                    Log.w(TAG, "importSettings: engine.hash=" + h + "MB exceeds 50% of heap (" + hashCap + "MB), capping"); // mobsf-ignore: android_logging
+                    Log.w(TAG, "importSettings: " + KEY_HASH + "=" + h + "MB exceeds 50% of heap (" + hashCap + "MB), capping"); // mobsf-ignore: android_logging
                     h = (int) hashCap;
+                    clamped = true;
                 } // mobsf-ignore: android_logging
-                parsed.add(new ParsedSetting(key, h, h != raw));
-                explicitlySet.add(key);
-                return null;
+                return new PendingSetting(KEY_HASH, h, clamped);
             }
-            case "engine.moveOverhead": {
-                int raw;
-                try {
-                    raw = Integer.parseInt(value);
-                } catch (NumberFormatException e) {
-                    return "line " + lineNumber + ": engine.moveOverhead value '"
-                            + value + "' is not an integer";
-                }
-                int ms = Math.max(0, Math.min(10000, raw));
+            case KEY_MOVE_OVERHEAD: {
+                int ms = parseInteger(key, value, lineNumber);
+                boolean clamped = false;
                 if (ms > 1000) {
-                    Log.w(TAG, "importSettings: engine.moveOverhead=" + ms + "ms exceeds 1000ms, capping"); // mobsf-ignore: android_logging
+                    Log.w(TAG, "importSettings: " + KEY_MOVE_OVERHEAD + "=" + ms + "ms exceeds 1000ms, capping"); // mobsf-ignore: android_logging
                     ms = 1000;
+                    clamped = true;
                 } // mobsf-ignore: android_logging
-                parsed.add(new ParsedSetting(key, ms, ms != raw));
-                return null;
+                return new PendingSetting(KEY_MOVE_OVERHEAD, ms, clamped);
             }
-            case "engine.multiPV": {
-                int raw;
-                try {
-                    raw = Integer.parseInt(value);
-                } catch (NumberFormatException e) {
-                    return "line " + lineNumber + ": engine.multiPV value '"
-                            + value + "' is not an integer";
-                }
-                int v = Math.max(1, Math.min(8, raw));
-                parsed.add(new ParsedSetting(key, v, v != raw));
-                return null;
-            }
-            case "engine.skillLevel": {
-                int raw;
-                try {
-                    raw = Integer.parseInt(value);
-                } catch (NumberFormatException e) {
-                    return "line " + lineNumber + ": engine.skillLevel value '"
-                            + value + "' is not an integer";
-                }
-                int v = Math.max(0, Math.min(20, raw));
-                parsed.add(new ParsedSetting(key, v, v != raw));
-                return null;
-            }
-            case "engine.elo": {
+            case KEY_MULTI_PV:
+                return new PendingSetting(KEY_MULTI_PV,
+                        Math.max(1, Math.min(8, parseInteger(key, value, lineNumber))), false);
+            case KEY_SKILL_LEVEL:
+                return new PendingSetting(KEY_SKILL_LEVEL,
+                        Math.max(0, Math.min(20, parseInteger(key, value, lineNumber))), false);
+            case KEY_ELO:
                 // v1.2.1 (round-5 review): align with EngineConfigHelper's 500-3500 range
                 // (previously 1-3200 — inconsistent with the canonical setter, allowing
                 // out-of-range values to slip through import and later be silently
                 // re-clamped on the next setEngineLimitElo call).
-                int raw;
-                try {
-                    raw = Integer.parseInt(value);
-                } catch (NumberFormatException e) {
-                    return "line " + lineNumber + ": engine.elo value '"
-                            + value + "' is not an integer";
-                }
-                int v = Math.max(500, Math.min(3500, raw));
-                parsed.add(new ParsedSetting(key, v, v != raw));
-                return null;
-            }
-            case "engine.ponder": {
-                Boolean b = parseStrictBoolean(value);
-                if (b == null) {
-                    return "line " + lineNumber + ": engine.ponder value '"
-                            + value + "' is not a boolean (expected true/false)";
-                }
-                parsed.add(new ParsedSetting(key, b, false));
-                return null;
-            }
-            case "engine.showWDL": {
-                Boolean b = parseStrictBoolean(value);
-                if (b == null) {
-                    return "line " + lineNumber + ": engine.showWDL value '"
-                            + value + "' is not a boolean (expected true/false)";
-                }
-                parsed.add(new ParsedSetting(key, b, false));
-                return null;
-            }
-            case "engine.limitStrength": {
-                Boolean b = parseStrictBoolean(value);
-                if (b == null) {
-                    return "line " + lineNumber + ": engine.limitStrength value '"
-                            + value + "' is not a boolean (expected true/false)";
-                }
-                parsed.add(new ParsedSetting(key, b, false));
-                return null;
-            }
-            case "engine.autoConfig": {
-                Boolean b = parseStrictBoolean(value);
-                if (b == null) {
-                    return "line " + lineNumber + ": engine.autoConfig value '"
-                            + value + "' is not a boolean (expected true/false)";
-                }
-                parsed.add(new ParsedSetting(key, b, false));
-                // v1.2.3 round-46 (PR53 CR#13): record the explicit key —
-                //   without this, handleAutoConfigOverride's
-                //   explicitlySet.contains("engine.autoConfig") was always
-                //   false, so a file combining autoConfig=true with
-                //   threads/hash had the user's explicit choice overridden
-                //   (round-44 C11's stated goal was defeated).
-                explicitlySet.add(key);
-                return null;
-            }
+                return new PendingSetting(KEY_ELO,
+                        Math.max(500, Math.min(3500, parseInteger(key, value, lineNumber))), false);
+            case KEY_PONDER:
+                return new PendingSetting(KEY_PONDER, parseBoolean(key, value, lineNumber), false);
+            case KEY_SHOW_WDL:
+                return new PendingSetting(KEY_SHOW_WDL, parseBoolean(key, value, lineNumber), false);
+            case KEY_LIMIT_STRENGTH:
+                return new PendingSetting(KEY_LIMIT_STRENGTH, parseBoolean(key, value, lineNumber), false);
+            case KEY_AUTO_CONFIG:
+                return new PendingSetting(KEY_AUTO_CONFIG, parseBoolean(key, value, lineNumber), false);
             default:
-                // v1.2.3 round-78 (ROB-04): unknown keys used to be silently
-                //   skipped (applySettingLine returned 0). A misspelled key
-                //   ("engine.thread"…) now fails the whole import instead of
-                //   being accepted as "success" with the setting ignored.
-                return "line " + lineNumber + ": unknown setting key '" + key + "'";
+                // v1.2.3 round-79 (ROB-04): unknown keys used to be silently skipped
+                // (applySettingLine returned 0). A misspelled key ("engine.thread"…)
+                // now fails the whole import instead of being accepted as "success"
+                // with the setting ignored.
+                throw new ImportRejectException(
+                        LINE_PREFIX + lineNumber + ": unknown setting key '" + key + "'");
+        }
+    }
+
+    /** 解析整数；非法值抛含行号与原因的 {@link ImportRejectException}。 */
+    private int parseInteger(String key, String value, int lineNumber) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            throw new ImportRejectException(
+                    LINE_PREFIX + lineNumber + ": setting '" + key + "' value '" + value + "'" + MSG_NOT_AN_INTEGER);
         }
     }
 
     /**
-     * v1.2.3 round-78 (ROB-04): 布尔值只接受明确的 true/false（大小写不敏感）。
-     * Boolean.parseBoolean 把任何非 "true" 文本静默转为 false —— 导入文件里
-     * "engine.ponder=ture"（拼写错误）会被静默应用为 false。返回 null 表示
-     * 输入既不是 true 也不是 false，由调用方作为整体拒绝处理。
+     * v1.2.3 round-79 (ROB-04): 布尔仅接受显式 true/false（大小写不敏感）。
+     * 旧 Boolean.parseBoolean 把任意非 "true" 文本静默转为 false。
      */
-    private static Boolean parseStrictBoolean(String raw) {
-        String v = raw.trim().toLowerCase(Locale.ROOT);
-        if ("true".equals(v)) return Boolean.TRUE;
-        if ("false".equals(v)) return Boolean.FALSE;
-        return null;
+    private boolean parseBoolean(String key, String value, int lineNumber) {
+        if ("true".equalsIgnoreCase(value)) return true;
+        if ("false".equalsIgnoreCase(value)) return false;
+        throw new ImportRejectException(
+                LINE_PREFIX + lineNumber + ": setting '" + key + "' value '" + value + "'" + MSG_NOT_A_BOOLEAN);
     }
 
-    /**
-     * v1.2.3 round-78 (ROB-04): apply 阶段 —— 把 validate 阶段已解析且钳制的
-     * 值写入回调 setter（每个 setter 与旧实现一样立即持久化）。
-     * 仅在整份文件全部 validate 通过后才会到达这里（全或无）。
-     */
-    private void applyParsedSetting(ParsedSetting p) {
-        switch (p.key) {
-            case "engine.threads": callbacks.setEngineThreads((Integer) p.value); return;
-            case "engine.hash": callbacks.setEngineHash((Integer) p.value); return;
-            case "engine.moveOverhead": callbacks.setEngineMoveOverhead((Integer) p.value); return;
-            case "engine.multiPV": callbacks.setEngineMultiPV((Integer) p.value); return;
-            case "engine.skillLevel": callbacks.setEngineSkillLevel((Integer) p.value); return;
-            case "engine.elo": callbacks.setEngineElo((Integer) p.value); return;
-            case "engine.ponder": callbacks.setEnginePonder((Boolean) p.value); return;
-            case "engine.showWDL": callbacks.setEngineShowWDL((Boolean) p.value); return;
-            case "engine.limitStrength": callbacks.setEngineLimitElo((Boolean) p.value); return;
-            case "engine.autoConfig": callbacks.setAutoConfigEnabled((Boolean) p.value); return;
+    /** 应用阶段：将校验产物写入引擎设置（带持久化）并记录显式键。 */
+    private void applySetting(PendingSetting setting, Set<String> explicitlySet) {
+        switch (setting.key) {
+            case KEY_THREADS:
+                callbacks.setEngineThreads(setting.intValue);
+                explicitlySet.add(KEY_THREADS);
+                break;
+            case KEY_HASH:
+                callbacks.setEngineHash(setting.intValue);
+                explicitlySet.add(KEY_HASH);
+                break;
+            case KEY_MOVE_OVERHEAD:
+                callbacks.setEngineMoveOverhead(setting.intValue);
+                explicitlySet.add(KEY_MOVE_OVERHEAD);
+                break;
+            case KEY_MULTI_PV:
+                callbacks.setEngineMultiPV(setting.intValue);
+                break;
+            case KEY_SKILL_LEVEL:
+                callbacks.setEngineSkillLevel(setting.intValue);
+                break;
+            case KEY_ELO:
+                callbacks.setEngineElo(setting.intValue);
+                break;
+            case KEY_PONDER:
+                callbacks.setEnginePonder(setting.boolValue);
+                break;
+            case KEY_SHOW_WDL:
+                callbacks.setEngineShowWDL(setting.boolValue);
+                break;
+            case KEY_LIMIT_STRENGTH:
+                callbacks.setEngineLimitElo(setting.boolValue);
+                break;
+            case KEY_AUTO_CONFIG:
+                callbacks.setAutoConfigEnabled(setting.boolValue);
+                // v1.2.3 round-46 (PR53 CR#13): record the explicit key —
+                //   without this, handleAutoConfigOverride's
+                //   explicitlySet.contains(KEY_AUTO_CONFIG) was always
+                //   false, so a file combining autoConfig=true with
+                //   threads/hash had the user's explicit choice overridden
+                //   (round-44 C11's stated goal was defeated).
+                explicitlySet.add(KEY_AUTO_CONFIG);
+                break;
             default:
-                // unreachable — validateSettingLine only adds known keys
-                Log.w(TAG, "applyParsedSetting: unknown key skipped: " + p.key); // mobsf-ignore: android_logging
+                // validateSetting 的 default 分支已拒绝一切未知键；此处不可达。
+                Log.w(TAG, "applySetting: unexpected key " + setting.key); // mobsf-ignore: android_logging
+                break;
         }
     }
 
@@ -518,22 +478,21 @@ public class EngineSettingsHelper {
         // v1.2.3 round-44 (C11): 若用户在同一份导入文件里显式设置了
         //   engine.autoConfig，尊重其显式选择 —— 不因 threads/hash 的存在而
         //   覆盖它（导入文件即用户意图的最终来源）。
-        if (explicitlySet.contains("engine.autoConfig")) {
+        if (explicitlySet.contains(KEY_AUTO_CONFIG)) {
             Log.w(TAG, "Import explicitly sets engine.autoConfig — keeping user's choice, not overriding");
             return 0;
         }
-        if (!explicitlySet.contains("engine.threads") && !explicitlySet.contains("engine.hash")) return 0;
+        if (!explicitlySet.contains(KEY_THREADS) && !explicitlySet.contains(KEY_HASH)) return 0;
         Log.i(TAG, "User explicitly imported threads/hash — disabling autoConfig for this apply cycle");
         callbacks.setAutoConfigEnabled(false);
         return 1;
     }
 
-    /** 构建导入结果消息（v1.2.3 round-78 (ROB-04)：含钳制计数） */
-    private String buildImportMessage(int appliedCount, int clampedCount, int skippedAutoConfigCount) {
+    /** 构建导入结果消息 */
+    private String buildImportMessage(int appliedCount, int skippedAutoConfigCount, int clampedCount) {
         String message = "Imported " + appliedCount + " settings successfully";
         if (clampedCount > 0) {
-            message += " (" + clampedCount + " value"
-                    + (clampedCount > 1 ? "s" : "") + " clamped to range)";
+            message += " (" + clampedCount + " clamped to safe ranges)";
         }
         if (skippedAutoConfigCount > 0) {
             message += " (autoConfig disabled to honor explicit threads/hash)";
@@ -544,22 +503,49 @@ public class EngineSettingsHelper {
         return message;
     }
 
-    /** 通知 JS 导入结果。
-     *  v1.2.3 round-78 (ROB-04): 新增 applied/rejected/clamped 计数字段
-     *  （JSON 增字段对旧 JS 向后兼容 —— 未知字段被忽略，success/message
-     *  语义不变）。rejected > 0 意味着全或无导入整体被拒绝、无任何应用。 */
-    private void notifyImportResult(boolean success, String message,
-                                    int appliedCount, int rejectedCount, int clampedCount) {
+    /** 通知 JS 导入结果 */
+    private void notifyImportResult(boolean success, String message) {
         try {
             JSONObject result = new JSONObject();
             result.put("success", success);
             result.put("message", message);
-            result.put("applied", appliedCount);
-            result.put("rejected", rejectedCount);
-            result.put("clamped", clampedCount);
             callbacks.postJsCallback("onSettingsImported(" + result.toString() + ")");
         } catch (Throwable e) {
             Log.w(TAG, "Error posting settings imported callback", e);
         }
+    }
+
+    /** 校验阶段的待应用设置（值已解析与钳制）。 */
+    private static final class PendingSetting {
+        final String key;
+        final int intValue;
+        final boolean boolValue;
+        final boolean clamped;
+
+        PendingSetting(String key, int intValue, boolean clamped) {
+            this.key = key;
+            this.intValue = intValue;
+            this.boolValue = false;
+            this.clamped = clamped;
+        }
+
+        PendingSetting(String key, boolean boolValue, boolean clamped) {
+            this.key = key;
+            this.intValue = 0;
+            this.boolValue = boolValue;
+            this.clamped = clamped;
+        }
+    }
+
+    /** 校验失败（含行号与原因）。v1.2.3 round-79 (ROB-04)。 */
+    private static final class ImportRejectException extends IllegalArgumentException {
+        ImportRejectException(String message) {
+            super(message);
+        }
+    }
+
+    /** 行内容过长时截断（避免错误消息复制整行长文本）。 */
+    private static String abbreviate(String line) {
+        return line.length() <= 64 ? line : line.substring(0, 64) + "…";
     }
 }

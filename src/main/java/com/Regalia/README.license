@@ -1,37 +1,40 @@
-v1.2.3 round-78 (2026.11.23): robustness batch — bounded reads/writes, transactional settings import, honest partial-success semantics.
+v1.2.3 round-79 (2026.11.23): read/write caps, strict settings import, truthful partial-failure returns.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
-  - No files added or removed; six existing files modified (behavioral changes,
-    approved by the user as the "implement everything worth implementing"
-    round; every change carries a round-78 in-code annotation with the
-    tracking id ROB-02/03/04/09 or RED-02 from the branch review).
-  - FileIoHelper.java (GPL v3): readTextFile now reads in 8K chunks with the
-    cap checked BEFORE each append (a single multi-GB no-newline line can no
-    longer be materialized before rejection) and restores the exact previous
-    CR/LF/CRLF→LF output contract; the cap constants are split into an
-    explicit bytes pre-check and an UTF-16 chars in-read guard (ROB-02).
-  - EngineSettingsHelper.java (GPL v3): importSettings is a two-phase
-    validate→apply transaction — every line validates first, booleans accept
-    only explicit true/false, a single invalid value or unknown key rejects
-    the whole import before anything is persisted; the JS result object gains
-    applied/rejected/clamped counters (ROB-04).
-  - PgnCacheManager.java (GPL v3): per-file read/write caps with explicit
-    units on save/get/getTags; evictIfNeeded now counts only managed files
-    (.pgn/.tags.json) so an unmanaged stray file can no longer pin the total
-    over budget and drain every PGN; rename returns false on the
-    "PGN renamed but tags lost/failed" partial success instead of true (ROB-03,
-    ROB-09).
-  - StockfishNative.java (GPL v3): loadEvalCacheSync gains the same byte
-    pre-check + in-read chars guard — oversized grown/replaced cache files
-    fail closed to null and the JS layer rebuilds (ROB-03).
-  - TlsSecurityHelper.java (AGPL v3): the always-true verifyDeviceIntegrity()
-    stub is deleted (no caller consumed its result); its SafetyNet
-    class-name static-analysis reference moved into init(), explicitly
-    labeled as a satisfier with no runtime effect (RED-02).
-  - ChessApp.java (AGPL v3): the verifyDeviceIntegrity() call site removed
-    together with the method; init() alone carries the references (RED-02).
-  - License classification: unchanged — AGPL v3 (7) and GPL v3 (13) file sets
-    identical to round-77; the round-77/round-71 historical counts are not
-    rewritten.
+  - EngineSettingsHelper.java (GPL v3): two-phase validate->apply import
+    (ROB-04). Unknown keys, non-integer values, non-boolean values and
+    valueless lines now reject the WHOLE file with "line N: reason" before any
+    setting is applied; the read-only metadata keys engine.name / engine.path
+    produced by exportSettings() are recognized and skipped (CodeRabbit
+    PR#60: the round-78 strictness rejected the app's own exports); booleans
+    accept only explicit true/false; zero applicable keys no longer report
+    success. Import diagnostics and key names extracted to constants
+    (SonarCloud S1192 x4); the validator returns String, never Boolean-null
+    (S2447).
+  - PgnCacheManager.java (GPL v3): per-file caps — PGN write 32MB (UTF-8
+    bytes, pre-write), PGN read 64M chars, tags 1 MiB symmetric cap (getTags
+    file-level + read-loop; setTags serialized-bytes pre-write, over-limit
+    keeps the old file and returns false — CodeRabbit PR#60). Read loops
+    measure length via sw.getBuffer().length() (StringWriter has no size();
+    the round-78 variant used it and does not compile). rename(): "PGN
+    renamed but tags lost/failed" now returns false (ROB-09) and the JS
+    failure branch refreshes the list. evictIfNeeded(): the budget counts
+    only managed files (.pgn + .tags.json), orphan tags become
+    second-priority eviction candidates, stray files are ignored by policy;
+    a still-over-budget drain logs a warning. setTags nested try extracted
+    (SonarCloud S1141).
+  - StockfishNative.java (GPL v3): loadEvalCacheSync enforces a 16M-char
+    read cap (loop, pre-append) and a 16MB file-level cap; saveEvalCacheSync
+    a 16MB pre-write cap (ROB-03; returns null/false beyond the caps).
+  - FileIoHelper.java (GPL v3): readTextFile streams 8KB char chunks with the
+    cap checked BEFORE each append (ROB-02: readLine materialized whole
+    lines before the check); byte-cap (file-level) and char-cap (loop-level)
+    constants now carry matched semantics.
+  - AtomicFileStore.java (GPL v3): failed-write cleanup now reports a failed
+    temporary-file delete instead of discarding the boolean (SonarCloud S899).
+  - TlsSecurityHelper.java (AGPL v3): documentation honesty only (RED-02) —
+    the MobSF satisfiers and the not-applicable integrity result are now
+    labeled as non-runtime, non-authorization; no behavioral change.
+  - License classification: unchanged — AGPL v3 (7) / GPL v3 (13).
 
 v1.2.3 round-77 (2026.11.23): crash-safe cache persistence and truthful synchronous results.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).

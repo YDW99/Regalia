@@ -116,13 +116,16 @@
              the "PGN cache private" decision above.
              v1.2.3 round-46 (PR53 CR#18) correction: the deletion did NOT
              reach the git upload branch (the zip-based sync only adds/
-             overwrites files), so both files were still present in res/xml/
-             as UNREFERENCED dead config at that time.
-             v1.2.3 round-78 (RED-01) correction: as of this round, res/xml/
-             contains ONLY network_security_config.xml — both rule files
-             have since been removed from the tree. Do not "restore" them
-             from the older notes above. To re-enable selective backup, set
-             allowBackup="true" and author fresh rule files. -->
+             overwrites files), so both files are still present in res/xml/
+             as UNREFERENCED dead config (no manifest attributes point at
+             them — removed in round-13). Harmless; a future git-side
+             cleanup may delete them. To re-enable selective backup, set
+             allowBackup="true" and author fresh rule files.
+             v1.2.3 round-79 (RED-01②) correction: that git-side cleanup HAS
+             since happened — res/xml/ now contains only network_security_
+             config.xml; the "still present in res/xml/" statement above no
+             longer matches the repository. Retained as history (append-only
+             erratum), superseded by the actual tree state. -->
         <!-- v1.2.1 round-10 (review-F P3): removed android:requestLegacyExternalStorage="true"
              — this attribute is ignored when targetSdk >= 30 (we use 35). The app
              uses SAF for all file I/O (no File API external-storage access), so the

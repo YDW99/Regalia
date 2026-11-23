@@ -147,30 +147,17 @@ let _reviewEvalCache=new function(){
       }
     }
   }catch(e){_warnEvalCache('constructor load',e);}
-  // v1.0.4 Round-5 Rev20: Save to disk. Strategy:
-  //   - Debounced 150ms write using saveEvalCacheSync (atomic file write).
-  //   - _flushSync() forces immediate write — called from critical event handlers.
-  // v1.0.4 Round-5 Rev21: set() now triggers SYNCHRONOUS write immediately
-  //   (no debounce). Rationale: HyperOS 3 can SIGKILL the app at any moment;
-  //   debouncing introduces a window where new eval data could be lost. Since
-  //   each set() is followed by an onEngineEval callback (relatively rare —
-  //   max ~1 per second per review step), the cost of synchronous write is
-  //   acceptable. For rapid batch operations (clear, analyze-all advancing
-  //   through steps), the JS event loop is single-threaded so writes are
-  //   naturally serialized — no risk of concurrent writes corrupting the file.
-  //   clear() and delete() also use synchronous writes for the same reason.
-  // v1.0.4 Round-5 Rev23 (this round): Reintroduced a HYBRID write strategy:
-  //   set() uses a 150ms debounce (coalescing rapid batch analyze-all writes),
-  //   while _flushSync() (called from lifecycle/visibility handlers) forces an
-  //   immediate synchronous write. This restores the Rev20 debounce that Rev21
-  //   removed — the Rev21 rationale (HyperOS 3 SIGKILL mid-debounce) is fully
-  //   addressed by the Rev22 onDestroy flush + the pagehide/visibilitychange
-  //   JS handlers, so the debounce window is now covered by multiple flush
-  //   triggers. Performance win: for a 60k-entry cache (~12MB JSON), set()
-  //   previously serialized the ENTIRE Map on every eval callback (~1/sec) —
-  //   now rapid navigations during analyze-all coalesce into one write per
-  //   150ms. The debounce is also cleared (forced immediate write) when
-  //   _flushSync() is called, so no data is lost on app backgrounding.
+  // v1.0.4 Round-5 Rev20/21/23 — consolidated v1.2.3 round-79 (RED-01): the
+  //   write strategy is the Rev23 HYBRID and nothing else — set() marks the
+  //   map dirty and schedules a 150ms debounce (coalescing rapid analyze-all
+  //   navigation writes into one disk write), while _flushSync() (the Rev22
+  //   onDestroy flush plus the pagehide/visibilitychange JS handlers) forces
+  //   an immediate synchronous write and clears the pending debounce, so a
+  //   HyperOS 3 SIGKILL can at most lose the 150ms coalescing window.
+  //   The Rev21 "synchronous-only" interlude and its 60k-entry (~12MB)
+  //   scale figures are history: the cache is now capped at MAX_ENTRIES=2000
+  //   (~800KB JSON, see PHASE 18 / _evictIfOverCap below), and the stale
+  //   numbers are not restated as if current.
   let _saveTimer=null;
   let _dirty=false;
   const DEBOUNCE_MS=150;
@@ -3707,8 +3694,11 @@ function openEngineConfig(){
   engineSettingsData=null;
   // No engine scanning/import — only built-in engine info
   if(typeof AndroidBridge!=='undefined'){
-    try{const info=AndroidBridge.getEngineInfo();if(info)engineConfigData=JSON.parse(info);}catch(e){engineConfigData={name:'Stockfish 19',author:'T. Romstad, M. Costalba, J. Kiiski, G. Linscott'};}
-    try{const settings=AndroidBridge.getEngineSettings();if(settings)engineSettingsData=JSON.parse(settings);}catch(e){engineSettingsData=null;}
+    // v1.2.3 round-79 (SonarCloud S2486): best-effort bridge query — on failure
+    //   we fall back to the built-in engine metadata; the exception is logged
+    //   (not silently swallowed) so bridge failures remain diagnosable.
+    try{const info=AndroidBridge.getEngineInfo();if(info)engineConfigData=JSON.parse(info);}catch(e){console.warn('[Engine]',e?.message?e.message:e);engineConfigData={name:'Stockfish 19',author:'T. Romstad, M. Costalba, J. Kiiski, G. Linscott'};}
+    try{const settings=AndroidBridge.getEngineSettings();if(settings)engineSettingsData=JSON.parse(settings);}catch(e){console.warn('[Engine]',e?.message?e.message:e);engineSettingsData=null;}
   }
   if(!engineSettingsData){
     engineSettingsData={threads:2,hash:128,moveOverhead:60,multiPV:1,ponder:false,showWDL:true,skillLevel:20,limitStrength:false,elo:2800,autoConfig:true};

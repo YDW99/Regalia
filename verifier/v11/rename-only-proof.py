@@ -41,10 +41,18 @@ def main() -> None:
         actual = (ROOT / rel).read_text(encoding="utf-8")
         expected = old
         for name in names:
-            expected = re.sub(
+            # v1.2.3 round-79 (CodeRabbit PR#60 #17): re.subn with a
+            #   minimum-hit assertion — if --base points at a commit where one
+            #   identifier was already renamed (absent from the baseline),
+            #   re.sub silently skipped it and the proof could report
+            #   "OK (12 renames)" after verifying only 11. Each name must hit
+            #   at least once; the final whole-file comparison is retained.
+            expected, hits = re.subn(
                 rf"(?<![A-Za-z0-9_$]){re.escape(name)}(?![A-Za-z0-9_$])",
                 name[1:], expected,
             )
+            if hits < 1:
+                raise AssertionError(f"rename baseline lacks identifier '{name}' in {rel}")
         if rel.endswith("/StatsActivity.java"):
             expected = expected.replace("StockfishNative._isHttpUrl", "StockfishNative.isHttpUrl")
         if actual != expected:

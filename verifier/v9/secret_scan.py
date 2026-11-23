@@ -30,6 +30,16 @@ class SecretScanner:
         self.members = 0
         self.bytes = 0
 
+    def _safe_label(self, label: str) -> str:
+        # v1.2.3 round-79 (CodeRabbit PR#60 #28): mask any known secret embedded
+        #   in the label (source path or archive member name) BEFORE it reaches a
+        #   diagnostic — a file whose NAME carries the password leaked it through
+        #   the exception text even though the value itself was suppressed.
+        safe = label
+        for value in self.values:
+            safe = safe.replace(value.decode("utf-8"), "<masked>")
+        return safe
+
     def stream(self, stream, label: str, member: bool = False) -> None:
         carry = b""
         size = 0
@@ -40,7 +50,7 @@ class SecretScanner:
             size += len(chunk)
             data = carry + chunk
             if any(pattern in data for pattern in self.patterns):
-                raise AssertionError(f"uploaded password match at {label}; value suppressed")
+                raise AssertionError(f"uploaded password match at {self._safe_label(label)}; value suppressed")
             carry = data[-(self.max_pattern - 1):] if self.max_pattern > 1 else b""
         self.bytes += size
         if member:
@@ -64,7 +74,7 @@ class SecretScanner:
                     self.stream(stream, member_label, member=True)
                 if info.filename.lower().endswith(".zip"):
                     if info.file_size > 20 * 1024 * 1024:
-                        raise AssertionError(f"nested ZIP exceeds scan limit: {member_label}")
+                        raise AssertionError(f"nested ZIP exceeds scan limit: {self._safe_label(member_label)}")
                     data = archive.read(info)
                     with zipfile.ZipFile(io.BytesIO(data)) as nested:
                         for nested_info in nested.infolist():

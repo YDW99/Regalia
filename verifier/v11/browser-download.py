@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import tempfile
 
 from playwright.async_api import async_playwright
 
@@ -31,22 +32,37 @@ async def download(url: str, output: Path) -> dict:
             async with page.expect_download(timeout=240_000) as event:
                 await link.click()
             item = await event.value
-            await item.save_as(str(output))
-            failure = await item.failure()
-            if failure is not None:
-                raise AssertionError(f"browser download failed: {failure}")
-            digest = hashlib.sha256()
-            with output.open("rb") as stream:
-                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                    digest.update(chunk)
-            return {
-                "page_title": await page.title(),
-                "suggested_filename": item.suggested_filename,
-                "download_url": item.url,
-                "saved_bytes": output.stat().st_size,
-                "saved_sha256": digest.hexdigest(),
-                "failure": failure,
-            }
+            # v1.2.3 round-79 (CodeRabbit PR#60 #13): the download goes to a UNIQUE
+            #   temporary file in the target directory first — save_as() used to
+            #   overwrite the target directly, and a page returning the WRONG
+            #   file destroyed a previously correct APK while the identity check
+            #   afterwards merely reported the mismatch. Only when BOTH the size
+            #   and SHA-256 match is the temporary atomically moved onto the
+            #   target (done by main); a mismatch cleans the temporary up.
+            fd, temp_name = tempfile.mkstemp(prefix=output.name + ".tmp-", dir=output.parent)
+            os.close(fd)
+            temp_path = Path(temp_name)
+            try:
+                await item.save_as(str(temp_path))
+                failure = await item.failure()
+                if failure is not None:
+                    raise AssertionError(f"browser download failed: {failure}")
+                digest = hashlib.sha256()
+                with temp_path.open("rb") as stream:
+                    for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                        digest.update(chunk)
+                return {
+                    "page_title": await page.title(),
+                    "suggested_filename": item.suggested_filename,
+                    "download_url": item.url,
+                    "saved_bytes": temp_path.stat().st_size,
+                    "saved_sha256": digest.hexdigest(),
+                    "failure": failure,
+                    "temp_path": str(temp_path),
+                }
+            except BaseException:
+                temp_path.unlink(missing_ok=True)
+                raise
         finally:
             await browser.close()
 
@@ -58,13 +74,21 @@ def main() -> None:
     args = parser.parse_args()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     result = asyncio.run(download(args.url, args.output))
+    temp_path = Path(result.pop("temp_path"))
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    if (result["saved_bytes"], result["saved_sha256"]) != (
-        81_552_289,
-        "644919d57c690b54c56b26ed0ce91ec785d67a68e8e58eeaa6aed2946a5533fb",
-    ):
-        raise AssertionError("browser-downloaded APK identity mismatch")
-    print("BROWSER-DOWNLOAD-V11 OK")
+    # v1.2.3 round-79 (CodeRabbit PR#60 #13): the target is replaced ONLY when
+    #   the downloaded bytes carry the approved identity; any other download
+    #   leaves the existing target untouched and its temporary is removed.
+    try:
+        if (result["saved_bytes"], result["saved_sha256"]) != (
+            81_552_289,
+            "644919d57c690b54c56b26ed0ce91ec785d67a68e8e58eeaa6aed2946a5533fb",
+        ):
+            raise AssertionError("browser-downloaded APK identity mismatch")
+        os.replace(temp_path, args.output)
+        print("BROWSER-DOWNLOAD-V11 OK")
+    finally:
+        temp_path.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

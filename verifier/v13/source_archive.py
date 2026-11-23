@@ -221,6 +221,18 @@ def pack(root: Path, output: Path) -> None:
     root = root.resolve()
     output = output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
+    # v1.2.3 round-79 (CodeRabbit PR#60 #21): refuse outputs that would
+    #   overwrite a protected input — packing into LICENSE&NOTICE.zip's own
+    #   path used to verify the original license, exclude it from the payload
+    #   as "the output", and then os.replace() a license-less source ZIP over
+    #   the original, reporting success. Outputs colliding with ANY payload
+    #   source file are refused for the same reason; repacking to a fresh
+    #   target path remains supported.
+    protected_input = root / "LICENSE&NOTICE.zip"
+    if output == protected_input.resolve():
+        raise AssertionError("refusing to overwrite the protected LICENSE&NOTICE.zip input")
+    if output in payload_files(root):
+        raise AssertionError("refusing to overwrite a payload source file")
     license_size, license_hash = protected_license_metadata(root)
     lock_path = output.with_name(output.name + ".lock")
     try:
@@ -245,6 +257,13 @@ def pack(root: Path, output: Path) -> None:
                     rel = path.relative_to(root).as_posix()
                     archive.write(path, PREFIX + rel)
                     total += path.stat().st_size
+            # v1.2.3 round-79 (CodeRabbit PR#60 #22): publish only after the SAME
+            #   bounded archive scan that verify applies to the delivery archive —
+            #   a source containing a 129 MiB plain member passed pack's inspection
+            #   while verify rejected the same ZIP; the budget check must gate the
+            #   publish, not the later verify. Failure cleans the temporary file
+            #   and leaves the previous output untouched.
+            BinaryInspector().archive(temporary, "pack.temp")
             # Publish only our exclusively created temporary file while the
             # per-output lock prevents a concurrent replacement/stat race.
             os.replace(temporary, output)
@@ -268,58 +287,72 @@ def verify(root: Path, archive_path: Path) -> None:
     archive_path = archive_path.resolve()
     if not archive_path.is_file():
         raise AssertionError("source ZIP missing")
-    # The bounded walker must reject hostile sizes before any member digest,
-    # CRC pass or archive.read() can decompress the delivery archive.
-    inspector = BinaryInspector()
-    budget = inspector.archive(archive_path, "delivery.source")
-    license_size, license_hash = protected_license_metadata(root)
-    expected_files = payload_files(root, archive_path)
-    inspect_source_payload(expected_files)
-    expected = {PREFIX + path.relative_to(root).as_posix(): path for path in expected_files}
-    with zipfile.ZipFile(archive_path) as archive:
-        names = archive.namelist()
-        if len(names) != len(set(names)):
-            raise AssertionError("duplicate source-ZIP entry")
-        if not names or any(not name.startswith(PREFIX) for name in names):
-            raise AssertionError("source-ZIP prefix mismatch")
-        actual = set(names)
-        if actual != set(expected):
-            raise AssertionError(
-                f"complete source manifest mismatch: missing={len(set(expected)-actual)} "
-                f"unexpected={len(actual-set(expected))}"
-            )
-        for name, path in expected.items():
-            rel = name[len(PREFIX):]
-            member_path = PurePosixPath(rel)
-            if not rel or name.endswith("/") or member_path.is_absolute() or ".." in member_path.parts:
-                raise AssertionError("unsafe or non-file source entry")
-            if forbidden_name(member_path):
-                raise AssertionError("forbidden source entry")
-            with archive.open(name) as stream:
-                archived_hash = hashlib.file_digest(stream, "sha256").hexdigest()
-            if archived_hash != sha256_file(path):
-                raise AssertionError(f"source content digest mismatch at entry {len(rel)}")
-        if archive.testzip() is not None:
-            raise AssertionError("source-ZIP CRC failure")
-        missing = sorted(_required_entries() - {name[len(PREFIX):] for name in names})
-        if missing:
-            raise AssertionError(f"missing required source entries: {len(missing)}")
-        protected = archive.read(PREFIX + "LICENSE&NOTICE.zip")
-        if protected != (root / "LICENSE&NOTICE.zip").read_bytes():
-            raise AssertionError("current protected license archive differs from archived current bytes")
-        if hashlib.sha256(archive.read(PREFIX + "src/main/assets/chess.html")).hexdigest() != BUNDLE_SHA256:
-            raise AssertionError("source bundle hash mismatch")
-        gradlew = archive.getinfo(PREFIX + "gradlew")
-        if stat.S_IMODE(gradlew.external_attr >> 16) != 0o755:
-            raise AssertionError("gradlew source-ZIP mode is not exactly 0755")
-    print(f"source_entries={len(names)} crc_ok=true duplicate_entries=0 manifest_exact=true")
-    print(f"nested_archive_members_scanned={budget.members} nested_archive_bytes={budget.bytes}")
-    print(f"protected_license_archive_bytes={license_size}")
-    print(f"protected_license_archive_sha256={license_hash} current_byte_identical=true")
-    print("engine_hash_matches=0 keystore_hash_matches=0 elf_entries=0 recursive_forbidden_members=0")
-    print(f"source_zip_bytes={archive_path.stat().st_size}")
-    print(f"source_zip_sha256={sha256_file(archive_path)}")
-    print("SOURCE-ZIP-V13-GATE OK: exact current manifest, recursive binary inspection, no engine/build/signing material")
+    # v1.2.3 round-79 (CodeRabbit PR#60 #23): ONE open file object serves the
+    #   bounded scan, every content check AND the reported size/SHA-256 — the
+    #   old code re-read the path after the with-block, so a concurrent
+    #   os.replace could attest an unchecked replacement; the fd below stays
+    #   fixed to the verified bytes even if the path changes underneath.
+    with archive_path.open("rb") as raw:
+        # The bounded walker must reject hostile sizes before any member digest,
+        # CRC pass or archive.read() can decompress the delivery archive.
+        inspector = BinaryInspector()
+        budget = inspector.archive(raw, "delivery.source")
+        license_size, license_hash = protected_license_metadata(root)
+        expected_files = payload_files(root, archive_path)
+        inspect_source_payload(expected_files)
+        expected = {PREFIX + path.relative_to(root).as_posix(): path for path in expected_files}
+        with zipfile.ZipFile(raw) as archive:
+            names = archive.namelist()
+            if len(names) != len(set(names)):
+                raise AssertionError("duplicate source-ZIP entry")
+            if not names or any(not name.startswith(PREFIX) for name in names):
+                raise AssertionError("source-ZIP prefix mismatch")
+            actual = set(names)
+            if actual != set(expected):
+                raise AssertionError(
+                    f"complete source manifest mismatch: missing={len(set(expected)-actual)} "
+                    f"unexpected={len(actual-set(expected))}"
+                )
+            for name, path in expected.items():
+                rel = name[len(PREFIX):]
+                member_path = PurePosixPath(rel)
+                if not rel or name.endswith("/") or member_path.is_absolute() or ".." in member_path.parts:
+                    raise AssertionError("unsafe or non-file source entry")
+                if forbidden_name(member_path):
+                    raise AssertionError("forbidden source entry")
+                with archive.open(name) as stream:
+                    archived_hash = hashlib.file_digest(stream, "sha256").hexdigest()
+                if archived_hash != sha256_file(path):
+                    raise AssertionError(f"source content digest mismatch at entry {len(rel)}")
+            if archive.testzip() is not None:
+                raise AssertionError("source-ZIP CRC failure")
+            missing = sorted(_required_entries() - {name[len(PREFIX):] for name in names})
+            if missing:
+                raise AssertionError(f"missing required source entries: {len(missing)}")
+            protected = archive.read(PREFIX + "LICENSE&NOTICE.zip")
+            if protected != (root / "LICENSE&NOTICE.zip").read_bytes():
+                raise AssertionError("current protected license archive differs from archived current bytes")
+            if hashlib.sha256(archive.read(PREFIX + "src/main/assets/chess.html")).hexdigest() != BUNDLE_SHA256:
+                raise AssertionError("source bundle hash mismatch")
+            gradlew = archive.getinfo(PREFIX + "gradlew")
+            if stat.S_IMODE(gradlew.external_attr >> 16) != 0o755:
+                raise AssertionError("gradlew source-ZIP mode is not exactly 0755")
+        print(f"source_entries={len(names)} crc_ok=true duplicate_entries=0 manifest_exact=true")
+        print(f"nested_archive_members_scanned={budget.members} nested_archive_bytes={budget.bytes}")
+        print(f"protected_license_archive_bytes={license_size}")
+        print(f"protected_license_archive_sha256={license_hash} current_byte_identical=true")
+        print("engine_hash_matches=0 keystore_hash_matches=0 elf_entries=0 recursive_forbidden_members=0")
+        # v1.2.3 round-79 (CodeRabbit PR#60 #23): identity of the SAME verified
+        # file object — size and SHA-256 are read from the already-open fd,
+        # never by re-opening the path.
+        raw.seek(0)
+        archive_hash = hashlib.sha256()
+        for chunk in iter(lambda: raw.read(1024 * 1024), b""):
+            archive_hash.update(chunk)
+        size = raw.tell()
+        print(f"source_zip_bytes={size}")
+        print(f"source_zip_sha256={archive_hash}")
+        print("SOURCE-ZIP-V13-GATE OK: exact current manifest, recursive binary inspection, no engine/build/signing material")
 
 
 def main() -> None:

@@ -1,3 +1,15 @@
+v1.2.3 round-79 (2026.11.23): chess.html rebuilt from the round-79 modules (24,388 lines / 1,500,518 bytes).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by
+    build-chess.py from the chess.src modules carrying the round-79
+    ui.js/ai-bridge.js updates (see the chess.src ledger entry below for the
+    module-level detail). 24,388 lines / 1,500,518 bytes (round-77 delivery:
+    1,500,801); two consecutive builds are byte-identical.
+  - screenshot.png / screenshot.jpg: unchanged; per root README.md the .png
+    file is a byte-identical JPEG copy of screenshot.jpg (kept by the
+    retention policy; the old "PNG format fallback" wording is not used).
+  - License classification: all files unchanged.
+
 v1.2.3 round-66 (2026.11.21): stats.html header extraction made backtracking-free (F-9).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - stats.html (GPL v3): the lazy-branch header regex (measured >120 s on a

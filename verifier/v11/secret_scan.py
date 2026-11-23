@@ -72,7 +72,17 @@ def main() -> None:
     parser.add_argument("--source-zip", type=Path, required=True)
     args = parser.parse_args()
     scanner = SecretScanner()
-    files = payload_files(root, args.source_zip)
+    try:
+        files = payload_files(root, args.source_zip)
+    except OSError as exc:
+        # v1.2.3 round-79 (CodeRabbit PR#60 #20): enumeration failures are
+        #   reported WITHOUT the path — an unreadable directory's name may
+        #   itself carry the signing password, and the raw OSError traceback
+        #   would print it. The scan still fails; unreadable directories are
+        #   never skipped silently.
+        raise AssertionError(
+            f"source enumeration failed ({type(exc).__name__}); path suppressed"
+        ) from None
     for index, path in enumerate(files, 1):
         label = f"source.file{index}"
         scanner.file(path, label)

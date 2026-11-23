@@ -260,13 +260,10 @@ android {
         }
     }
 
-    // Java 17 language level (source/target).
-    // v1.2.3 round-78 (RED-01) correction: the old comment claimed "利用
-    // JDK 21 编译器的完整特性" — misleading: the toolchain that RUNS the
-    // compiler may be JDK 21, but source/target are pinned to 17, so
-    // language features beyond Java 17 must not be used in this source
-    // tree. The comment now states the actual contract instead of the
-    // host-JDK marketing name.
+    // v1.2.3 round-79 (RED-01①): Java 17 language level on a JDK 17 toolchain —
+    //   CI builds use setup-java 17 (codeql/android-ci) and local builds resolve
+    //   JDK via JAVA_HOME (see gradle.properties). The earlier "利用 JDK 21 编译器
+    //   的完整特性" wording contradicted the actual VERSION_17 bytecode target.
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17

@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import os
 from pathlib import Path, PurePosixPath
+import tempfile
 import zipfile
 
 PREFIX = "Regalia-v1.2.3-round71/"
@@ -30,7 +31,13 @@ def forbidden_name(path: PurePosixPath) -> bool:
     name = lower_parts[-1]
     if any(part in EXCLUDED_DIRS for part in lower_parts[:-1]):
         return True
-    if "src/main/jniLibs" in path.as_posix().lower():
+    # v1.2.3 round-79 (CodeRabbit PR#60 #29): compare lowercased components on
+    #   both sides — the previous form matched the literal "jniLibs" (capital L)
+    #   against an already-lowercased path, so a delivered ZIP containing
+    #   src/main/jniLibs/README.txt slipped past validation. Pack-side pruning
+    #   (exact rel.as_posix() == "src/main/jniLibs") is case-exact by design;
+    #   the ZIP validation side now matches at any case via the lower form.
+    if "src/main/jnilibs" in path.as_posix().lower():
         return True
     if name in EXCLUDED_FILES or name.endswith(FORBIDDEN_SUFFIXES):
         return True
@@ -72,9 +79,14 @@ def pack(root: Path, output: Path) -> None:
     if not files:
         raise AssertionError("empty source payload")
     output.parent.mkdir(parents=True, exist_ok=True)
-    temporary = output.with_name(output.name + ".tmp")
-    if temporary.exists():
-        temporary.unlink()
+    # v1.2.3 round-79 (CodeRabbit PR#60 #30): an EXCLUSIVE temporary per
+    #   invocation (mkstemp) — the fixed ".tmp" sibling let a second pack
+    #   delete the first pack's still-open temporary, publish an unfinished
+    #   ZIP, or fail after its own path was moved away. Each call now replaces
+    #   and cleans up only the file it created.
+    fd, temporary_name = tempfile.mkstemp(prefix=output.name + ".tmp-", dir=output.parent)
+    temporary = Path(temporary_name)
+    os.close(fd)
     total = 0
     try:
         with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9, allowZip64=True) as archive:
@@ -84,8 +96,7 @@ def pack(root: Path, output: Path) -> None:
                 total += path.stat().st_size
         os.replace(temporary, output)
     finally:
-        if temporary.exists():
-            temporary.unlink()
+        temporary.unlink(missing_ok=True)
     print(f"source_entries={len(files)}")
     print(f"source_uncompressed_bytes={total}")
     print(f"source_zip_bytes={output.stat().st_size}")
@@ -94,82 +105,95 @@ def pack(root: Path, output: Path) -> None:
 
 
 def verify(root: Path, archive_path: Path) -> None:
-    if not archive_path.is_file():
-        raise AssertionError("source ZIP missing")
-    with zipfile.ZipFile(archive_path) as archive:
-        names = archive.namelist()
-        if len(names) != len(set(names)):
-            raise AssertionError("duplicate source-ZIP entry")
-        if not names or any(not name.startswith(PREFIX) for name in names):
-            raise AssertionError("source-ZIP prefix mismatch")
-        for name in names:
-            rel = name[len(PREFIX):]
-            path = PurePosixPath(rel)
-            if not rel or name.endswith("/") or path.is_absolute() or ".." in path.parts:
-                raise AssertionError(f"unsafe or non-file source entry: {name}")
-            if forbidden_name(path):
-                raise AssertionError(f"forbidden source entry: {rel}")
-        corrupt = archive.testzip()
-        if corrupt is not None:
-            raise AssertionError(f"source-ZIP CRC failure: {corrupt}")
-        required = {
-            ".gitignore",
-            ".github/dependabot.yml",
-            ".github/workflows/codeql.yml",
-            ".github/workflows/mobsf.yml",
-            "src/main/java/.mobsf",
-            "src/main/cpp/engine_jni.cpp",
-            "src/main/cpp/CMakeLists.txt",
-            "src/main/assets/chess.html",
-            "verifier/README.md",
-            "verifier/runs/recovery-round71.md",
-            "verifier/runs/round71-audit.md",
-            "worklog.md",
-            "LICENSE&NOTICE.zip",
-        }
-        for version in ("v4", "v5", "v6", "v7", "v8", "v9", "v10"):
-            required.add(f"verifier/{version}/round71-acceptance.md")
-        missing = sorted(required - {name[len(PREFIX):] for name in names})
-        if missing:
-            raise AssertionError(f"missing required source entries: {missing}")
-        protected = archive.read(PREFIX + "LICENSE&NOTICE.zip")
-        if len(protected) != 56011 or protected != (root / "LICENSE&NOTICE.zip").read_bytes():
-            raise AssertionError("protected LICENSE&NOTICE.zip changed")
-        if hashlib.sha256(archive.read(PREFIX + "src/main/assets/chess.html")).hexdigest() != BUNDLE_SHA256:
-            raise AssertionError("source bundle hash mismatch")
-        engine_hits = []
-        keystore_hits = []
-        elf_hits = []
-        total = 0
-        for name in names:
-            digest = hashlib.sha256()
-            size = 0
-            with archive.open(name) as stream:
-                first = stream.read(4)
-                if first == b"\x7fELF":
-                    elf_hits.append(name[len(PREFIX):])
-                digest.update(first)
-                size += len(first)
-                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                    digest.update(chunk)
-                    size += len(chunk)
-            total += size
-            value = digest.hexdigest()
-            if value == ENGINE_SHA256:
-                engine_hits.append(name[len(PREFIX):])
-            if value == KEYSTORE_SHA256:
-                keystore_hits.append(name[len(PREFIX):])
-        if engine_hits or keystore_hits or elf_hits:
-            raise AssertionError(
-                f"forbidden binary content: engine={engine_hits}, keystore={keystore_hits}, ELF={elf_hits}"
-            )
-    print(f"source_entries={len(names)} crc_ok=true duplicate_entries=0")
-    print(f"source_uncompressed_bytes={total}")
-    print("protected_license_archive_bytes=56011 byte_identical=true")
-    print("engine_hash_matches=0 keystore_hash_matches=0 elf_entries=0")
-    print(f"source_zip_bytes={archive_path.stat().st_size}")
-    print(f"source_zip_sha256={sha256_file(archive_path)}")
-    print("SOURCE-ZIP-V10-GATE OK: complete required payload, no engine/build/signing material")
+    # v1.2.3 round-79 (CodeRabbit PR#60 #7): ONE open file object serves the
+    #   whole verification and the reported size/SHA-256 — the old code
+    #   re-read the path after the with-block, so a concurrent os.replace
+    #   could make the success line attest an unchecked file.
+    with archive_path.open("rb") as raw:
+        if not archive_path.is_file():
+            raise AssertionError("source ZIP missing")
+        with zipfile.ZipFile(raw) as archive:
+            names = archive.namelist()
+            if len(names) != len(set(names)):
+                raise AssertionError("duplicate source-ZIP entry")
+            if not names or any(not name.startswith(PREFIX) for name in names):
+                raise AssertionError("source-ZIP prefix mismatch")
+            for name in names:
+                rel = name[len(PREFIX):]
+                path = PurePosixPath(rel)
+                if not rel or name.endswith("/") or path.is_absolute() or ".." in path.parts:
+                    raise AssertionError(f"unsafe or non-file source entry: {name}")
+                if forbidden_name(path):
+                    raise AssertionError(f"forbidden source entry: {rel}")
+            corrupt = archive.testzip()
+            if corrupt is not None:
+                raise AssertionError(f"source-ZIP CRC failure: {corrupt}")
+            required = {
+                ".gitignore",
+                ".github/dependabot.yml",
+                ".github/workflows/codeql.yml",
+                ".github/workflows/mobsf.yml",
+                "src/main/java/.mobsf",
+                "src/main/cpp/engine_jni.cpp",
+                "src/main/cpp/CMakeLists.txt",
+                "src/main/assets/chess.html",
+                "verifier/README.md",
+                "verifier/runs/recovery-round71.md",
+                "verifier/runs/round71-audit.md",
+                "worklog.md",
+                "LICENSE&NOTICE.zip",
+            }
+            for version in ("v4", "v5", "v6", "v7", "v8", "v9", "v10"):
+                required.add(f"verifier/{version}/round71-acceptance.md")
+            missing = sorted(required - {name[len(PREFIX):] for name in names})
+            if missing:
+                raise AssertionError(f"missing required source entries: {missing}")
+            protected = archive.read(PREFIX + "LICENSE&NOTICE.zip")
+            if len(protected) != 56011 or protected != (root / "LICENSE&NOTICE.zip").read_bytes():
+                raise AssertionError("protected LICENSE&NOTICE.zip changed")
+            if hashlib.sha256(archive.read(PREFIX + "src/main/assets/chess.html")).hexdigest() != BUNDLE_SHA256:
+                raise AssertionError("source bundle hash mismatch")
+            engine_hits = []
+            keystore_hits = []
+            elf_hits = []
+            total = 0
+            for name in names:
+                digest = hashlib.sha256()
+                size = 0
+                with archive.open(name) as stream:
+                    first = stream.read(4)
+                    if first == b"\x7fELF":
+                        elf_hits.append(name[len(PREFIX):])
+                    digest.update(first)
+                    size += len(first)
+                    for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                        digest.update(chunk)
+                        size += len(chunk)
+                total += size
+                value = digest.hexdigest()
+                if value == ENGINE_SHA256:
+                    engine_hits.append(name[len(PREFIX):])
+                if value == KEYSTORE_SHA256:
+                    keystore_hits.append(name[len(PREFIX):])
+            if engine_hits or keystore_hits or elf_hits:
+                raise AssertionError(
+                    f"forbidden binary content: engine={engine_hits}, keystore={keystore_hits}, ELF={elf_hits}"
+                )
+        print(f"source_entries={len(names)} crc_ok=true duplicate_entries=0")
+        print(f"source_uncompressed_bytes={total}")
+        print("protected_license_archive_bytes=56011 byte_identical=true")
+        print("engine_hash_matches=0 keystore_hash_matches=0 elf_entries=0")
+        # v1.2.3 round-79 (CodeRabbit PR#60 #7): identity of the SAME verified
+        # file object — size and SHA-256 are read from the already-open fd,
+        # never by re-opening the path.
+        raw.seek(0)
+        archive_hash = hashlib.sha256()
+        for chunk in iter(lambda: raw.read(1024 * 1024), b""):
+            archive_hash.update(chunk)
+        size = raw.tell()
+        print(f"source_zip_bytes={size}")
+        print(f"source_zip_sha256={archive_hash}")
+        print("SOURCE-ZIP-V10-GATE OK: complete required payload, no engine/build/signing material")
 
 
 def main() -> None:
