@@ -176,12 +176,37 @@ jobs:
           #   manifest of extracted members is what the commit step stages.
           mkdir -p ./extracted
           python3 - <<'PY'
+          import os
+          import stat
           import zipfile
           with open("/tmp/extracted-manifest.txt", encoding="utf-8") as source:
               members = [line.rstrip("\n") for line in source if line.strip()]
           with zipfile.ZipFile("upload.zip") as archive:
               for member in members:
                   archive.extract(member, "./extracted")
+          # v1.2.3 round-81 (CodeRabbit PR#60 outside-diff Minor, yml:184):
+          #   preserve the executable bit of uploaded scripts. zipfile.extract
+          #   applies the ZIP-recorded Unix mode when the archive carries one,
+          #   but zips produced on Windows / via GitHub web upload record NO
+          #   permission bits, so .sh scripts land non-executable and the
+          #   committed tree silently loses the mode. For members that look
+          #   like scripts (suffix .sh) whose extracted mode lacks ALL execute
+          #   bits, restore 0755 explicitly (recorded permissions are honored
+          #   as-is and never weakened; only the permission-less case is
+          #   repaired, and each repair is logged).
+          restored = []
+          for member in members:
+              if not member.endswith(".sh"):
+                  continue
+              extracted = os.path.join("./extracted", member)
+              mode = os.stat(extracted).st_mode
+              if not (mode & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)):
+                  os.chmod(extracted, 0o755)
+                  restored.append(member)
+          if restored:
+              print("🔧 Executable bit restored for scripts (zip carried no execute bits):")
+              for name in restored:
+                  print(f"  {name}")
           print(f"📁 Extracted {len(members)} members")
           PY
 
