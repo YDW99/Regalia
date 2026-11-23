@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'upload.zip'
+      - '.github/workflows/unzip-folder-optimized.yml'
     branches:
       - upload
       - main
@@ -22,7 +23,7 @@ permissions:
   contents: write
 
 # v1.2.3 round-79 (ROB-06): serialize runs per ref — two overlapping runs on the
-#   same ref would race their stash/pull/pop sequences and their staging scope.
+#   same ref would race their staging scope.
 concurrency:
   group: unzip-folder-${{ github.ref }}
   cancel-in-progress: false
@@ -34,6 +35,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          # v1.2.3 round-80.1 (hotfix): check out the BRANCH (not the triggering
+          #   SHA as a detached HEAD) so the pull/push below operate on the
+          #   branch with normal semantics.
+          ref: ${{ github.ref_name }}
           fetch-depth: 1
 
       - name: Check if upload.zip exists
@@ -44,7 +49,7 @@ jobs:
             echo "✅ Found upload.zip"
           else
             echo "exists=false" >> $GITHUB_OUTPUT
-            echo "❌ upload.zip not found"
+            echo "ℹ️ upload.zip not found (no-op smoke check)"
           fi
 
       - name: Validate ZIP file (structural preflight)
@@ -62,17 +67,18 @@ jobs:
           fi
 
           # v1.2.3 round-79 (ROB-06): structural, entry-by-entry preflight BEFORE
-          #   anything is written to disk. The old checks grepped the textual
-          #   `unzip -l` listing and only warned; the post-extraction cleanup used
-          #   `find ./extracted -path './extracted/.github/workflows/*'`, which a
-          #   nested `Regalia-upload/.github/workflows/x.yml` member does not
-          #   match (nested-prefix bypass — the round-76 review reproduced this
-          #   file-system model: the top-level copy was deleted, the nested one
-          #   survived into the repo). Now every member name is normalized and
+          #   anything is written to disk. Every member name is normalized and
           #   checked at ANY depth: traversal/absolute/encrypted/budget violations
           #   fail the run immediately; protected components at any depth are
           #   listed and structurally skipped during extraction (the channel
           #   itself keeps working for zips that merely carry such entries).
+          # v1.2.3 round-80.1 (hotfix): directory members no longer enter the
+          #   staging manifest — git never tracks empty directories, and an
+          #   empty-directory pathspec makes `git add --pathspec-from-file`
+          #   abort the whole run. Parent directories are created implicitly by
+          #   the file members during extraction. The staging file is written
+          #   with the `:(literal)` pathspec magic so member names containing
+          #   glob characters (e.g. `*`, `?`) are staged by their literal name.
           python3 - <<'PY'
           import re
           import sys
@@ -102,6 +108,8 @@ jobs:
               manifest = []
               for info in infos:
                   name = info.filename
+                  if any(ch in name for ch in "\n\r\x00"):
+                      fail(f"member name contains control characters: {name!r}")
                   if name.startswith("/") or "\\" in name:
                       fail(f"absolute or backslash member path: {name!r}")
                   if re.match(r"^[A-Za-z]:", name):
@@ -131,11 +139,18 @@ jobs:
                   if protected:
                       skipped.append(name)
                       continue
+                  if name.endswith("/") or info.is_dir():
+                      # Directory members carry no content; git tracks no empty
+                      # directories, and an empty-dir pathspec would abort
+                      # `git add --pathspec-from-file`. Skip them from staging.
+                      continue
                   manifest.append(name)
               with open("/tmp/protected-members.txt", "w", encoding="utf-8") as out:
                   out.write("\n".join(skipped) + ("\n" if skipped else ""))
               with open("/tmp/extracted-manifest.txt", "w", encoding="utf-8") as out:
                   out.write("\n".join(manifest) + ("\n" if manifest else ""))
+              with open("/tmp/add-pathspecs.txt", "w", encoding="utf-8") as out:
+                  out.write("".join(f":(literal){name}\n" for name in manifest))
               print(f"📋 ZIP members: {len(infos)} (protected skipped: {len(skipped)})")
               print(f"📦 Decompressed total: {total} bytes")
           PY
@@ -157,9 +172,8 @@ jobs:
         run: |
           # v1.2.3 round-79 (ROB-06): structured extraction — only members that
           #   passed the preflight are written; protected entries are skipped by
-          #   name (any nesting depth), not by post-hoc `find` deletion that the
-          #   nested-prefix bypass could dodge. The manifest of extracted
-          #   members is what the commit step stages.
+          #   name (any nesting depth), not by post-hoc `find` deletion. The
+          #   manifest of extracted members is what the commit step stages.
           mkdir -p ./extracted
           python3 - <<'PY'
           import zipfile
@@ -180,25 +194,22 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Stash local changes
-          # v1.2.3 round-79 (ROB-06): `|| true` removed — a failed stash/pull/pop
-          #   must abort BEFORE cp -a overwrites the working tree, not be
-          #   swallowed and continue on top of a half-merged state.
-          if ! git stash push -m "temp-unzip-$(date +%s)"; then
-            echo "::error::git stash push failed; aborting before any overwrite"
-            exit 1
-          fi
-
-          # Pull remote updates
-          git pull origin ${{ github.ref_name }} --ff-only || \
-          git pull origin ${{ github.ref_name }} --rebase
-
-          # Restore stashed changes — fail closed on conflict (the stash entry is
-          #   preserved for manual recovery; the old `|| true` swallowed it and
-          #   let the run continue over a conflicting tree).
-          if ! git stash pop --index; then
-            echo "::error::git stash pop failed (conflict) — the stash entry is preserved for manual recovery; aborting before overwrite"
-            git stash list | sed -n '1p'
+          # v1.2.3 round-80.1 (hotfix): the round-79 rewrite removed the old
+          #   `|| true` error-swallowers but kept the stash/pull/pop sequence
+          #   itself — and that sequence cannot run on an Actions runner: the
+          #   checkout tree is clean and ./extracted is untracked, so
+          #   `git stash push` creates NO stash entry ("No local changes to
+          #   save"), and the immediately following `git stash pop --index`
+          #   fails with "No stash entries found" (exit 1). Every run of the
+          #   round-79 file aborted at this step (observed: run 45127110278,
+          #   2026-11-23 06:52 UTC — steps 1-5 green, step 6 red). The old
+          #   round-76 version only ever "worked" because two `|| true` masked
+          #   exactly this failure. Actions runners are ephemeral: there is no
+          #   local state worth stashing, so the sequence is removed outright.
+          #   Remote-side concurrency (a queued push landing after checkout) is
+          #   absorbed by a single fail-closed `--ff-only` pull.
+          if ! git pull origin ${{ github.ref_name }} --ff-only; then
+            echo "::error::git pull --ff-only failed — the remote branch diverged from this checkout; resolve manually, then re-upload upload.zip to re-run"
             exit 1
           fi
 
@@ -207,15 +218,25 @@ jobs:
           rm -rf ./extracted
           rm -f upload.zip
 
-          # Stage only the extracted files (manifest-driven staging that finally
-          #   matches this comment — the old `git add -A` below it also staged
-          #   unrelated working-tree changes).
-          git add --pathspec-from-file=/tmp/extracted-manifest.txt
+          # Stage exactly the extracted members (manifest-driven staging):
+          #   `-f` lets explicitly uploaded members that happen to match a
+          #   .gitignore pattern (build outputs, *.hprof, ...) still land —
+          #   protected/sensitive paths were already structurally skipped by
+          #   the preflight, so -f never resurrects those.
+          if [ -s /tmp/add-pathspecs.txt ]; then
+            git add -f --pathspec-from-file=/tmp/add-pathspecs.txt
+          else
+            echo "::warning::every member of upload.zip was a protected path — nothing to stage; upload.zip will be consumed without content changes"
+          fi
+
           git rm -q --ignore-unmatch upload.zip
 
           if ! git diff --cached --quiet; then
             git commit -m "chore: auto unzip files to root [skip ci]"
-            git push origin ${{ github.ref_name }}
+            if ! git push origin ${{ github.ref_name }}; then
+              echo "::error::git push rejected (remote moved after the pull) — re-upload upload.zip to re-run this workflow"
+              exit 1
+            fi
             echo "✅ Changes pushed successfully"
           else
             echo "ℹ️ No changes to commit"
