@@ -1,3 +1,61 @@
+# Regalia v1.2.3 — round-82 补丁包说明
+
+- 生成时间：2026-11-24（Asia/Shanghai）
+- 交付形态：本轮为**增量补丁包**（`Regalia-v1.2.3-round82-patch.zip`，5 个仓库文件，按仓库根目录结构组织）
+- 实施基准：GitHub `upload` 分支当前树（tip `beea7339`，= round-81 源码 zip 落库 + 所有权属更新的 `LICENSE&NOTICE.zip`；本补丁 5 个文件均以其分支当前字节为基线，经 GitHub contents API 逐字节拉取核对）
+- 输入源：CodeRabbit 对 PR #60 的两轮复审邮件（2026-11-24 01:06 / 02:06）：**4 条 actionable + 1 条 outside-diff**，全部落地（见 §1）；用户指令：EXPECTED_LICENSE_SHA256 跟随已上传至 upload 分支的新版许可归档
+- 本轮不改 Java/JS/assets/chess.html → **APK 与源码链路无影响**（round-81 release 指纹 `b77fb2f5…` 继续有效），无需 assembleRelease；源码 zip 指纹 `db6e4710…` 仅随本轮 5 文件更新而演进
+- 不变约束：versionCode 10203、八项权限、minSdk 23 / target 35、arm64-v8a only、Stockfish 引擎身份、根 `LICENSE&NOTICE.zip`（远端当前字节，见 §1 第 3 条）、v4–v8 历史验证器、失败日志 append-only
+
+---
+
+## §0 最重要的应用须知（通道丢件教训，先读）
+
+本补丁包里有 **1 个文件不能指望 upload.zip 自动解压通道送达**（`.github/` 点目录受保护集结构化跳过，教训与 round-80 §0 相同）：
+
+| 文件 | 为什么通道送不到 |
+| --- | --- |
+| `.github/workflows/unzip-folder-optimized.yml` | `.github/` 目录组件 ∈ PROTECTED_DIR_COMPONENTS，预检结构化跳过、永不落地 |
+
+该文件请用以下任一方式落库：
+- **方式 A（推荐）**：GitHub 网页打开该文件，粘贴补丁包内同名文件全部内容，直接 commit 到 `upload` 分支。
+- **方式 B**：本地 `git clone` 后解压本补丁覆盖，`git add -A && git commit && git push`。
+
+其余 4 个仓库文件（`verifier/v11/source-gate.py`、`verifier/v13/source-gate.py`、`worklog.md`、`PATCH-NOTES.md`）可照旧走 upload.zip 通道，或与上面文件一起用方式 B 一次搞定。
+
+---
+
+## §1 逐文件改动明细（5 文件，CodeRabbit 5 条意见全落地）
+
+| 文件 | 意见级别 | 内容 |
+| --- | --- | --- |
+| `verifier/v11/source-gate.py`、`verifier/v13/source-gate.py` | Minor ×2（同类成对修复） | ① `effective_gradle_script` 块注释删除改为**留一个空格分隔符**（原直接拼接两侧字符：`compileSdk 35` → `compile/**/Sdk 35` + 独立注释行 `// compileSdk 35` 后有效形态与原文相同，Groovy 分词却已不等价——门禁曾放行；独立注释行仍通过）。② `effective_properties` 经新助手 `_properties_natural_lines` **仅按 CR/LF/CRLF 分行**（`str.splitlines()` 把 `\v`/`\f`/U+001C../NEL/U+2028/U+2029 也当换行：`#`+换页符前缀使 splitlines 见"注释行+属性行"而过滤后保留属性，Java Properties 只认三种终止符、整条属性实为注释——配置已变而门禁曾放行）；注释前空白限定 Properties 支持的 space/tab/formfeed。 |
+| `verifier/v13/source-gate.py`（附加） | Major | `EXPECTED_LICENSE_SHA256`：`f5dc2788…` → **`88b9bc20f3ab2e8e881a718bae593a01e00457f10982bfd0c923a847e07d5861`**（所有权属已把新归档上传至 upload 分支——常量跟随当前归档；56,011 B，经 GitHub contents API 逐字节拉取并经门禁自身 `protected_license_metadata` 复核；旧值 `f5dc2788…`/`d4bd3cd4…` 注释留痕，A02 "current remote bytes" 语义延续） |
+| `.github/workflows/unzip-folder-optimized.yml` | Minor | exec 位恢复整块重写：从 `ZipInfo.external_attr` 恢复**普通 Unix 权限（`& 0o777`，屏蔽 setuid/setgid/sticky 与文件类型位）对全部成员**生效（python 3.12 `zipfile.extract()` 实证不应用归档模式位——0755 的 `build-chess.py` 落地丢执行位、直接运行 Permission denied）；仅**缺少有效 Unix 元数据**的 `.sh` 回退 0755（DOS 制式 zip）；逐项打印；round-80.1 热修复主体不动；round-81 注释中"extract 应用归档模式位"失实表述更正 |
+| `worklog.md` | outside-diff Minor | ① 文件顶部恢复**历史工作日志可查位置索引**（round-18–61 → `git show 6ef7ad6881:worklog.md`；round-69 → `git show 21fdb3fdda:worklog.md`；round-62–68 → 各轮源码 zip 快照与 round76 进度恢复指南；完整链 `git log --follow -- worklog.md`）。② 追加 round-82 工作日志段（本轮全部变更与验证记录） |
+| `PATCH-NOTES.md` | — | 本说明置顶（round-81/round-80 说明按惯例保留于下方） |
+
+## §2 应用步骤
+
+1. **先落 1 个点文件**（§0 方式 A 或 B）：`.github/workflows/unzip-folder-optimized.yml`。
+2. **再落其余 4 个仓库文件**（通道可达或方式 B 一并）。注意：补丁应用前提是分支上的 `LICENSE&NOTICE.zip` 已是新版（88b9bc20…——你已上传，本轮实测拉取核实），否则 v13 许可身份检查将失败。
+3. **门禁重跑**（签名环境，或直接依赖本轮沙盒已跑的全量结果）：v13 source gate（38 检查；`REGALIA_R77_BASE` 固定 f783179 外部基线）→ v11 source gate（27 检查）→ v11 integration（19）→ v11 negative（32）。APK 链路无需重跑（本轮零 Java/JS/assets 改动）。
+4. push/merge 前取得明确确认；`LICENSE&NOTICE.zip` 永不回退。
+
+## §3 本轮沙盒已执行验证（交付环境内，分支 tip beea7339 树 + f783179 api-tarball 基线导入）
+
+- 攻击复现→拦截对照 38/38：round-81 实现在 `compile/**/Sdk 35` 与 `#`+换页符两例**复现放行**；round-82 修复在 v11/v13 双文件全部拦截；回归正控全过（独立注释行/续行 `# note`/CRLF/裸 CR/字符串字面量/**真实对照对** 分支 vs f783179 有效形态仍相等）
+- **全量门禁重跑**：v13 source-gate **38/38**（`CURRENT_LICENSE bytes=56011 sha256=88b9bc20…` 身份检查转绿；基线树摘要 `be6778e4…` 校验通过）；v11 source-gate **27/27**；v11 integration **19/19**（含 I17 注释编辑通过/I18 配置编辑仍拒）；v11 negative **32/32**
+- unzip yml 夹具 8 例全过（0755 `.sh`/0755 `build-chess.py`（CodeRabbit 样例）/0644 `.txt` 按元数据恢复/**0644 `.sh` 原样不提权**/04755 屏蔽为 0755/DOS `.sh` 回退 0755/DOS `.txt` 不伪造执行位/逐项打印）；PyYAML `safe_load` 解析通过（5 步骤完整）；与 round-81 版 diff 恰为 exec 块替换（53 行）
+- `py_compile` 双 source-gate 文件、yml 内嵌 python 块独立编译均通过
+- **边界**：本轮为工具链/门禁补丁，未执行 assembleRelease（零 Java/JS/assets 改动，APK 指纹不变）；r62/r67/v1-v3 回归未重跑（测试对象本轮零改动）
+
+## §4 不做事项（边界）
+
+ROB-05（统计页阈值 UTF-16 估算，D 档）继续不动；v4–v8 历史验证器与已标 superseded 的 v9/verify-apk.py 不动；verifier/runs 历史日志 append-only 不动（本轮零新增 run 日志入包）；`LICENSE&NOTICE.zip` 不随补丁包重发（分支已携带新版，补丁只更新 pin 常量）；worklog 历史内容不整体回填入树（outside-diff 意见按"可查位置"恢复索引处置，历史字节留 git 历史与各轮交付包）。
+
+---
+
 # Regalia v1.2.3 — round-81 交付说明
 
 - 生成时间：2026-11-23（Asia/Shanghai）

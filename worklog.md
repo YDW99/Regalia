@@ -1,3 +1,17 @@
+> **历史工作日志的可查位置（round-82 恢复，CodeRabbit PR#60 outside-diff Minor，
+> worklog.md:1）**：本文件自 round-70 起为当前工作日志（round-70～81 各段依次
+> 追加）。此前历史均有可查位置：
+> - round-18～61（含 Stage 6 说明书适配与 NOTICE 原开发日志归档）：
+>   `git show 6ef7ad6881:worklog.md`（897,221 B，round-61 交付快照；中间态
+>   `aa1b4bfe2e`＝round-22 期、`c6d8c0c822`＝Stage 6/round-43 期、
+>   `fbfc3689ec`＝round-50 期均为其子集）
+> - round-62～68：不在 worklog.md 的 git 历史内（该期间源码 zip 采用逐轮条目
+>   格式随各轮交付包分发）；各轮源码 zip 快照与《Regalia v1.2.3—round76 进度
+>   恢复指南》可查
+> - round-69：`git show 21fdb3fdda:worklog.md`（5,248 B；round-69 曾单独重启
+>   本文件）
+> - 完整提交列表：`git log --follow -- worklog.md`
+
 # Regalia v1.2.3 — round-70 工作日志（2026-11-22 UTC+8）
 
 ## 任务来源
@@ -458,3 +472,77 @@ src/main/java/com/Regalia/README.license、chess.src/README.license、assets/REA
 ### 本轮沙盒验证（run-and-log 留痕，verifier/runs 与外部 evidence 根）
 
 完整工具链就地重建：SDK platform-35/build-tools 35.0.0（aapt/aapt2/apksigner）/platform-tools/CMake 3.31.6 + 官方 NDK r27c zip（663,987,688 字节，SHA-256 `59c2f6dc…`，ndk-check 全 CRC 门禁通过）+ Gradle 8.11.1 + OpenJDK 21（含 javac）。**APK 重建**：gradle assembleRelease 成功（51 任务全执行，含 R8 minify/shrink、CMake native build、lintVital）；**v13 verify-apk 全绿**：v1/v2/v3 全 true、单签名者、证书 SHA-256 `45bc6d36…`（与上传 keystore-info 一致）、versionCode 10203/1.2.3、min/target SDK 23/35、八项权限基线、arm64-v8a only、三个 native 库齐全、引擎 `ffd8fc20…`/100,695,968 字节逐字节、chess.html bundle `ff703692…` 与源码一致、签名块 v2/v3 结构有效、34 zip 条目 CRC 全过——新 APK SHA-256 `b77fb2f5cf43e8951a262fd9423507163702d330a12fe6a38a95bbee833079b6`（81,554,761 字节）。HyperOS 3 兼容为静态口径（A11）。**遗留事务补齐**：v1/v2/v3 node 回归、r62 十三门负测、r67 bench、v11 负测 32/32、v11 集成 19/19、v13 syntax/source-checks/source-gate 38 项（含固定 f783179 基线）/ndk-check/engine 证据门禁全部通过；源码 zip 经 pack+verify 门禁（504 条目 manifest exact、gradlew 0755、LICENSE zip 远端当前字节、无引擎/签名材料），v9+v10 secret_scan 对 APK 与源码 zip 零密码命中（222,763,900 字节扫描）。hyperos-claims：仅静态。push/merge 前须取得用户确认；`LICENSE&NOTICE.zip` 永不回退。
+
+---
+
+# Regalia v1.2.3 — round-82 工作日志（2026-11-24 UTC+8）
+
+## 任务来源
+
+CodeRabbit 对 PR #60 的两轮复审邮件（2026-11-24 01:06 / 02:06，PDF 全文入
+upload/）：**4 条 actionable + 1 条 outside-diff**——v11/source-gate.py 两条
+Minor（块注释删除拼接两侧字符、Properties 用 str.splitlines() 分行）、
+v13/source-gate.py 一条 Major（EXPECTED_LICENSE_SHA256 固定 f5dc2788… 而提交
+9afb87c 中 LICENSE&NOTICE.zip 已为 88b9bc20…，许可身份检查必败、干净检出无法
+通过门禁）、unzip-folder-optimized.yml 一条 Minor（仅修复 .sh 不能保留非 .sh
+脚本的可执行位）、worklog.md:1 一条 outside-diff Minor（恢复历史工作日志的可查
+位置）。用户指令：EXPECTED_LICENSE_SHA256 更新为已上传至 upload 分支的新版本
+（CodeRabbit 两分支处置中选“常量跟随当前归档”），了解剩余问题并完成 round-82
+补丁包。
+
+## 实施纪要（round-82 补丁包，5 个仓库文件）
+
+- **verifier/v11/source-gate.py、verifier/v13/source-gate.py（两条 Minor，同类
+  成对修复）**：
+  ① `effective_gradle_script` 删除 `/*…*/` 块注释时改为**追加一个空格分隔符**
+  （原实现直接拼接两侧字符：`compileSdk 35` 改成 `compile/**/Sdk 35` 再补独立
+  注释行 `// compileSdk 35` 后规范化结果与原文相同，行内子串检查也通过，但
+  Groovy 将 compile 与 Sdk 识别为不同 token——构建脚本已不等价而门禁放行）；
+  独立注释行仍通过比较。
+  ② `effective_properties` 拆行改用新助手 `_properties_natural_lines`：**仅按
+  CR/LF/CRLF 三种终止符分行**（`str.splitlines()` 把 \v、\f、U+001C..U+001E、
+  NEL、U+2028/\u2029 也当换行——现有独立属性行前插入 `#`+换页符 U+000C 后
+  splitlines 见“# 行+属性行”，过滤删 # 留属性，而 Java Properties 只用
+  CR/LF/CRLF 结束自然行，整条属性实为注释、已离开有效形态，门禁却放行）；
+  注释前空白判定限定为 Properties 支持的 space/tab/formfeed
+  （`lstrip(" \t\f")`）；独立注释修改仍通过。
+- **verifier/v13/source-gate.py（Major）**：EXPECTED_LICENSE_SHA256
+  f5dc2788… → **88b9bc20f3ab2e8e881a718bae593a01e00457f10982bfd0c923a847e07d5861**
+  （远端 upload 分支当前字节，56,011 B；本轮经 GitHub contents API 逐字节拉取、
+  并经门禁自身的 protected_license_metadata 复核 bytes/SHA 一致；A02
+  “current remote bytes” 语义延续；旧值 f5dc2788…（round-80/81）与
+  d4bd3cd4…（round-79）注释留痕）。
+- **.github/workflows/unzip-folder-optimized.yml（Minor）**：exec 位恢复整块重写——
+  从 ZipInfo.external_attr 恢复**普通 Unix 权限（& 0o777，屏蔽
+  setuid/setgid/sticky 与 S_IFMT 文件类型位）**对**全部**成员生效（python 3.12
+  zipfile.extract 实证不应用任何归档模式位：0755 的 build-chess.py 落地即丢
+  执行位、直接运行 Permission denied；round-81 注释中“extract 应用归档模式位”
+  的失实表述一并更正）；仅对**缺少有效 Unix 权限元数据**的 `.sh` 回退 0755
+  （DOS 制式 zip：Windows/GitHub 网页上传）；每次恢复逐项打印。round-80.1 热修复
+  主体（stash 移除/--ff-only/目录条目排除/:(literal)/控制字符拒绝）不动。
+- **worklog.md:1（outside-diff Minor）**：本文件顶部恢复历史工作日志可查位置
+  索引（见顶部引用块）。
+- **PATCH-NOTES.md**：round-82 补丁说明置顶。
+
+### 本轮沙盒验证（round-82 补丁包交付环境内，分支 tip beea7339 树为基准）
+
+- **攻击复现→拦截对照（38/38 全过）**：round-81 实现在 `compile/**/Sdk 35` 与
+  `#`+换页符两例上**复现放行**（有效形态相同）；round-82 修复在 v11/v13 双文件
+  **全部拦截**；回归正控全过——独立注释行仍通过、续行内 `# note` 仍拒
+  （round-81 语义保留）、CRLF/裸 CR 正确分行、字符串字面量原样保留、**真实
+  对照对**（分支 build.gradle/gradle.properties vs f783179 基线）有效形态仍
+  相等、settings.gradle 与 wrapper 字节一致。
+- **全量门禁重跑（分支 tip beea7339 树 + 本轮 4 个代码文件补丁 + f783179
+  外部基线 api tarball 导入，基线树摘要 be6778e4… 校验通过）**：v13
+  source-gate **38/38**（CURRENT_LICENSE 56,011 B / 88b9bc20… 身份检查转绿）；
+  v11 source-gate **27/27**（-G. 内容差异、允许集）；v11 integration **19/19**
+  （含 I17 纯注释编辑通过 / I18 活动配置编辑仍拒）；v11 negative **32/32**。
+- **unzip yml 夹具 8 例全过**：0755 .sh 恢复 0755、0755 build-chess.py（CodeRabbit
+  样例）恢复 0755、0644 .txt 按元数据恢复 0644、**0644 .sh 按元数据原样不提权**、
+  04755 setuid 屏蔽为 0755、DOS .sh 回退 0755、DOS .txt 不伪造执行位、逐项打印；
+  PyYAML safe_load 解析通过（5 步骤完整）；与 round-81 版 diff 范围恰为 exec 块
+  替换（53 行）。
+- 本轮不改 Java/JS/assets/chess.html，APK 与源码链路无影响（release 指纹
+  b77fb2f5… 继续有效），无需 assembleRelease。
+- push/merge 前须取得用户确认；`LICENSE&NOTICE.zip` 永不回退（本轮即
+  “远端当前字节”语义的执行）。

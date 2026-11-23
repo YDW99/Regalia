@@ -13,13 +13,17 @@ from source_archive import protected_license_metadata
 
 ROOT = Path(__file__).resolve().parents[2]
 EXPECTED_BASE_TREE_SHA256 = "be6778e492a799129fc4c36f603de80f7b69fda23749e6d33456f7f632e6a4c5"
-# v1.2.3 round-81: the protected license archive pin follows the CURRENT
-#   remote bytes (the A02 contract: "remains the current remote bytes"). The
-#   remote copy advanced from d4bd3cd4... to f5dc2788... between round-79 and
-#   round-80; the round-80/81 trees already carry the current remote bytes
-#   (verified against the upload branch and the GitHub contents API this
-#   round). The old value is kept here in the comment for provenance.
-EXPECTED_LICENSE_SHA256 = "f5dc2788e2c02f38e7df358dea0e020c486a38be9b79c1c131df69d3096e2fa5"
+# v1.2.3 round-82 (CodeRabbit PR#60 Major): the protected license archive pin
+#   follows the CURRENT remote bytes (the A02 contract: "remains the current
+#   remote bytes"). The remote copy advanced again from f5dc2788... (the
+#   round-81 pin, matching the round-80/81 trees) to 88b9bc20... — the owner
+#   uploaded the new archive to the upload branch (commit 9afb87c), so the
+#   archive itself is authoritative and THIS PIN moves to it: keeping the
+#   old constant would fail the identity check on a clean checkout. Verified
+#   this round against the upload branch and the GitHub contents API
+#   (56,011 bytes, SHA-256 below). Older values kept for provenance
+#   (f5dc2788... round-80/81; d4bd3cd4... round-79).
+EXPECTED_LICENSE_SHA256 = "88b9bc20f3ab2e8e881a718bae593a01e00457f10982bfd0c923a847e07d5861"
 checks = 0
 
 
@@ -95,8 +99,19 @@ def effective_gradle_script(source: str) -> str:
             i = newline
             continue
         if ch == "/" and source[i:i + 2] == "/*":
+            # v1.2.3 round-82 (CodeRabbit PR#60 Minor): a removed block comment
+            #   leaves ONE space behind — never nothing. Deleting it outright
+            #   concatenated the surrounding characters, so `compile/**/Sdk 35`
+            #   normalized to the SAME effective form as `compileSdk 35` while
+            #   Groovy tokenizes the two sides as different tokens; the
+            #   separator keeps the token boundary visible to the comparison.
+            #   Independent comment lines still compare equal.
             end = source.find("*/", i + 2)
-            i = n if end < 0 else end + 2
+            if end < 0:
+                i = n
+            else:
+                out.append(" ")
+                i = end + 2
             continue
         if ch in ("'", '"'):
             triple = source[i:i + 3]
@@ -136,6 +151,21 @@ def _continues_line(line: str) -> bool:
     return count % 2 == 1
 
 
+def _properties_natural_lines(source: str) -> list[str]:
+    """v1.2.3 round-82 (CodeRabbit PR#60 Minor): java.util.Properties ends a
+    natural line ONLY at CR, LF, or CRLF — str.splitlines() additionally
+    splits on vertical tab, form feed, U+001C..U+001E, NEL, U+2028 and
+    U+2029. A '#' followed by a form feed inserted before an active property
+    made splitlines() see a lone comment line plus the property line (the
+    filter dropped the '#' line and kept the property — effective form
+    unchanged), while Properties reads ONE natural line starting with '#'
+    — the whole property silently left the effective form as a comment.
+    Split on exactly the three terminators so the comparison sees the real
+    configuration.
+    """
+    return re.split(r"\r\n|\r|\n", source)
+
+
 def effective_properties(source: str) -> str:
     """v1.2.3 round-80 (CodeRabbit PR#60 re-review): the EFFECTIVE form of a
     Java-properties file — comment lines (# / !) and blank lines removed, every
@@ -159,15 +189,24 @@ def effective_properties(source: str) -> str:
     lines inside a continuation are now kept verbatim; the # / ! test applies
     only to the FIRST natural line of each logical line, so independent
     comment edits still pass unchanged.
+
+    v1.2.3 round-82 (CodeRabbit PR#60 Minor): natural lines are split ONLY on
+    the three Properties terminators (see _properties_natural_lines), and the
+    blank/comment test strips only the whitespace Properties itself skips
+    before a comment marker — space, tab, and form feed — instead of
+    str.strip()/lstrip(), which treat vertical tab / U+001C as leading
+    whitespace and misclassify lines Properties reads as active keys.
+    Independent comment edits still pass unchanged.
     """
     kept: list[str] = []
     continuing = False
-    for line in source.splitlines():
+    for line in _properties_natural_lines(source):
+        first = line.lstrip(" \t\f")
         if continuing:
             # Natural line inside a logical line's value — never a comment;
             # kept verbatim so value changes stay visible to the comparison.
             kept.append(line)
-        elif line.strip() and not line.lstrip().startswith(("#", "!")):
+        elif first and first[0] not in "#!":
             kept.append(line)
         else:
             # A comment or blank first natural line starts nothing; it also
