@@ -16,6 +16,16 @@ build/
 .cxx/
 .gradle/
 
+# v1.2.3 round-79 (ROB-08, CodeRabbit PR#60): heap-dump exclusions.
+#   gradle.properties directs -XX:HeapDumpPath to .gradle-dumps/ (round-56
+#   SEC-07); since round-56 the comment there claimed the directory was
+#   git-ignored while .gitignore carried no matching rule — `git add .` would
+#   stage dumps that can contain signing credentials from the daemon process.
+#   Both rules below land in this round; check with
+#   git check-ignore -v .gradle-dumps/java_pid123.hprof
+.gradle-dumps/
+*.hprof
+
 # The ~100MB engine binary is fetched at build time (BUILDING.md §2.3),
 # never committed — GitHub hard-limits files at 100MB
 src/main/jniLibs/
