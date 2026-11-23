@@ -90,6 +90,11 @@ public class PgnCacheManager {
     //   超限保留旧文件并返回 false，与 getTags 的拒绝语义对称）。
     private static final long MAX_TAGS_FILE_BYTES = 1024L * 1024; // 1 MiB
 
+    // v1.2.3 round-80 (SonarCloud S1192): the per-file cap refusal logs shared
+    //   the literal " bytes): " three times (save / setTags / getTags) — it is
+    //   now a named constant.
+    private static final String CAP_REFUSAL_BYTES_SUFFIX = " bytes): ";
+
     // v1.2.3 round-79 (ROB-03): 标签读取的字符上限（2M chars ≥ 1 MiB 文件的
     //   最坏 UTF-8 解码膨胀；读取循环内、追加前检查，防 file.length() 竞态）。
     private static final int MAX_TAGS_READ_CHARS = 2 * 1024 * 1024;
@@ -199,7 +204,7 @@ public class PgnCacheManager {
             //   超限拒绝写入（旧文件保持原样），避免超大输入直接绕过预算语义。
             long pgnBytes = pgn.getBytes(StandardCharsets.UTF_8).length;
             if (pgnBytes > MAX_PGN_WRITE_BYTES) {
-                Log.w(TAG, "save refused: content exceeds per-file write cap (" + pgnBytes + " bytes): " + safe); // mobsf-ignore: android_logging
+                Log.w(TAG, "save refused: content exceeds per-file write cap (" + pgnBytes + CAP_REFUSAL_BYTES_SUFFIX + safe); // mobsf-ignore: android_logging
                 return false;
             } // mobsf-ignore: android_logging
             File file = new File(getCacheDir(), safe + ".pgn");
@@ -389,7 +394,7 @@ public class PgnCacheManager {
             long serializedBytes = serialized.getBytes(StandardCharsets.UTF_8).length;
             if (serializedBytes > MAX_TAGS_FILE_BYTES) {
                 // 超限：保留旧文件并返回 false（getTags 之后仍能读到旧标签）
-                Log.w(TAG, "setTags refused: serialized tags exceed per-file cap (" + serializedBytes + " bytes): " + safe); // mobsf-ignore: android_logging
+                Log.w(TAG, "setTags refused: serialized tags exceed per-file cap (" + serializedBytes + CAP_REFUSAL_BYTES_SUFFIX + safe); // mobsf-ignore: android_logging
                 return false;
             } // mobsf-ignore: android_logging
             AtomicFileStore.writeUtf8(tagsFile, serialized);
@@ -507,8 +512,9 @@ public class PgnCacheManager {
                     }
                 }
             }
-            java.util.Collections.sort(pgns,
-                    (a, b) -> Long.compare(a.lastModified(), b.lastModified()));
+            // v1.2.3 round-80 (SonarCloud S9412): sort the lists in place via
+            //   List.sort() instead of the Collections.sort() indirection.
+            pgns.sort((a, b) -> Long.compare(a.lastModified(), b.lastModified()));
             for (File f : pgns) {
                 if (total <= MAX_CACHE_BYTES) break;
                 String fn = f.getName();
@@ -534,8 +540,7 @@ public class PgnCacheManager {
             if (total > MAX_CACHE_BYTES) {
                 // v1.2.3 round-79 (ROB-03): 受管 PGN 已排空仍超限 —— 淘汰最旧
                 //   的孤儿标签（其 .pgn 已不存在的残留）。
-                java.util.Collections.sort(orphanTags,
-                        (a, b) -> Long.compare(a.lastModified(), b.lastModified()));
+                orphanTags.sort((a, b) -> Long.compare(a.lastModified(), b.lastModified()));
                 for (File tags : orphanTags) {
                     if (total <= MAX_CACHE_BYTES) break;
                     long tagsLen = tags.length();
@@ -574,7 +579,7 @@ public class PgnCacheManager {
             File tagsFile = new File(getCacheDir(), safe + ".tags.json");
             if (!tagsFile.exists() || !tagsFile.isFile()) return "[]";
             if (tagsFile.length() > MAX_TAGS_FILE_BYTES) {
-                Log.w(TAG, "getTags refused: file exceeds per-file read cap (" + tagsFile.length() + " bytes): " + safe); // mobsf-ignore: android_logging
+                Log.w(TAG, "getTags refused: file exceeds per-file read cap (" + tagsFile.length() + CAP_REFUSAL_BYTES_SUFFIX + safe); // mobsf-ignore: android_logging
                 return "[]";
             } // mobsf-ignore: android_logging
             try (FileInputStream fis = new FileInputStream(tagsFile);

@@ -29,18 +29,23 @@ class SecretScanner:
         self.files = 0
         self.members = 0
         self.bytes = 0
+        # v1.2.3 round-80 (CodeRabbit PR#60 re-review): diagnostics carry only
+        #   scanner-generated opaque identities (stage + sequence number).
+        #   Round-79 masked a secret inside a diagnostic label by replacing it
+        #   with the literal "<masked>" — but that placeholder itself CONTAINS
+        #   the secret whenever the password is a substring of "masked"
+        #   ("mask", "ask", "ed", ...), so both the password-match and the
+        #   nested-ZIP-limit diagnostics could still print it. Following the
+        #   v11 design, raw source paths and archive member names never enter
+        #   a diagnostic at all; failures report stage#sequence scope ids only.
+        self.scopes = 0
 
-    def _safe_label(self, label: str) -> str:
-        # v1.2.3 round-79 (CodeRabbit PR#60 #28): mask any known secret embedded
-        #   in the label (source path or archive member name) BEFORE it reaches a
-        #   diagnostic — a file whose NAME carries the password leaked it through
-        #   the exception text even though the value itself was suppressed.
-        safe = label
-        for value in self.values:
-            safe = safe.replace(value.decode("utf-8"), "<masked>")
-        return safe
+    def _next_scope(self, stage: str) -> str:
+        self.scopes += 1
+        return f"{stage}#{self.scopes}"
 
-    def stream(self, stream, label: str, member: bool = False) -> None:
+    def stream(self, stream, stage: str, member: bool = False) -> None:
+        scope = self._next_scope(stage)
         carry = b""
         size = 0
         while True:
@@ -50,7 +55,7 @@ class SecretScanner:
             size += len(chunk)
             data = carry + chunk
             if any(pattern in data for pattern in self.patterns):
-                raise AssertionError(f"uploaded password match at {self._safe_label(label)}; value suppressed")
+                raise AssertionError(f"uploaded password match at {scope}; value suppressed")
             carry = data[-(self.max_pattern - 1):] if self.max_pattern > 1 else b""
         self.bytes += size
         if member:
@@ -58,30 +63,29 @@ class SecretScanner:
         else:
             self.files += 1
 
-    def file(self, path: Path, label: str | None = None) -> None:
-        label = label or str(path)
+    def file(self, path: Path, stage: str = "source.file") -> None:
         with path.open("rb") as stream:
-            self.stream(stream, label)
+            self.stream(stream, stage)
 
-    def archive(self, path: Path, label: str) -> None:
-        self.file(path, label + " [raw]")
+    def archive(self, path: Path, stage: str) -> None:
+        self.file(path, stage + ".raw")
         with zipfile.ZipFile(path) as archive:
             for info in archive.infolist():
                 if info.is_dir():
                     continue
-                member_label = f"{label}!/{info.filename}"
                 with archive.open(info) as stream:
-                    self.stream(stream, member_label, member=True)
+                    self.stream(stream, stage + ".member", member=True)
                 if info.filename.lower().endswith(".zip"):
                     if info.file_size > 20 * 1024 * 1024:
-                        raise AssertionError(f"nested ZIP exceeds scan limit: {self._safe_label(member_label)}")
+                        raise AssertionError(
+                            f"nested ZIP exceeds scan limit at {self._next_scope(stage + '.nested')}")
                     data = archive.read(info)
                     with zipfile.ZipFile(io.BytesIO(data)) as nested:
                         for nested_info in nested.infolist():
                             if nested_info.is_dir():
                                 continue
                             with nested.open(nested_info) as stream:
-                                self.stream(stream, f"{member_label}!/{nested_info.filename}", member=True)
+                                self.stream(stream, stage + ".nested-member", member=True)
 
 
 def main() -> None:
@@ -93,20 +97,16 @@ def main() -> None:
     scanner = SecretScanner()
     files = payload_files(root)
     for path in files:
-        scanner.file(path, "source/" + path.relative_to(root).as_posix())
+        scanner.file(path)
         if path.suffix.lower() in (".zip", ".jar") and zipfile.is_zipfile(path):
             with zipfile.ZipFile(path) as archive:
                 for info in archive.infolist():
                     if info.is_dir():
                         continue
                     with archive.open(info) as stream:
-                        scanner.stream(
-                            stream,
-                            "source/" + path.relative_to(root).as_posix() + "!/" + info.filename,
-                            member=True,
-                        )
-    scanner.archive(args.apk.resolve(), "delivered.apk")
-    scanner.archive(args.source_zip.resolve(), "source.zip")
+                        scanner.stream(stream, "source.archive-member", member=True)
+    scanner.archive(args.apk.resolve(), "delivery.apk")
+    scanner.archive(args.source_zip.resolve(), "delivery.source-zip")
     print(f"password_variables_checked=2 distinct_passwords={len(scanner.values)} values_suppressed=true")
     print(f"raw_files_scanned={scanner.files} archive_members_scanned={scanner.members} bytes_scanned={scanner.bytes}")
     print("password_matches=0")

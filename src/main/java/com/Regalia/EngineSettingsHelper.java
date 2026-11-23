@@ -70,6 +70,10 @@ public class EngineSettingsHelper {
     private static final String MSG_NOT_AN_INTEGER = "' is not an integer";
     private static final String MSG_NOT_A_BOOLEAN = "' is not a boolean (expected true/false)";
     private static final String MSG_HAS_NO_VALUE = "' has no value";
+    // v1.2.3 round-80 (SonarCloud S1192): the import diagnostics prefix was
+    //   duplicated across the validateSetting clamping warnings (three times
+    //   over, four once the round-80 threads lower bound lands).
+    private static final String IMPORT_LOG_PREFIX = "importSettings: ";
 
     private static final String KEY_ENGINE_NAME = "engine.name";
     private static final String KEY_ENGINE_PATH = "engine.path";
@@ -300,7 +304,13 @@ public class EngineSettingsHelper {
      */
     private List<PendingSetting> validateSettings(String txtContent) {
         List<PendingSetting> pending = new ArrayList<>();
-        String[] lines = txtContent.split("\\r?\\n");
+        // v1.2.3 round-80 (CodeRabbit PR#60 re-review): the parser accepts bare
+        //   CR, LF and CRLF. Round-79's chunked readTextFile returns \r faithfully
+        //   and the old split("\\r?\\n") did not split a bare-CR file —
+        //   "engine.threads=2\rengine.hash=64\r" stayed one line, failed integer
+        //   parsing and rejected the whole import, while the pre-round-79
+        //   readLine-based reader normalized those newlines and imported fine.
+        String[] lines = txtContent.split("\\r\\n|\\r|\\n");
         for (int index = 0; index < lines.length; index++) {
             String line = lines[index].trim();
             if (line.isEmpty() || line.startsWith("#")) continue;
@@ -324,11 +334,12 @@ public class EngineSettingsHelper {
                 //   produced by exportSettings() — recognized and skipped (not counted
                 //   as applicable settings, never rejected) so the app can re-import
                 //   its own exports. All other unknown keys are still rejected below.
+                // v1.2.3 round-80 (SonarCloud S135): single continue per loop — the
+                //   skip is an if/else branch instead of a second continue.
                 Log.i(TAG, "importSettings: skipping read-only metadata key " + key); // mobsf-ignore: android_logging
-                continue;
+            } else {
+                pending.add(validateSetting(key, value, index + 1));
             }
-
-            pending.add(validateSetting(key, value, index + 1));
         }
         return pending;
     }
@@ -341,8 +352,19 @@ public class EngineSettingsHelper {
                 int cpuCores = Runtime.getRuntime().availableProcessors();
                 int threadsCap = Math.max(1, cpuCores * 2);
                 boolean clamped = false;
-                if (t > threadsCap) {
-                    Log.w(TAG, "importSettings: " + KEY_THREADS + "=" + t + " exceeds 2x CPU cores (" + threadsCap + "), capping"); // mobsf-ignore: android_logging
+                // v1.2.3 round-80 (CodeRabbit PR#60 re-review): the round-79 refactor
+                //   dropped the lower bound — an imported engine.threads=0 or negative
+                //   value passed the upper-bound check only and was saved verbatim
+                //   (applySetting's raw field callback never goes through the clamping
+                //   setter). The Math.max(1, ...) floor is restored and lower clamping
+                //   counts into the clamped summary; the CPU cap and legitimate-value
+                //   handling are unchanged.
+                if (t < 1) {
+                    Log.w(TAG, IMPORT_LOG_PREFIX + KEY_THREADS + "=" + t + " below minimum 1, raising to 1"); // mobsf-ignore: android_logging
+                    t = 1;
+                    clamped = true;
+                } else if (t > threadsCap) {
+                    Log.w(TAG, IMPORT_LOG_PREFIX + KEY_THREADS + "=" + t + " exceeds 2x CPU cores (" + threadsCap + "), capping"); // mobsf-ignore: android_logging
                     t = threadsCap;
                     clamped = true;
                 } // mobsf-ignore: android_logging
@@ -354,7 +376,7 @@ public class EngineSettingsHelper {
                 long hashCap = Math.max(16, maxMemoryMB / 2);
                 boolean clamped = false;
                 if (h > hashCap) {
-                    Log.w(TAG, "importSettings: " + KEY_HASH + "=" + h + "MB exceeds 50% of heap (" + hashCap + "MB), capping"); // mobsf-ignore: android_logging
+                    Log.w(TAG, IMPORT_LOG_PREFIX + KEY_HASH + "=" + h + "MB exceeds 50% of heap (" + hashCap + "MB), capping"); // mobsf-ignore: android_logging
                     h = (int) hashCap;
                     clamped = true;
                 } // mobsf-ignore: android_logging
@@ -364,7 +386,7 @@ public class EngineSettingsHelper {
                 int ms = parseInteger(key, value, lineNumber);
                 boolean clamped = false;
                 if (ms > 1000) {
-                    Log.w(TAG, "importSettings: " + KEY_MOVE_OVERHEAD + "=" + ms + "ms exceeds 1000ms, capping"); // mobsf-ignore: android_logging
+                    Log.w(TAG, IMPORT_LOG_PREFIX + KEY_MOVE_OVERHEAD + "=" + ms + "ms exceeds 1000ms, capping"); // mobsf-ignore: android_logging
                     ms = 1000;
                     clamped = true;
                 } // mobsf-ignore: android_logging

@@ -92,19 +92,32 @@ def _read_tail(source, tail_bytes: int) -> bytes:
 
 
 def _central_directory_size(tail: bytes) -> int | None:
-    """Extract the central-directory size from an EOCD (or ZIP64 EOCD64) tail."""
+    """Extract the central-directory size the stdlib parser will actually use.
+
+    v1.2.3 round-80 (CodeRabbit PR#60 re-review): CPython 3.11's _EndRecData
+    unconditionally runs _EndRecData64, and a valid ZIP64 locator sitting in
+    front of the EOCD makes the parser adopt the ZIP64 EOCD64 record's 64-bit
+    sizes — regardless of the classic EOCD's 32-bit cd_size (the round-79
+    form only consulted the EOCD64 when the classic value was exactly
+    0xFFFFFFFF, so an archive pairing a small classic size with a hostile
+    valid EOCD64 passed the preflight while the parser still materialized
+    the oversized ZIP64 directory). The effective size now mirrors the
+    parser: a locator signature in front of the EOCD means the parser goes
+    ZIP64, so the EOCD64's size field is the value checked; without a locator
+    the classic value is used. Anything ambiguous (missing/truncated EOCD,
+    locator without a complete EOCD64 in the tail) returns None and the
+    caller fails closed.
+    """
     index = tail.rfind(b"PK\x05\x06")
     if index < 0 or len(tail) - index < 22:
         return None
-    cd_size = struct.unpack_from("<I", tail, index + 12)[0]
-    if cd_size != 0xFFFFFFFF:
-        return cd_size
-    # ZIP64: the true 64-bit value lives in the EOCD64 record (PK\x06\x06),
-    # whose size-of-central-directory field sits at offset 40.
-    index64 = tail.rfind(b"PK\x06\x06")
-    if index64 < 0 or len(tail) - index64 < 48:
-        return None
-    return struct.unpack_from("<Q", tail, index64 + 40)[0]
+    locator = index - 20
+    if locator >= 0 and tail[locator:locator + 4] == b"PK\x06\x07":
+        index64 = tail.rfind(b"PK\x06\x06")
+        if index64 < 0 or len(tail) - index64 < 48:
+            return None
+        return struct.unpack_from("<Q", tail, index64 + 40)[0]
+    return struct.unpack_from("<I", tail, index + 12)[0]
 
 
 def _preflight_central_directory(source, limits: ArchiveLimits, label: str) -> None:
@@ -112,12 +125,26 @@ def _preflight_central_directory(source, limits: ArchiveLimits, label: str) -> N
     zipfile.ZipFile() parses it — zipfile materializes every ZipInfo while
     constructing, so a multi-gigabyte declared central directory would spend
     unbounded memory before any traversal-time cap could fire. Reads only the
-    tail (EOCD locator); the file offset is restored afterwards."""
-    tail = _read_tail(source, 131072)  # 64KiB comment cap + EOCD64 + locator
+    tail (EOCD locator); the file offset is restored afterwards.
+
+    v1.2.3 round-80 (CodeRabbit PR#60 re-review): the preflight's own I/O
+    errors enter the same opaque-diagnostic boundary as the parser's — a
+    path source moved after a raw-byte scan used to raise a bare OSError
+    whose traceback printed the original file path. An effective size that
+    cannot be determined (missing EOCD, or a ZIP64 locator whose EOCD64
+    record is absent from the tail) now rejects the archive instead of
+    falling back to a smaller classic value the parser would not use.
+    """
+    try:
+        tail = _read_tail(source, 131072)  # 64KiB comment cap + EOCD64 + locator
+    except Exception:
+        raise AssertionError(f"central directory preflight read failed at {label}") from None
     if not tail:
         return  # empty/tiny inputs are rejected by ZipFile itself
     cd_size = _central_directory_size(tail)
-    if cd_size is not None and cd_size > limits.max_central_directory_bytes:
+    if cd_size is None:
+        raise AssertionError(f"central directory size indeterminable at {label}")
+    if cd_size > limits.max_central_directory_bytes:
         raise AssertionError(f"central directory size limit exceeded at {label}")
 
 

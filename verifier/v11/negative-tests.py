@@ -238,16 +238,18 @@ def assert_interrupt_run(label: str, before_logs: set[Path], before_history: set
     if f"exit_code={expected_status}" not in content or marker not in content:
         raise AssertionError("interrupt log lacks status or pre-signal output")
     history = runs / "v11-history.tsv"
-    after_history = set(history.read_text(encoding="utf-8").splitlines())
-    new_history = after_history - before_history
+    # v1.2.3 round-80 (CodeRabbit PR#60 re-review): history rows are counted AS
+    #   WRITTEN — the round-79 set comprehension folded two IDENTICAL appended
+    #   rows into one element, so a wrapper that double-recorded this run still
+    #   passed the ==1 uniqueness check. Rows are kept as a list (duplicates
+    #   preserved), and only THIS case's rows are selected — by the FULL label
+    #   field (TSV column 2), so other labels' concurrent rows stay ignored.
+    after_lines = history.read_text(encoding="utf-8").splitlines() if history.is_file() else []
+    new_rows = [line for line in after_lines if line not in before_history]
+    label_rows = [line for line in new_rows
+                  if len(line.split("\t")) >= 2 and line.split("\t")[1] == label]
     expected = f"\t{label}\t{expected_status}\t{log.relative_to(ROOT).as_posix()}"
-    # v1.2.3 round-79 (CodeRabbit PR#60 #15): filter to THIS case's label first
-    #   — another verification command finishing between the two snapshots adds
-    #   its own history row and used to make len(new_history) != 1 fail
-    #   spuriously. Only this label's rows must number exactly one, and carry
-    #   the right status and retained log path.
-    label_rows = {line for line in new_history if f"\t{label}\t" in line}
-    if len(label_rows) != 1 or expected not in next(iter(label_rows)):
+    if len(label_rows) != 1 or expected not in label_rows[0]:
         raise AssertionError(f"interrupt history lacks the {expected_status} status or retained log path")
 
 
@@ -655,15 +657,24 @@ def test_leading_data_nested_secret() -> None:
 
 
 def test_archive_member_preflights() -> None:
-    # v1.2.3 round-79 (CodeRabbit PR#60 #10): the central directory is bounded
-    #   BEFORE zipfile parses it — a tiny ZIP under a tiny cd budget cap is
-    #   rejected by the preflight, not after materialization.
+    # v1.2.3 round-79 (CodeRabbit PR#60 #10) + round-80 (re-review): the
+    #   central directory is bounded BEFORE zipfile parses it. The fixture is
+    #   built FIRST, then the module's ZipFile constructor is watched: a scan
+    #   that parses the directory before rejecting would materialize it
+    #   first, so the rejection must fire with the constructor never called.
+    #   The error-text assertion is retained so another early failure is not
+    #   mistaken for the pass.
     data = io.BytesIO()
     with zipfile.ZipFile(data, "w") as archive:
         archive.writestr("member.txt", b"x" * 64)
-    expect_failure(lambda: scan_archive(io.BytesIO(data.getvalue()), consume_all, "opaque.cd",
-                                        limits=ArchiveLimits(max_central_directory_bytes=16)),
-                    expected="central directory size limit")
+    zip_spy = mock.Mock(
+        side_effect=AssertionError("zipfile.ZipFile must not run for a preflight rejection"))
+    with mock.patch.object(archive_scan.zipfile, "ZipFile", zip_spy):
+        expect_failure(lambda: scan_archive(io.BytesIO(data.getvalue()), consume_all, "opaque.cd",
+                                            limits=ArchiveLimits(max_central_directory_bytes=16)),
+                       expected="central directory size limit")
+    if zip_spy.call_count != 0:
+        raise AssertionError("central-directory rejection happened after zipfile parsing")
     passed("oversized central directory is rejected before zipfile parses it")
 
     # v1.2.3 round-79 (CodeRabbit PR#60 #11): duplicate DIRECTORY entries are

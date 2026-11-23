@@ -263,8 +263,13 @@ public class FileIoHelper {
                 //   readLine 对无换行的超长行会先把整行缓冲进堆，上限检查落在
                 //   物化之后（"先物化后检查"）。改为 8KB char[] 流式读：每块
                 //   追加前判限，超限立即返回哨兵，任何时刻内存占用不超过
-                //   上限+一块。消费者是设置导入（split("\\r?\\n")），流式读
-                //   保留原始换行形态（CRLF 不再规范化为 LF）不影响解析。
+                //   上限+一块。
+                // v1.2.3 round-80 (CodeRabbit PR#60 re-review): round-79 声称"流式读
+                //   保留原始换行形态（CRLF 不再规范化为 LF）不影响解析"——该论断
+                //   对裸 CR 文件不成立（validateSettings 的 split("\\r?\\n") 不拆
+                //   裸 CR 行，整份导入被拒绝）。设置解析器已改为同时接受
+                //   CR/LF/CRLF（split("\\r\\n|\\r|\\n")，见 EngineSettingsHelper
+                //   round-80）；本方法保持字节忠实的流式读不变。
                 StringBuilder sb = new StringBuilder();
                 char[] buf = new char[8192];
                 int n;

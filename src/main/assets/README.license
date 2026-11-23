@@ -1,3 +1,14 @@
+v1.2.3 round-80 (2026.11.23): chess.html rebuilt from the round-80 modules (24,403 lines / 1,500,928 bytes).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by
+    build-chess.py from the chess.src modules carrying the round-80
+    ai-bridge.js update (see the chess.src ledger entry below for the
+    module-level detail). 24,403 lines / 1,500,928 bytes (round-79 delivery:
+    24,388 lines / 1,500,518 bytes); two consecutive builds are
+    byte-identical. SHA-256
+    ff7036920da6e33f7502464dfd5372f5500f8408f1c499d8279913560ae01cf2.
+  - License classification: all files unchanged.
+
 v1.2.3 round-79 (2026.11.23): chess.html rebuilt from the round-79 modules (24,388 lines / 1,500,518 bytes).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by

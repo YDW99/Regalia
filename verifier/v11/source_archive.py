@@ -74,6 +74,25 @@ def _is_output_artifact(path: Path, root: Path, output: Path | None) -> bool:
             (path.name.startswith(output.name + ".tmp-") or path.name == output.name + ".lock"))
 
 
+def _is_rebuildable_test_artifact(output: Path, root: Path) -> bool:
+    """v1.2.3 round-80 (CodeRabbit PR#60 re-review): the selftest packs its
+    in-tree artifact TWICE to prove the output-artifact exclusion — the first
+    pack creates verifier/runs/<round>-selftest-source.zip inside the tree,
+    and the second call must be able to REBUILD it. Round-79's blanket
+    "refusing to overwrite a payload source file" fired on that second call
+    because the first ZIP had already become an in-tree payload file. Only
+    outputs under verifier/runs/ named *-selftest-source.zip are treated as
+    rebuildable test artifacts; the protected license and every other
+    payload source file remain non-overwritable.
+    """
+    try:
+        rel = output.relative_to(root)
+    except ValueError:
+        return False
+    return (len(rel.parts) == 3 and rel.parts[:2] == ("verifier", "runs")
+            and rel.name.endswith("-selftest-source.zip"))
+
+
 def payload_files(root: Path, output: Path | None = None) -> list[Path]:
     """Return the complete regular-file payload; directory read errors abort."""
     root = root.resolve()
@@ -223,7 +242,7 @@ def pack(root: Path, output: Path) -> None:
     protected_input = root / "LICENSE&NOTICE.zip"
     if output == protected_input.resolve():
         raise AssertionError("refusing to overwrite the protected LICENSE&NOTICE.zip input")
-    if output in payload_files(root):
+    if output in payload_files(root) and not _is_rebuildable_test_artifact(output, root):
         raise AssertionError("refusing to overwrite a payload source file")
     license_size, license_hash = protected_license_metadata(root)
     lock_path = output.with_name(output.name + ".lock")
@@ -256,6 +275,13 @@ def pack(root: Path, output: Path) -> None:
             #   publish, not the later verify. Failure cleans the temporary file
             #   and leaves the previous output untouched.
             BinaryInspector().archive(temporary, "pack.temp")
+            # v1.2.3 round-80 (CodeRabbit PR#60 re-review): the pack report
+            #   carries THIS invocation's published bytes — size and SHA-256
+            #   are read from the completed temporary BEFORE the publish; after
+            #   os.replace another writer could swap the target and the old
+            #   post-replace stat() would attest someone else's archive.
+            zip_size = temporary.stat().st_size
+            zip_digest = sha256_file(temporary)
             # Publish only our exclusively created temporary file while the
             # per-output lock prevents a concurrent replacement/stat race.
             os.replace(temporary, output)
@@ -267,8 +293,8 @@ def pack(root: Path, output: Path) -> None:
         print(f"source_uncompressed_bytes={total}")
         print(f"protected_license_archive_bytes={license_size}")
         print(f"protected_license_archive_sha256={license_hash}")
-        print(f"source_zip_bytes={output.stat().st_size}")
-        print(f"source_zip_sha256={sha256_file(output)}")
+        print(f"source_zip_bytes={zip_size}")
+        print(f"source_zip_sha256={zip_digest}")
         print(f"SOURCE-PACK-V11 OK: {output}")
     finally:
         lock_path.unlink(missing_ok=True)
@@ -343,7 +369,11 @@ def verify(root: Path, archive_path: Path) -> None:
             archive_hash.update(chunk)
         size = raw.tell()
         print(f"source_zip_bytes={size}")
-        print(f"source_zip_sha256={archive_hash}")
+        # v1.2.3 round-80 (CodeRabbit PR#60 re-review): print the hex DIGEST —
+        #   formatting the hash object emitted `<sha256 ... object at ...>`
+        #   instead of the digest, so a passing archive could not be identified
+        #   by its own success line.
+        print(f"source_zip_sha256={archive_hash.hexdigest()}")
         print("SOURCE-ZIP-V11-GATE OK: exact current manifest, recursive binary inspection, no engine/build/signing material")
 
 

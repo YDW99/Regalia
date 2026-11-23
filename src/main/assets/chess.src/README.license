@@ -1,3 +1,15 @@
+v1.2.3 round-80 (2026.11.23): engine-config bridge queries extracted (SonarCloud S3776).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - ai-bridge.js (GPL v3): openEngineConfig's two best-effort bridge reads
+    moved into a shared _bridgeJsonQuery helper — round-79's inline
+    try/catch + fallback-ternary pairs pushed the function's cognitive
+    complexity to 16 (SonarCloud S3776, threshold 15). Behavior identical:
+    falsy bridge returns stay null, exceptions are logged (round-79 S2486
+    semantics kept) and the caller's fallback applies.
+  - assets/chess.html: rebuilt deterministically from these sources (24,403
+    lines / 1,500,928 bytes; two consecutive builds byte-identical; SHA-256
+    ff7036920da6e33f7502464dfd5372f5500f8408f1c499d8279913560ae01cf2).
+
 v1.2.3 round-79 (2026.11.23): cache-list refresh on partial rename + honest bridge fallbacks.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - ui.js (GPL v3): _pgnCacheRename's failure branch now refreshes the cache

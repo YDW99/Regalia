@@ -10556,6 +10556,21 @@ function renderEngineConfigAndUpdate(){
     }
   }
 }
+// v1.2.3 round-80 (SonarCloud S3776): shared best-effort bridge query helper —
+//   round-79's S2486 fix put both try/catch + fallback-ternary pairs inline in
+//   openEngineConfig and pushed its cognitive complexity to 16 (> the 15
+//   threshold). Behavior is unchanged: falsy bridge returns stay null, an
+//   exception is logged (never silently swallowed) and the caller's fallback
+//   value applies.
+function _bridgeJsonQuery(query,fallback){
+  try{
+    const raw=query();
+    return raw?JSON.parse(raw):null;
+  }catch(e){
+    console.warn('[Engine]',e?.message?e.message:e);
+    return fallback;
+  }
+}
 function openEngineConfig(){
   showEngineConfig=true;
   engineConfigData=null;
@@ -10565,8 +10580,8 @@ function openEngineConfig(){
     // v1.2.3 round-79 (SonarCloud S2486): best-effort bridge query — on failure
     //   we fall back to the built-in engine metadata; the exception is logged
     //   (not silently swallowed) so bridge failures remain diagnosable.
-    try{const info=AndroidBridge.getEngineInfo();if(info)engineConfigData=JSON.parse(info);}catch(e){console.warn('[Engine]',e?.message?e.message:e);engineConfigData={name:'Stockfish 19',author:'T. Romstad, M. Costalba, J. Kiiski, G. Linscott'};}
-    try{const settings=AndroidBridge.getEngineSettings();if(settings)engineSettingsData=JSON.parse(settings);}catch(e){console.warn('[Engine]',e?.message?e.message:e);engineSettingsData=null;}
+    engineConfigData=_bridgeJsonQuery(()=>AndroidBridge.getEngineInfo(),{name:'Stockfish 19',author:'T. Romstad, M. Costalba, J. Kiiski, G. Linscott'});
+    engineSettingsData=_bridgeJsonQuery(()=>AndroidBridge.getEngineSettings(),null);
   }
   if(!engineSettingsData){
     engineSettingsData={threads:2,hash:128,moveOverhead:60,multiPV:1,ponder:false,showWDL:true,skillLevel:20,limitStrength:false,elo:2800,autoConfig:true};

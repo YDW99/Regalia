@@ -1,3 +1,24 @@
+v1.2.3 round-80 (2026.11.23): import clamp floor restored, bare-CR settings parser, cap-log constants, List.sort.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - EngineSettingsHelper.java (GPL v3): the round-79 threads refactor lost the
+    lower bound — an imported engine.threads=0/negative value passed the
+    upper-bound check only and was saved verbatim (applySetting's raw field
+    callback never goes through the clamping setter); the Math.max(1, ...) floor
+    is restored and lower clamping counts into the clamped summary (CodeRabbit
+    PR#60 re-review). The settings parser now splits on CR/LF/CRLF
+    (split("\\r\\n|\\r|\\n")) — round-79's byte-faithful chunked read kept
+    bare \r while split("\\r?\\n") did not split it, so a bare-CR settings
+    file failed integer parsing and rejected the whole import (CodeRabbit
+    PR#60 re-review). The "importSettings: " log prefix extracted to a
+    constant (SonarCloud S1192); the validateSettings loop keeps a single
+    continue — the metadata skip is an if/else branch (SonarCloud S135).
+  - FileIoHelper.java (GPL v3): the round-79 comment claiming the raw-newline
+    stream "does not affect parsing" is corrected in place (cross-references
+    the round-80 parser fix); no behavior change.
+  - PgnCacheManager.java (GPL v3): the " bytes): " cap-refusal suffix
+    extracted to a constant (SonarCloud S1192); evictIfNeeded sorts via
+    List.sort() instead of Collections.sort() (SonarCloud S9412).
+
 v1.2.3 round-79 (2026.11.23): read/write caps, strict settings import, truthful partial-failure returns.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - EngineSettingsHelper.java (GPL v3): two-phase validate->apply import

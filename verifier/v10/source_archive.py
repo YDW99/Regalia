@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import os
 from pathlib import Path, PurePosixPath
+import stat
 import tempfile
 import zipfile
 
@@ -26,6 +27,19 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _is_jnilibs(parts: list[str]) -> bool:
+    # v1.2.3 round-80 (CodeRabbit PR#60 re-review): the round-79 form matched
+    #   the SUBSTRING "src/main/jnilibs" anywhere in the lowercased path, so
+    #   src/main/jniLibsBackup/README.md (and any path merely CONTAINING the
+    #   fragment) was rejected wholesale — payload_files() silently skipped
+    #   it and verify() refused the archive. The jniLibs tree is now matched
+    #   by three CONSECUTIVE whole path components (any case), matching the
+    #   v11/v13 form: neighbouring directories survive, the actual jniLibs
+    #   tree is still rejected at any case.
+    return any(tuple(parts[index:index + 3]) == ("src", "main", "jnilibs")
+               for index in range(max(0, len(parts) - 2)))
+
+
 def forbidden_name(path: PurePosixPath) -> bool:
     lower_parts = [part.lower() for part in path.parts]
     name = lower_parts[-1]
@@ -37,7 +51,7 @@ def forbidden_name(path: PurePosixPath) -> bool:
     #   src/main/jniLibs/README.txt slipped past validation. Pack-side pruning
     #   (exact rel.as_posix() == "src/main/jniLibs") is case-exact by design;
     #   the ZIP validation side now matches at any case via the lower form.
-    if "src/main/jnilibs" in path.as_posix().lower():
+    if _is_jnilibs(lower_parts):
         return True
     if name in EXCLUDED_FILES or name.endswith(FORBIDDEN_SUFFIXES):
         return True
@@ -94,13 +108,20 @@ def pack(root: Path, output: Path) -> None:
                 rel = path.relative_to(root).as_posix()
                 archive.write(path, PREFIX + rel)
                 total += path.stat().st_size
+        # v1.2.3 round-80 (CodeRabbit PR#60 re-review): the pack report carries
+        #   THIS invocation's published bytes — size and SHA-256 are read from
+        #   the completed temporary BEFORE the publish; after os.replace a
+        #   concurrent writer could publish to the same path and the old
+        #   post-replace stat() would attest THEIR archive.
+        zip_size = temporary.stat().st_size
+        zip_digest = sha256_file(temporary)
         os.replace(temporary, output)
     finally:
         temporary.unlink(missing_ok=True)
     print(f"source_entries={len(files)}")
     print(f"source_uncompressed_bytes={total}")
-    print(f"source_zip_bytes={output.stat().st_size}")
-    print(f"source_zip_sha256={sha256_file(output)}")
+    print(f"source_zip_bytes={zip_size}")
+    print(f"source_zip_sha256={zip_digest}")
     print(f"SOURCE-PACK-V10 OK: {output}")
 
 
@@ -109,9 +130,18 @@ def verify(root: Path, archive_path: Path) -> None:
     #   whole verification and the reported size/SHA-256 — the old code
     #   re-read the path after the with-block, so a concurrent os.replace
     #   could make the success line attest an unchecked file.
-    with archive_path.open("rb") as raw:
-        if not archive_path.is_file():
-            raise AssertionError("source ZIP missing")
+    # v1.2.3 round-80 (CodeRabbit PR#60 re-review): non-regular inputs are
+    #   rejected BEFORE any read — archive_path.open("rb") on a Linux FIFO
+    #   with no writer blocks forever, so the round-79 is_file() check placed
+    #   AFTER the open was unreachable for exactly that case. The path is
+    #   opened non-blocking first, the descriptor is fstat-verified to be a
+    #   regular file, and the SAME descriptor then serves the whole
+    #   verification and digest computation.
+    fd = os.open(archive_path, os.O_RDONLY | os.O_NONBLOCK)
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise AssertionError("source ZIP missing or not a regular file")
+    with os.fdopen(fd, "rb") as raw:
         with zipfile.ZipFile(raw) as archive:
             names = archive.namelist()
             if len(names) != len(set(names)):
@@ -192,7 +222,11 @@ def verify(root: Path, archive_path: Path) -> None:
             archive_hash.update(chunk)
         size = raw.tell()
         print(f"source_zip_bytes={size}")
-        print(f"source_zip_sha256={archive_hash}")
+        # v1.2.3 round-80 (CodeRabbit PR#60 re-review): print the hex DIGEST —
+        #   formatting the hash object emitted `<sha256 ... object at ...>`
+        #   instead of the digest, so a passing archive could not be identified
+        #   by its own success line.
+        print(f"source_zip_sha256={archive_hash.hexdigest()}")
         print("SOURCE-ZIP-V10-GATE OK: complete required payload, no engine/build/signing material")
 
 

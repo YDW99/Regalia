@@ -22,7 +22,7 @@ from archive_scan import ArchiveLimits, Budget, safe_member_name, scan_archive
 PREFIX = "Regalia-v1.2.3-round77/"
 ENGINE_SHA256 = "ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8"
 KEYSTORE_SHA256 = "6a44f6607f4ed90fa6f4c52bedb8626d22ef285ba4127b68dd26975aaa522ccc"
-BUNDLE_SHA256 = "ae15d2b699624e549745582b5835d35418ff77b51a08ae704915a0d643e6c9e0"
+BUNDLE_SHA256 = "ff7036920da6e33f7502464dfd5372f5500f8408f1c499d8279913560ae01cf2"
 EXCLUDED_DIRS = {".git", ".gradle", ".cxx", "build", ".idea", "__pycache__", "node_modules"}
 EXCLUDED_FILES = {"local.properties", "keystore.properties", "keystore-info.txt", "regalia-signing.env"}
 FORBIDDEN_SUFFIXES = (".jks", ".keystore", ".p12", ".pfx", ".apk", ".aab", ".idsig", ".so")
@@ -72,6 +72,25 @@ def _is_output_artifact(path: Path, root: Path, output: Path | None) -> bool:
         return True
     return (resolved.parent == output.parent and
             (path.name.startswith(output.name + ".tmp-") or path.name == output.name + ".lock"))
+
+
+def _is_rebuildable_test_artifact(output: Path, root: Path) -> bool:
+    """v1.2.3 round-80 (CodeRabbit PR#60 re-review): the selftest packs its
+    in-tree artifact TWICE to prove the output-artifact exclusion — the first
+    pack creates verifier/runs/<round>-selftest-source.zip inside the tree,
+    and the second call must be able to REBUILD it. Round-79's blanket
+    "refusing to overwrite a payload source file" fired on that second call
+    because the first ZIP had already become an in-tree payload file. Only
+    outputs under verifier/runs/ named *-selftest-source.zip are treated as
+    rebuildable test artifacts; the protected license and every other
+    payload source file remain non-overwritable.
+    """
+    try:
+        rel = output.relative_to(root)
+    except ValueError:
+        return False
+    return (len(rel.parts) == 3 and rel.parts[:2] == ("verifier", "runs")
+            and rel.name.endswith("-selftest-source.zip"))
 
 
 def payload_files(root: Path, output: Path | None = None) -> list[Path]:
@@ -231,7 +250,7 @@ def pack(root: Path, output: Path) -> None:
     protected_input = root / "LICENSE&NOTICE.zip"
     if output == protected_input.resolve():
         raise AssertionError("refusing to overwrite the protected LICENSE&NOTICE.zip input")
-    if output in payload_files(root):
+    if output in payload_files(root) and not _is_rebuildable_test_artifact(output, root):
         raise AssertionError("refusing to overwrite a payload source file")
     license_size, license_hash = protected_license_metadata(root)
     lock_path = output.with_name(output.name + ".lock")
@@ -264,6 +283,13 @@ def pack(root: Path, output: Path) -> None:
             #   publish, not the later verify. Failure cleans the temporary file
             #   and leaves the previous output untouched.
             BinaryInspector().archive(temporary, "pack.temp")
+            # v1.2.3 round-80 (CodeRabbit PR#60 re-review): the pack report
+            #   carries THIS invocation's published bytes — size and SHA-256
+            #   are read from the completed temporary BEFORE the publish; after
+            #   os.replace another writer could swap the target and the old
+            #   post-replace stat() would attest someone else's archive.
+            zip_size = temporary.stat().st_size
+            zip_digest = sha256_file(temporary)
             # Publish only our exclusively created temporary file while the
             # per-output lock prevents a concurrent replacement/stat race.
             os.replace(temporary, output)
@@ -275,8 +301,8 @@ def pack(root: Path, output: Path) -> None:
         print(f"source_uncompressed_bytes={total}")
         print(f"protected_license_archive_bytes={license_size}")
         print(f"protected_license_archive_sha256={license_hash}")
-        print(f"source_zip_bytes={output.stat().st_size}")
-        print(f"source_zip_sha256={sha256_file(output)}")
+        print(f"source_zip_bytes={zip_size}")
+        print(f"source_zip_sha256={zip_digest}")
         print(f"SOURCE-PACK-V13 OK: {output}")
     finally:
         lock_path.unlink(missing_ok=True)
@@ -351,7 +377,11 @@ def verify(root: Path, archive_path: Path) -> None:
             archive_hash.update(chunk)
         size = raw.tell()
         print(f"source_zip_bytes={size}")
-        print(f"source_zip_sha256={archive_hash}")
+        # v1.2.3 round-80 (CodeRabbit PR#60 re-review): print the hex DIGEST —
+        #   formatting the hash object emitted `<sha256 ... object at ...>`
+        #   instead of the digest, so a passing archive could not be identified
+        #   by its own success line.
+        print(f"source_zip_sha256={archive_hash.hexdigest()}")
         print("SOURCE-ZIP-V13-GATE OK: exact current manifest, recursive binary inspection, no engine/build/signing material")
 
 

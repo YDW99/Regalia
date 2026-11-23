@@ -66,6 +66,73 @@ def text(rel: str) -> str:
     return (ROOT / rel).read_text(encoding="utf-8")
 
 
+def effective_gradle_script(source: str) -> str:
+    """v1.2.3 round-80 (CodeRabbit PR#60 re-review): the EFFECTIVE form of a
+    Gradle script — // line comments and /* */ block comments removed, string
+    literals (single/double/triple quoted) preserved verbatim so their content
+    still participates in the comparison, and the blank/whitespace-only lines
+    left behind by comment removal normalized away. Round-79 dropped
+    build.gradle from the byte comparison entirely and guarded it with
+    substring assertions, which let a real dependency or configuration change
+    pass as a round-79 "comment-only edit"; comparing the effective form keeps
+    every dependency, plugin and configuration line guarded while the round-79
+    JDK-21 comment correction stays allowed.
+    """
+    out = []
+    i, n = 0, len(source)
+    while i < n:
+        ch = source[i]
+        if ch == "/" and source[i:i + 2] == "//":
+            newline = source.find("\n", i)
+            if newline < 0:
+                break
+            i = newline
+            continue
+        if ch == "/" and source[i:i + 2] == "/*":
+            end = source.find("*/", i + 2)
+            i = n if end < 0 else end + 2
+            continue
+        if ch in ("'", '"'):
+            triple = source[i:i + 3]
+            if triple in ('"""', "'''"):
+                end = source.find(triple, i + 3)
+                if end < 0:
+                    out.append(source[i:])
+                    i = n
+                else:
+                    out.append(source[i:end + 3])
+                    i = end + 3
+                continue
+            j = i + 1
+            while j < n:
+                if source[j] == "\\":
+                    j += 2
+                    continue
+                if source[j] == ch:
+                    break
+                j += 1
+            out.append(source[i:j + 1])
+            i = j + 1
+            continue
+        out.append(ch)
+        i += 1
+    return "\n".join(line for line in "".join(out).splitlines() if line.strip())
+
+
+def effective_properties(source: str) -> str:
+    """v1.2.3 round-80 (CodeRabbit PR#60 re-review): the EFFECTIVE form of a
+    Java-properties file — comment lines (# / !) and blank lines removed, every
+    active key=value line kept verbatim. Round-79 asserted gradle.properties
+    with substring checks: keeping
+    `org.gradle.java.installations.auto-download=false` in a comment while
+    adding an ACTIVE `...=true` passed the gate while the configuration had
+    actually changed. The effective comparison rejects that and still lets the
+    round-79 comment corrections through.
+    """
+    return "\n".join(line for line in source.splitlines()
+                     if line.strip() and not line.lstrip().startswith(("#", "!")))
+
+
 def snapshot(root: Path, current: bool = False) -> dict[str, str]:
     result: dict[str, str] = {}
     generated = (".git/", ".gradle/", "build/", "app/build/", ".cxx/", "src/main/jniLibs/")
@@ -133,18 +200,20 @@ def main() -> None:
     pmd = text("config/pmd-ruleset.xml")
     check("project PMD ruleset preserved", "rulesets/java/quickstart.xml" in pmd and '<exclude name="ControlStatementBraces"/>' in pmd)
 
-    # v1.2.3 round-79 (RED-01): build.gradle / gradle.properties carry
-    #   comment-only edits this round — they are asserted by build SEMANTICS
-    #   below (SDK/NDK contract + jvmargs block) instead of byte equality;
+    # v1.2.3 round-79 (RED-01) → round-80 (CodeRabbit PR#60 re-review):
+    #   build.gradle / gradle.properties carry comment-only edits since the
+    #   fixed base. Round-79 replaced their byte comparison with substring
+    #   assertions, which a comment/active-value swap could satisfy; they are
+    #   now compared in EFFECTIVE form (comments stripped, string literals
+    #   kept): every dependency, task and active property line must still match
+    #   the fixed base, while the comment corrections remain allowed.
     #   settings.gradle and the gradle wrapper remain byte-identical.
     build_files = ("settings.gradle", "gradle/wrapper/gradle-wrapper.properties")
     check("unchanged build dependencies and configuration", all(text(rel) == base_text(rel) for rel in build_files))
-    gradle_props = text("gradle.properties")
-    check("gradle.properties build semantics unchanged", all(s in gradle_props for s in (
-        "org.gradle.jvmargs=-Xmx4096m \\", "-XX:+UseG1GC \\",
-        "-XX:HeapDumpPath=.gradle-dumps/ \\",
-        "org.gradle.java.installations.auto-detect=true",
-        "org.gradle.java.installations.auto-download=false")))
+    check("build.gradle effective dependencies and configuration unchanged",
+          effective_gradle_script(text("build.gradle")) == effective_gradle_script(base_text("build.gradle")))
+    check("gradle.properties effective configuration unchanged",
+          effective_properties(text("gradle.properties")) == effective_properties(base_text("gradle.properties")))
     build = text("build.gradle")
     check("SDK/NDK contract", all(s in build for s in ('compileSdk 35', 'minSdk 23', 'targetSdk 35', 'ndkVersion "27.2.12479018"')))
     version = text("version.properties")
@@ -265,7 +334,7 @@ def main() -> None:
     else:
         engine_ok = True
     check("local engine input is absent or untracked and ignored", engine_ok)
-    assert checks == 37, checks
+    assert checks == 38, checks
     print(f"SOURCE-V13-GATE OK ({checks} checks), fixed_base={base}")
 
 

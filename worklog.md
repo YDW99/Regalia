@@ -343,3 +343,90 @@ NDK 受损安装缺少整个 `build/` 目录；官方 ZIP 的大小与 SHA-256 �
 **边界（用户侧必须执行的验收）**：本补丁包**未经 `compileReleaseJavaWithJavac` 编译验证**（交付环境无 JDK，仅有 JRE 21；语法验证到 javalang 层）。应用补丁后须在签名环境执行：v13 source gate 允许子集核对（Java 改动属 source-gate 纪律范围，基线 `f783179…` 须用户侧持有）→ v1/v2/v3、r62、r67、v11 负测 27/27 全量回归 → `compileReleaseJavaWithJavac` 与 `assembleRelease` → APK 重建/重签与 v13 APK 门（chess.html 不在本轮改动内，交付哈希 `ae15d2b6…` 应保持一致，可作为回归锚点）。ROB-04 行为变化（导入事务化）与 ROB-09 返回语义变化建议各配一次设备级冒烟（导入含错行文件、重命名含标签条目）。push/merge 前须取得用户明确确认；`LICENSE&NOTICE.zip` 永不回退。
 
 补丁包内含 `PATCH-NOTES.md`（逐文件改动说明与应用方法）；worklog 本条目不自称任何未在本环境实际执行的门禁结果。
+
+---
+
+## v1.2.3 round-79 (2026.11.23)：剩余项一次性正确落地（PR #60 复核 + CodeRabbit/SonarCloud 意见吸收）
+
+本轮以 round-77 源码包为实施基准，把 round-77 验收后剩余的 ROB-02/03/04/06/08/09、ROB-07 残留、RED-01/02 与 CodeRabbit 对 PR #60（round-78）的全部可操作评论、SonarCloud PR #60 的 9 项 OPEN 问题一次性正确落地。round-78 曾引入的 `StringWriter.size()` 编译阻断错误不在本轮产物中 —— 全部读取循环统一使用 `sw.getBuffer().length()`（java.io.StringWriter 没有 size() 方法）。
+
+### Java 载荷（六文件）
+
+- EngineSettingsHelper（ROB-04）：导入重构为两阶段 validate→apply；未知键、非整数、非布尔、空值在应用任何设置之前以 "line N: reason" 拒绝整份文件；exportSettings() 产出的 engine.name / engine.path 只读元数据键被识别并跳过（round-78 严格化误伤"自导出配置无法恢复"的问题不复现）；布尔仅接受显式 true/false；0 个有效键不报成功；诊断与键名常量化（SonarCloud S1192 ×4）；校验返回 String 而非 Boolean-null（S2447）。
+- PgnCacheManager（ROB-03/09）：PGN 写 32MB（UTF-8 字节写前）/ 读 64M chars；标签 1MiB 对称上限（getTags 文件级+读循环级，setTags 序列化字节写前检查、超限保留旧文件并返回 false）；rename 的"PGN 已改名但标签丢失/迁移失败"部分成功返回 false 并要求调用方刷新列表；evictIfNeeded 预算只统计受管文件（.pgn 与 .tags.json）、孤儿标签为第二优先淘汰候选、杂散文件受控忽略、淘汰排空仍超限输出警告；setTags 嵌套 try 提取为 clearTagsFile（S1141）。
+- StockfishNative（ROB-03）：loadEvalCacheSync 增加 16M chars 读循环上限与 16MB 文件级上限；saveEvalCacheSync 增加 16MB 写前上限（超限拒绝、旧正式缓存保持原样）。
+- FileIoHelper（ROB-02）：readTextFile 弃用 readLine 整行物化（先物化后检查），改为 8KB char[] 流式读、追加前判限；文件级字节上限与循环级字符上限常量拆分并注明口径关系。
+- AtomicFileStore（SonarCloud S899）：失败清理路径的 temp.delete() 返回值记录（清理失败记 Log.w），原始写入/替换失败仍优先上抛。
+- TlsSecurityHelper（RED-02）：文档透明化 —— Class.forName 满足器明确标注为"非运行时防御"，永真 verifyDeviceIntegrity 明确标注为"显式不适用、不得用作授权依据"；无行为变化（MobSF 可见性保持）。
+
+### JS 与网页包
+
+ui.js 的 _pgnCacheRename 失败分支刷新缓存列表并重渲染（与 rename false 语义闭环，CodeRabbit PR#60）；ai-bridge.js 的两处桥接 catch 记录异常（SonarCloud S2486），eval-cache 写策略注释合并为当前混合策略 + 2000-entry 规模的单一叙述（RED-01④，过时的 60k-entry/~12MB 数字不再以现状口吻出现）。chess.html 由 build-chess.py 确定性重建：24,388 行 / 1,500,518 字节，连续两次构建字节一致，SHA-256 `9e356a3cd3851730f17bf5719aace76f35d0c6b4619b87c78a63aeaa985f0a32`。
+
+### 仓库卫生与 CI
+
+.gitignore 落地 `.gradle-dumps/` 与 `*.hprof` 两道规则（ROB-08，gradle.properties 注释同步更正）；mobsf.yml 补 `persist-credentials: false`，`|| true` 改为区分"有 SARIF 的 findings 退出"（预期，告警后继续上传）与"无报告的工具失败"（fail closed）（ROB-07 残留）；unzip-folder-optimized.yml 重写：python3 结构化 ZIP 预检（任意层级保护路径、穿越/加密/预算/成员数/自覆盖检查，危险输入失败即终止；保护条目结构化跳过并告警，通道功能保持）+ 并发串行化（concurrency）+ stash push/pop 失败即终止 + manifest 驱动 staging（git add --pathspec-from-file，与"Stage only the extracted files"的注释终于一致；旧实现 git add -A 与注释直接矛盾）（ROB-06）。RED-01 六处注释更正：JDK 17 工具链口径（build.gradle）、备份规则文件已删除勘误（AndroidManifest）、nativeChmod-only（CMakeLists）、写策略单一叙述（ai-bridge）、.gitignore 落地对齐（gradle.properties）、账本条目（assets/README.license 追加 round-79 记录）。
+
+### verifier 加固（v9/v10/v11/v13；v4–v8 历史与已标 superseded 的 v9/verify-apk.py 不动）
+
+- archive_scan（v11+v13 同构同修）：EOCD 中央目录预检（解析前限制元数据资源）+ infolist 后按实际记录数执行成员上限 + 目录条目纳入重复成员检查 + 先路径/加密检查再拒带数据的目录条目（CodeRabbit #10/#11/#12）。
+- source_archive（v11+v13）：pack 拒绝覆盖受保护输入（LICENSE&NOTICE.zip 及任何载荷源文件）+ 发布前对临时 ZIP 执行与 verify 相同的有界扫描 + verify 全程单一文件对象并就地报告身份（#21/#22/#23）。
+- source_archive（v9+v10）：mkstemp 独占临时文件、jniLibs 小写两口径匹配修复、verify 单文件对象（#29/#30/#7）。
+- secret_scan（v9+v10）：诊断 label 先遮蔽已知密码（#28）；v11：源码枚举失败转不含路径诊断并 from None（#20）。
+- verify-apk（v10/v11/v13）：uses-permission-sdk-23 声明纳入基准权限集合、APK 私有副本（所有检查与身份报告针对同一副本、原路径在副本后不再重开）、v11 固定批准身份前置检查（#8/#9/#27）。
+- source-gate（v11）：解析两清单 XML 比较权限元素（含 sdk-23 与 maxSdkVersion）、-z NUL 分隔路径枚举、inherited_unchanged 同时比较内容与 index/tree 模式（#24/#25/#26）。
+- rename-only-proof（v11）：re.subn 且每个标识符至少命中一次（#17）。
+- negative-tests（v11）：expect_failure 增加预期诊断片段并逐用例标注（I/O 错误不再算作预期拒绝）、中断历史断言先按 label 筛选；新增中央目录预算/重复目录/带数据目录三个负测（原语负测 27→30）（#14/#15 + 新防线佐证）。
+- run-and-log（v11+v13）：finish 状态化 —— 日志写入成功才追加历史；子进程退出码保留，证据写失败不报验证成功（75）（#18/#19）。
+- browser-download（v11）：唯一临时文件保存下载，大小+SHA-256 双校验通过才原子替换目标，失败清理临时（#13）。
+
+### v13 source gate 适配（31→37 检查）
+
+允许集扩展至 round-79 变更面（Java 新增 EngineSettingsHelper/FileIoHelper/TlsSecurityHelper；.gitignore、AndroidManifest、CMakeLists、assets 两账本、chess.src/ui.js、unzip workflow、build.gradle、gradle.properties 入 allowed_exact）；build.gradle / gradle.properties 从逐字节不变改为构建语义不变断言（SDK/NDK contract 与 jvmargs 块；settings.gradle 与 wrapper 仍逐字节不变）；新增六项断言：.gitignore 落地、MobSF checkout credentials、gradle 语义、只读元数据键跳过特征、部分改名可观测特征、tracked 文件模式白名单（内容快照基线看不到模式位变更，此为其可执行等价物）。
+
+### 本轮静态验证（沙盒内完成）
+
+17 个改动 Python 文件 py_compile 全部通过；v11/v13 run-and-log.sh bash -n 通过；ui.js/ai-bridge.js node --check 通过；mobsf.yml 与 unzip-folder-optimized.yml YAML 解析通过；AndroidManifest.xml XML 解析通过；六个 Java 文件 javalang 语法级解析通过（StockfishNative 的 Java 16 instanceof 模式匹配以等价改写后全文件解析验证，round-77 原版在同位置受 javalang 版本能力限制属既有现象）；chess.html 两次重建字节一致；全部修复特征断言（约 90 项）逐一验证在文件内存在。APK 未重建（本轮全部为源码/脚本/配置变更，versionCode/引擎身份/权限/protected zip/APK 均不动）；v13 门禁重跑、v1/v2/v3 与 r62/r67 回归、v11 负测与 APK 重建重签由仓库侧按惯例执行——EXPECTED_BASE_TREE_SHA256 基线树常量与外部基线目录（f783179）由仓库侧维护，应用步骤与门禁重跑指引见补丁包内 PATCH-NOTES.md。
+
+（本条目为追加文件落地：`cat worklog-round79-append.txt >> worklog.md`，不整体覆盖 worklog.md，以保护 round-78 的既有日志行。）
+
+---
+
+## v1.2.3 round-80 (2026.11.23)：CodeRabbit 复审 25 项 + SonarCloud 5 项落地 + 自动解压通道丢件补投
+
+本轮实施基准为 GitHub `upload` 分支当前树（round-79 补丁应用后状态；经 SHA-256 逐文件核对，38 个文件中 35 个与 round-79 补丁逐字节一致，`.gitignore`、`.github/workflows/mobsf.yml`、`.github/workflows/unzip-folder-optimized.yml` 仍停留在 round-76 原始状态——补投原因见下）。输入源：用户上传的 CodeRabbit 对 PR #60（round-79 变更）的复审邮件（25 条可操作评论 + 1 条 diff 外评论）、SonarCloud PR #60 OPEN/CONFIRMED 5 项、《回复复查(2026.11.23)》元级复核意见。
+
+### 通道丢件根因与补投（round-79 遗留三项）
+
+经 GitHub API 取回上传 blob 与 round-79 补丁包逐字节比对确认：用户侧把补丁包重新打包为 upload.zip 上传时（重打包时间戳 13:39，SHA-256 不同于补丁包），点文件（`.gitignore`、`.github/`）与交付说明文件（PATCH-NOTES.md、worklog-round79-append.txt）未进入重打包的 zip；且 `unzip-folder-optimized.yml` 的 find -delete 也会在解压阶段删除 `.github/workflows/*` 条目（通道自身设计如此，另有 round-67/.gitignore 头部注释的历史佐证）。因此 ROB-06/07/08 的修复自 round-78/79 起从未真正落进仓库——当前分支的 mobsf.yml 仍是"未固定版本 + 无 persist-credentials + `|| true`"的原始状态，unzip workflow 仍是"嵌套前缀绕过 + `|| true` 吞 stash 冲突 + git add -A"的原始状态，.gitignore 仍缺 `.gradle-dumps/` 与 `*.hprof`。本轮把这三个文件按 round-79 已交付版本原字节补投进补丁包；**应用方式变更**：这三个文件（及 worklog 之外的 dotfile）必须经 GitHub 网页编辑器或直接 git push 落库，不能指望 upload.zip 通道（详见 PATCH-NOTES.md 第 0 节）。
+
+### Java（3 文件）
+
+- EngineSettingsHelper（CodeRabbit 复审 #1 + SonarCloud S135/S1192 + 复审 #2 解析侧）：engine.threads 下限 1 恢复（round-79 重构丢了 Math.max(1,...)，导入 0/负值原样保存；下限钳制计入 clamped）；设置解析器改为 split("\\r\\n|\\r|\\n") 同时接受裸 CR/LF/CRLF（round-79 的字节忠实流式读保留裸 \\r，而 split("\\r?\\n") 不拆裸 CR 行，整份导入被拒）；"importSettings: " 前缀常量化（S1192）；validateSettings 循环单一 continue——元数据跳过改 if/else（S135）。
+- FileIoHelper（复审 #2 注释侧）：round-79"流式读保留原始换行形态不影响解析"的失实注释就地更正（交叉引用 round-80 解析器修复）；无行为变化。
+- PgnCacheManager（SonarCloud S1192/S9412）：" bytes): " 上限拒绝日志后缀常量化（CAP_REFUSAL_BYTES_SUFFIX）；evictIfNeeded 两处 Collections.sort 改 List.sort。
+
+### JS 与网页包（SonarCloud S3776）
+
+ai-bridge.js：openEngineConfig 的两个 try/catch + 回退三元对提取为共享 _bridgeJsonQuery 助手（行为逐语义保持：桥返回假值仍为 null、异常仍记录、调用方回退仍生效），认知复杂度 16 → 阈值 15 以内。chess.html 由 build-chess.py 确定性重建：24,403 行 / 1,500,928 字节，连续两次构建字节一致，SHA-256 `ff7036920da6e33f7502464dfd5372f5500f8408f1c499d8279913560ae01cf2`。
+
+### verifier（16 文件）
+
+- secret_scan（v9+v10，CodeRabbit 复审 Major）：诊断改为扫描器生成的"阶段#序号"不透明标识，路径/成员名彻底不进诊断——round-79 的 `<masked>` 占位符在密码为 "masked" 的子串（"mask"/"ask"/"ed"…）时本身内含密码，两个失败诊断仍会打印它（采用 v11 的既有设计）。
+- source_archive（v9+v10）：verify 先以 O_RDONLY|O_NONBLOCK 打开并用 os.fstat 校验为普通文件（FIFO 无写入方时 open("rb") 永久阻塞，round-79 的 open 后 is_file 检查恰好不可达）；pack 的 size/SHA-256 改为发布前从本次已完成的临时文件计算（发布后 output.stat() 可读到并发写手的归档）；source_zip_sha256 输出 hexdigest（此前输出哈希对象）；jniLibs 识别改为连续 src/main/jnilibs 三组件匹配（round-79 子串形式连 src/main/jniLibsBackup/README.md 一并拒绝，对齐 v11/v13 实现）。
+- source_archive（v11+v13）：source_zip_sha256 输出 hexdigest；pack 统计同样改为发布前从临时文件计算；pack 恢复对 verifier/runs/*-selftest-source.zip 的显式重建（round-79 的一律拒绝使集成测试对树内自测产物的第二次 pack 提前失败；_is_rebuildable_test_artifact 仅放行该命名模式，许可证与普通源文件仍受保护）。
+- source_archive（v13 附加）：BUNDLE_SHA256 更新为本轮重建后的 chess.html（`ff703692…`）——round-79 重建了 chess.html 却把该 pin 留在 round-77 值（`ae15d2b6…`），打包-校验对必然失败"source bundle hash mismatch"（round-79 交付引入的失配，本轮交叉核对发现）。
+- archive_scan（v11+v13 同构同修，CodeRabbit 复审 Major）：中央目录预检镜像 CPython 3.11 解析器的 ZIP64 语义——EOCD 前 20 字节存在 PK\\x06\\x07 定位记录即意味着解析器采用 EOCD64 的 64 位目录大小（与经典字段是否 0xFFFFFFFF 无关），预检据此取 EOCD64 值；无法确定有效大小时（无 EOCD、定位记录而无完整 EOCD64）fail closed 拒绝；预检自身的 I/O 错误进入与解析器相同的不透明诊断边界（路径移走后的裸 OSError 会把原路径打进回溯）。
+- browser-download（v11，两条 Major）：临时文件所有权范围覆盖 browser.close() 与 playwright 上下文退出（close 失败此前逃出内层 except，download() 不返回、临时文件无人清理；现在任何退出阶段失败先删临时再上抛，全部成功后才把路径交给 main）；main() 的 JSON 输出移入临时清理 try 内（打印在 try 之前失败会把完整下载的 APK 临时文件留在输出目录）。
+- negative-tests（v11）：中断历史按实际行数计数（round-79 的 set 压平了两条相同行，双重记账仍过 ==1 检查；现按 TSV 第 2 列完整 label 字段筛选列表计数）；中央目录超限负测构造夹具后对被测模块 ZipFile 构造器设 spy 并断言未被调用（此前只查错误文本——先解析再拒绝也会通过；错误文本断言保留）。
+- rename-only-proof（v11，Major）：基线先做词法去注释/去字符串，每个标识符必须在代码形态中命中"TYPE name(params) {"方法声明——round-79 的 re.subn 把注释提及也算命中，基线声明已改名而注释残留时可"通过"而不证明任何东西；subn 变换与全文比较保留。
+- run-and-log（v11+v13）：finish 的日志写入改为 set -e 子shell 逐条执行——round-79 的 if ! {…} 只看组内最后一条命令（cat），中段 printf 失败（磁盘满）而 TMP 为空时组状态仍为 0，历史条目指向截断日志；cat ""$LOG"" 改 cat "$LOG"（路径含空格时词拆分，日志无法输出且 return 0 掩盖）。
+- source-gate（v13，两条）：build.gradle / gradle.properties 恢复真实比较——改为"有效形态"比较（Gradle 注释/属性注释剥离、字符串字面量保留、注释删除遗留的空行归一）：round-79 把 build.gradle 从字节比较中移除后依赖声明变化不再触发失败、gradle.properties 的子串断言可被"注释保留 false + 生效行改 true"满足；有效形态比较拒绝实际依赖/配置变化，同时放行 round-79 的注释更正（检查数 37→38）。
+
+### 账本
+
+src/main/java/com/Regalia/README.license、chess.src/README.license、assets/README.license 顶部各追加 round-80 条目（许可分类不变：AGPL 7 / GPL 13 / 16 Java 总数；不改写历史计数）。
+
+### 本轮沙盒验证
+
+12 个改动 Python 文件 py_compile 通过；v11/v13 run-and-log.sh bash -n + 真实运行（退出码/日志/历史三元正确）通过；ai-bridge.js node --check 通过；chess.html 两次重建字节一致；archive_scan 预检对普通 ZIP/合法 ZIP64/经典字段+敌意 EOCD64/不可确定四类夹具功能验证通过（敌意组合正确拒绝、普通与合法 ZIP64 通过）；v13 集成 test_archives 全绿（含树内自测产物双重 pack——round-79 起即失败的场景、pack 统计发布前计算、hexdigest、新 BUNDLE pin）；v9/v10/v11/v13 source_archive 打包流程功能运行通过；mobsf.yml / unzip-folder-optimized.yml YAML 解析通过。APK 未重建（全部为源码/脚本/配置变更，versionCode/引擎身份/八项权限/protected zip/APK 均不动）；v13 门禁全量重跑、v1/v2/v3 与 r62/r67 回归、v11 负测与 APK 重建重签由仓库侧按惯例执行。push/merge 前须取得用户确认；`LICENSE&NOTICE.zip` 永不回退。

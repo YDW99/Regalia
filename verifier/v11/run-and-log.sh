@@ -37,7 +37,15 @@ finish() {
   fi
   FINALIZED=1
   RC="$rc"
-  if ! {
+  # v1.2.3 round-80 (CodeRabbit PR#60 re-review): every log write reports its
+  #   own status. The round-79 form checked only the command group's LAST
+  #   command — a printf failing mid-group (disk full) with an empty TMP still
+  #   ended in a successful cat, so a truncated log counted as a complete
+  #   write and the history entry pointed at missing evidence. The writes now
+  #   run in a set -e subshell: the first failure aborts the group, history is
+  #   appended only after every write succeeded.
+  if ! (
+    set -e
     printf 'timestamp_start=%s\n' "$START"
     printf 'timestamp_end=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     printf 'cwd=%s\n' "$ROOT"
@@ -48,7 +56,7 @@ finish() {
     fi
     printf '%s\n' '--- output ---'
     cat "$TMP"
-  } >"$LOG"; then
+  ) >"$LOG"; then
     printf '%s\n' "run-and-log: log write failed; evidence NOT saved, history NOT appended" >&2
     return 1
   fi
@@ -56,7 +64,10 @@ finish() {
     printf '%s\n' "run-and-log: history append failed; log saved but the run is not in history" >&2
     return 2
   fi
-  cat ""$LOG""
+  # v1.2.3 round-80 (CodeRabbit PR#60 re-review): quote the log path —
+  #   cat ""$LOG"" word-split paths containing spaces into several arguments,
+  #   the log never printed, and the trailing return 0 hid the failure.
+  cat "$LOG"
   return 0
 }
 
