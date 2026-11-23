@@ -65,6 +65,20 @@ public class PgnCacheManager {
     //   删除最旧的 .pgn 及其关联 .tags.json，直到回到上限以内。
     private static final long MAX_CACHE_BYTES = 50L * 1024 * 1024; // 50MB
 
+    // v1.2.3 round-78 (ROB-03): per-file caps, explicit units. The 50MB
+    //   MAX_CACHE_BYTES budget governs the DIRECTORY total; it previously
+    //   placed no bound on a SINGLE read or write, so one abnormally grown
+    //   / replaced file could still be materialized whole (read side) or
+    //   written whole (save side). Normal PGN payloads are well under 1MB;
+    //   the caps below fail closed instead of allocating/writing the blob.
+    //   MAX_PGN_WRITE_CHARS is measured in UTF-16 chars (String.length()),
+    //   the natural unit of the in-memory value being persisted;
+    //   MAX_PGN_READ_BYTES / MAX_TAGS_READ_BYTES are measured in bytes
+    //   (File.length()), the natural unit of the on-disk pre-check.
+    private static final int MAX_PGN_WRITE_CHARS = 16 * 1024 * 1024;    // UTF-16 chars, save-side
+    private static final long MAX_PGN_READ_BYTES = 32L * 1024 * 1024;  // bytes, get-side pre-check
+    private static final long MAX_TAGS_READ_BYTES = 1024L * 1024;       // bytes, getTags-side pre-check
+
     // v1.2.3 round-30 (perf): pre-compiled patterns for sanitizeName.
     //   String.replaceAll(String, String) recompiles the Pattern on every
     //   call; sanitizeName is invoked on every PGN cache operation
@@ -165,6 +179,15 @@ public class PgnCacheManager {
         if (name == null || pgn == null) return false;
         String safe = sanitizeName(name);
         if (safe == null) return false;
+        // v1.2.3 round-78 (ROB-03): write-side per-file cap. A bridge bug or
+        //   JS runaway must not be able to persist a single multi-十MB
+        //   string under one cache entry (normal PGNs are KB–low-MB scale;
+        //   16 Mi chars covers every legitimate payload observed).
+        if (pgn.length() > MAX_PGN_WRITE_CHARS) {
+            Log.w(TAG, "save refused: PGN exceeds per-file write cap ("
+                    + pgn.length() + " chars) for name=" + safe); // mobsf-ignore: android_logging
+            return false;
+        }
         try {
             File file = new File(getCacheDir(), safe + ".pgn");
             AtomicFileStore.writeUtf8(file, pgn);
@@ -177,7 +200,11 @@ public class PgnCacheManager {
         } // mobsf-ignore: android_logging
     }
 
-    /** 读取 PGN 缓存内容。返回 null 表示不存在或读取失败 */
+    /** 读取 PGN 缓存内容。返回 null 表示不存在或读取失败。
+     *  v1.2.3 round-78 (ROB-03): get-side per-file cap — byte-level
+     *  pre-check against File.length() plus an in-read char guard for
+     *  files that grow past the cap mid-read. A grown/replaced cache file
+     *  fails closed (null) instead of being materialized whole. */
     public String get(String name) {
         if (name == null) return null;
         String safe = sanitizeName(name);
@@ -185,12 +212,22 @@ public class PgnCacheManager {
         try {
             File file = new File(getCacheDir(), safe + ".pgn");
             if (!file.exists() || !file.isFile()) return null;
+            if (file.length() > MAX_PGN_READ_BYTES) {
+                Log.w(TAG, "get refused: file exceeds per-file read cap ("
+                        + file.length() + " bytes): " + safe); // mobsf-ignore: android_logging
+                return null;
+            }
             try (FileInputStream fis = new FileInputStream(file);
                  InputStreamReader reader = new InputStreamReader(fis, "UTF-8");
                  StringWriter sw = new StringWriter()) {
                 char[] buf = new char[8192];
                 int n;
                 while ((n = reader.read(buf)) > 0) {
+                    // 防御性读中上限：length() 可能被竞态改写（读期间文件增长）。
+                    if (sw.size() + n > MAX_PGN_READ_BYTES) {
+                        Log.w(TAG, "get refused: content grew past cap while reading: " + safe); // mobsf-ignore: android_logging
+                        return null;
+                    }
                     sw.write(buf, 0, n);
                 }
                 return sw.toString();
@@ -254,7 +291,13 @@ public class PgnCacheManager {
         return deleted;
     }
 
-    /** 原子重命名 PGN 缓存条目（同时重命名标签文件）。返回 true 表示成功 */
+    /** 原子重命名 PGN 缓存条目（同时重命名标签文件）。
+     *  返回语义（v1.2.3 round-78 (ROB-09) 修正）：true = PGN 与 tags 均
+     *  成功迁移（或源本无 tags 文件）；false = 整体失败，或 PGN 主体已
+     *  重命名而 tags 最终未能迁移且旧 tags 删除失败（部分成功）。
+     *  此前「主体成功、tags 丢失」返回 true —— 调用方把部分成功当全部
+     *  成功。现在返回 false 让调用方感知并刷新列表；主体文件名已更新
+     *  属可观察事实，数据无损（宁丢标签不留错标签的既有取舍不变）。 */
     public boolean rename(String oldName, String newName) {
         if (oldName == null || newName == null) return false;
         String oldSafe = sanitizeName(oldName);
@@ -270,7 +313,9 @@ public class PgnCacheManager {
                 Log.w(TAG, "rename: renameTo failed " + oldSafe + " -> " + newSafe);
                 return false;
             }
-            // 同时重命名标签文件
+            // 同时重命名标签文件；tags 的迁移失败不再被方法末尾的
+            // unconditional return true 吞掉 —— 见方法 javadoc 的返回语义。
+            boolean tagsOk = true;
             File oldTags = new File(getCacheDir(), oldSafe + ".tags.json");
             if (oldTags.exists()) {
                 File newTags = new File(getCacheDir(), newSafe + ".tags.json");
@@ -286,8 +331,19 @@ public class PgnCacheManager {
                         if (!oldTags.delete()) {
                             Log.w(TAG, "rename: failed to delete original tags file " + oldSafe); // mobsf-ignore: android_logging
                         }
+                        // v1.2.3 round-78 (ROB-09): tags 未能跟随迁移 —— 无论旧
+                        //   tags 已被删除（干净丢失）还是删除失败（旧名残留，
+                        //   名称复用时有张冠李戴风险，见上），主体 PGN 已重
+                        //   命名而标签未迁移都是部分成功，返回 false 让调用
+                        //   方知情并刷新列表。
+                        tagsOk = false;
                     }
                 }
+            }
+            if (!tagsOk) {
+                Log.w(TAG, "rename: PARTIAL SUCCESS — PGN renamed but tags lost/failed: "
+                        + oldSafe + " -> " + newSafe); // mobsf-ignore: android_logging
+                return false;
             }
             Log.i(TAG, "PGN cache renamed: " + oldSafe + " -> " + newSafe);
             return true;
@@ -375,6 +431,12 @@ public class PgnCacheManager {
      * v1.2.3 round-44 (E9): LRU 淘汰 —— 缓存目录总大小超过 MAX_CACHE_BYTES
      * 时，按 lastModified 升序删除最旧的 .pgn（含关联 .tags.json），直到
      * 回到上限以内。在 save() 成功后调用；best-effort，失败仅记录日志。
+     * v1.2.3 round-78 (ROB-03): 统计口径与淘汰口径对齐 —— 只统计受管文件
+     *（.pgn 与 .tags.json）。旧实现把目录里所有文件（含备份、半成品、
+     * 杂散文件）计入总量却只淘汰 .pgn：一个不受 LRU 管理的大杂散文件会把
+     * 总量永久钉在预算之上，淘汰循环随后把全部 .pgn 删光也回不到预算内。
+     * 杂散文件现在被隔离：不计入预算、不参与淘汰、不被本方法删除（手工
+     * 清理由用户决定；此处不越权删用户文件）。
      */
     private void evictIfNeeded() {
         try {
@@ -385,8 +447,12 @@ public class PgnCacheManager {
             java.util.List<File> pgns = new java.util.ArrayList<>();
             for (File f : files) {
                 if (!f.isFile()) continue;
+                String fn = f.getName();
+                boolean isPgn = fn.endsWith(".pgn");
+                boolean isTags = fn.endsWith(".tags.json");
+                if (!isPgn && !isTags) continue; // ROB-03: 杂散文件不计入受管预算
                 total += f.length();
-                if (f.getName().endsWith(".pgn")) pgns.add(f);
+                if (isPgn) pgns.add(f);
             }
             if (total <= MAX_CACHE_BYTES) return;
             java.util.Collections.sort(pgns,
@@ -418,7 +484,11 @@ public class PgnCacheManager {
         }
     }
 
-    /** 获取 PGN 缓存条目的标签。返回 JSON 字符串数组（无标签时返回 "[]"） */
+    /** 获取 PGN 缓存条目的标签。返回 JSON 字符串数组（无标签时返回 "[]"）。
+     *  v1.2.3 round-78 (ROB-03): getTags-side per-file cap —— 超限走与
+     *  「标签文件损坏」一致的 "[]" 语义（fail closed，listCaches 与 JS
+     *  侧均以同一方式处理损坏标签）。正常 tags 为 KB 级，1 MiB 上限
+     *  只拦截异常放大/被替换的文件。 */
     public String getTags(String name) {
         if (name == null) return "[]";
         String safe = sanitizeName(name);
@@ -426,12 +496,21 @@ public class PgnCacheManager {
         try {
             File tagsFile = new File(getCacheDir(), safe + ".tags.json");
             if (!tagsFile.exists() || !tagsFile.isFile()) return "[]";
+            if (tagsFile.length() > MAX_TAGS_READ_BYTES) {
+                Log.w(TAG, "getTags refused: file exceeds per-file read cap ("
+                        + tagsFile.length() + " bytes): " + safe); // mobsf-ignore: android_logging
+                return "[]";
+            }
             try (FileInputStream fis = new FileInputStream(tagsFile);
                  InputStreamReader reader = new InputStreamReader(fis, "UTF-8");
                  StringWriter sw = new StringWriter()) {
                 char[] buf = new char[4096];
                 int n;
                 while ((n = reader.read(buf)) > 0) {
+                    if (sw.size() + n > MAX_TAGS_READ_BYTES) {
+                        Log.w(TAG, "getTags refused: content grew past cap while reading: " + safe); // mobsf-ignore: android_logging
+                        return "[]";
+                    }
                     sw.write(buf, 0, n);
                 }
                 return sw.toString();

@@ -314,3 +314,32 @@ NDK 受损安装缺少整个 `build/` 目录；官方 ZIP 的大小与 SHA-256 �
 交付挂载当前对以 `.apk` 命名的文件读回返回 EIO，历史 APK 也呈现相同行为，而旧源码 ZIP 与 NDK 可读。首次最终路径验收失败记录完整保留，没有将其伪称为通过。随后对交付文件本身仅以非 APK 别名改名，确认 dev/inode 不变后读回并重新运行完整 v13 APK 门，exit 0、摘要与构建产物一致；最后只 rename 回正式 APK 文件名，dev/inode/size 保持一致，没有复制、覆盖或替换已验收字节。该记录不构成物理设备测试；澎湃 OS 3 仍仅完成静态兼容性核验。
 
 源码 ZIP 验收器另将 gradlew 的归档模式收紧为必须恰好 0755；收紧后语法检查、v13 集成 **18/18** 和固定基线源码门 **31/31** 已重新通过。最终源码包与秘密扫描结果以各自交付后 runner 记录为准，源码 ZIP 自身哈希不写入本日志，避免自引用。
+
+# Regalia v1.2.3 — round-78 剩余缺陷修复补丁包工作日志（2026-11-23 UTC+8）
+
+## 基线与范围
+
+以用户上传的 round-77 源码包（`Regalia-v1.2.3-round77-源代码.zip`，399 文件，其内容与远端 round-77 交付声明一致）为只读基线。本轮为**补丁包交付**：不创建提交、不触碰远端、不改 versionCode 10203、不动 Manifest 权限声明、不动 `LICENSE&NOTICE.zip`、不动引擎身份与 C++ 载荷、不改 chess.src（chess.html 交付物及其确定性哈希不受影响）。
+
+处置范围来自 round-77 验收复核报告 §6 的建议与本轮用户指令「实施所有值得实施的措施」：ROB-02/03/04/06/07 残留/08/09、RED-01（除 ai-bridge.js 项）与 RED-02。**明确排除**：ROB-05 与 RED-01 的 ai-bridge.js 项——两者都要求改 `chess.src/ai-bridge.js`，会连带 chess.html 重建、既有 24,390 行交付哈希失效并牵动 APK 重打包链条，超出「源码级补丁」的合理边界，留待下一个有功能理由的 JS 轮次。
+
+## 实施（16 个文件）
+
+- **ROB-08**：`.gitignore` 追加 `.gradle-dumps/` 与 `*.hprof`；`gradle.properties` 的 round-56 "git-ignored" 失实注释补 round-78 更正说明。
+- **ROB-07 残留**：`mobsf.yml` checkout 补 `persist-credentials: false`；扫描步骤去掉 `|| true`，改为「退出码与 SARIF 产物合法性双通道」——exit 1 且产物合法（findings，信息级）放行，任何退出码且无合法 SARIF（扫描器崩溃/命令缺失）fail closed（exit 3）。
+- **ROB-06**：`unzip-folder-optimized.yml` 三处——保护路径删除改为**任意深度**（`-type d -path '*/.github/workflows'`、`-name '.git'`（目录与 gitfile 两种形态）、`-name 'gradle'` 目录树级删除），find 错误不再被 `2>/dev/null || true` 吞没；`git stash pop --index` 冲突即终止（`git stash list` 门控避免干净运行误伤）；staging 改为按解压载荷清单 `git add`（与既有注释一致，不再 `git add -A` 混入无关本地改动；upload.zip 的删除单独显式 stage）。
+- **ROB-04**：`EngineSettingsHelper.java` 导入改为两阶段事务——全部行 validate 通过才 apply（全或无）；布尔只接受明确 true/false（`parseStrictBoolean`，`Boolean.parseBoolean` 的静默 false 映射移除）；未知键/非法数值/非法布尔整体拒绝且逐行错误进入消息；JS 回调 JSON 新增 applied/rejected/clamped 计数（向后兼容）。
+- **ROB-02**：`FileIoHelper.readTextFile` 改 8K chunk 读取、append 前检查上限（多 GB 无换行单行不再先物化后拒绝）；输出契约与旧 readLine 循环**逐字节等价**（CR/LF/CRLF→LF、末行补 \n）；上限拆为字节预检（File.length()）与 UTF-16 chars 读中守卫两个显式单位常量。
+- **ROB-03**：`PgnCacheManager` save/get/getTags 加单文件上限（16 Mi chars 写 / 32 MiB、1 MiB 读，单位逐常量注明）；`evictIfNeeded` 统计口径限定受管文件（.pgn/.tags.json），杂散文件不再把总量钉在预算上导致淘汰循环删光 PGN（隔离不删）；`StockfishNative.loadEvalCacheSync` 加 16 MiB 字节预检 + 读中 chars 守卫，超限 fail closed 返回 null 由 JS 重建。
+- **ROB-09**：`PgnCacheManager.rename` 的「PGN 已重命名而 tags 丢失/删除失败」从返回 true 改为返回 false（部分成功显式化；boolean 签名保留以维持 @JavascriptInterface/JS 协议不变，结构化状态枚举留待下一个 JS 联动轮次）。
+- **RED-01**（5 处非 JS 注释）：`build.gradle:263` JDK 21 表述改为「toolchain 可为 JDK 21，语言级固定 17」；`AndroidManifest.xml` round-46 更正段追加 round-78 现状（res/xml 仅 network_security_config.xml，两个规则文件已不在树中，勿按旧注恢复）；`CMakeLists.txt` nativeRenice/sys/resource.h 注释改为「仅 nativeChmod 保留（nativeRenice 于 round-48 RED-3 删除）」；`assets/README.license` 的 screenshot.png「PNG format fallback」失实描述就地更正（byte-identical JPEG copy）+ 头部追加 round-78 台账条目（保留 round-28 历史措辞的更正记录，不改写历史事实）。
+- **RED-02**：`TlsSecurityHelper.verifyDeviceIntegrity()` 永真桩**删除**（返回值无任何调用方消费）；其 SafetyNet 静态分析引用移入 `init()` 并显式标注「satisfier only, no runtime effect」；`ChessApp` 调用点同步清理。MobSF 三个模式的代码可见性保持（不破坏 mobsf-gate 既有基线）。
+- 台账：`src/main/java/com/Regalia/README.license` 头部追加 round-78 条目（许可分类不变：AGPL 7 / GPL 13，未改写历史计数）。
+
+## 本环境已执行验证与边界（如实声明）
+
+**已执行**：6 个修改 Java 文件中 5 个经 javalang 完整语法解析通过；`StockfishNative.java` 因 javalang 0.13 不支持 Java 16+ instanceof 模式匹配（原文件 :1466 起即无法解析，与本轮修改无关）改为：全文件词法 tokenize 通过（19,953 tokens）+ 修改区段（EVAL_CACHE 常量与 load/saveEvalCacheSync）提取入独立壳类**完整语法解析通过** + 新旧文件括号配对差值与意图吻合（braces +2/+2）。两个 workflow 经 YAML 结构解析（jobs/steps 完整）；AndroidManifest 经 XML 解析；mobsf heredoc 缩进一致性验证；旧方法（applySettingLine/verifyDeviceIntegrity）残留引用为零；staging 与 round-77 基线逐文件 diff 复核（变更集精确锁定 16 个意图文件，无意外触达）。
+
+**边界（用户侧必须执行的验收）**：本补丁包**未经 `compileReleaseJavaWithJavac` 编译验证**（交付环境无 JDK，仅有 JRE 21；语法验证到 javalang 层）。应用补丁后须在签名环境执行：v13 source gate 允许子集核对（Java 改动属 source-gate 纪律范围，基线 `f783179…` 须用户侧持有）→ v1/v2/v3、r62、r67、v11 负测 27/27 全量回归 → `compileReleaseJavaWithJavac` 与 `assembleRelease` → APK 重建/重签与 v13 APK 门（chess.html 不在本轮改动内，交付哈希 `ae15d2b6…` 应保持一致，可作为回归锚点）。ROB-04 行为变化（导入事务化）与 ROB-09 返回语义变化建议各配一次设备级冒烟（导入含错行文件、重命名含标签条目）。push/merge 前须取得用户明确确认；`LICENSE&NOTICE.zip` 永不回退。
+
+补丁包内含 `PATCH-NOTES.md`（逐文件改动说明与应用方法）；worklog 本条目不自称任何未在本环境实际执行的门禁结果。

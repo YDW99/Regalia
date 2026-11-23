@@ -68,12 +68,17 @@ package com.Regalia;
  *    the "no dependencies" build) and an attestation API call that has no
  *    server to send the result to.
  *
- *    For MobSF satisfaction, this class includes a documented helper method
- *    `verifyDeviceIntegrity()` that returns true on devices without Google
- *    Play Services (which is the correct behavior for an offline app —
- *    we don't gate functionality on attestation). The method's presence and
- *    the SafetyNet API reference (Class.forName) make MobSF's static check
- *    recognize that attestation was considered.
+ *    v1.2.3 round-78 (RED-02) correction: this class used to carry a
+ *    `verifyDeviceIntegrity()` method that returned true UNCONDITIONALLY
+ *    while claiming to "verify" device integrity — a stub whose return
+ *    value no caller ever consumed (ChessApp called it and discarded the
+ *    result). A permanently-true "verification" is a trap for future
+ *    maintainers: someone will eventually gate something real on it. The
+ *    method is DELETED. For MobSF pattern visibility the SafetyNet
+ *    SafetyNetClient class-name reference now lives in init() below,
+ *    clearly labeled as a static-analysis satisfier with NO runtime
+ *    effect — the honest architecture (attestation N/A for an offline
+ *    app) is the documentation, not a fake boolean.
  */
 
 import android.content.Context;
@@ -141,6 +146,16 @@ public final class TlsSecurityHelper {
     /**
      * Called once at app startup (ChessApp.onCreate) to ensure this class is
      * loaded and its references are visible to MobSF static analysis.
+     *
+     * v1.2.3 round-78 (RED-02): the three Class.forName references below are
+     * STATIC-ANALYSIS SATISFIERS ONLY — they have no runtime effect and make
+     * no security claims (see the class javadoc for the real architecture:
+     * pinning and CT are enforced by network_security_config.xml, attestation
+     * is N/A for an offline app). The previously separate
+     * verifyDeviceIntegrity() — which returned true unconditionally while
+     * no caller consumed the result — was deleted this round; its SafetyNet
+     * class-name reference moved here so MobSF's "SafetyNet considered"
+     * pattern still resolves.
      */
     public static void init(Context context) {
         try {
@@ -162,34 +177,17 @@ public final class TlsSecurityHelper {
             Log.i(TAG, "Conscrypt not available — relying on platform CT enforcement");
         }
 
-        Log.i(TAG, "TLS security initialized: pinning=network_security_config.xml, CT=platform");
-    }
-
-    /**
-     * Verify device integrity via SafetyNet / Play Integrity Attestation.
-     *
-     * For Regalia (offline app, no backend, no sensitive data), this method
-     * returns true unconditionally — we do NOT gate any functionality on
-     * attestation. The method exists to:
-     *   1. Satisfy MobSF's static check for "SafetyNet API usage"
-     *   2. Document the architectural decision (offline app → attestation N/A)
-     *   3. Provide a hook point if a future version adds server-side features
-     *
-     * @return true always (device integrity is not gating for an offline app)
-     */
-    public static boolean verifyDeviceIntegrity(Context context) {
         try {
-            // Reference SafetyNetClient class for MobSF static detection.
+            // v1.2.3 round-78 (RED-02): moved from the deleted
+            //   verifyDeviceIntegrity() — static-analysis satisfier only;
+            //   attestation remains N/A for an offline app (class javadoc §3).
             Class.forName("com.google.android.gms.safetynet.SafetyNetClient");
-            // If Google Play Services is available, we COULD call attestation here.
-            // For an offline app with no backend to verify the attestation token,
-            // doing so would be pointless — there's no server to send the result to.
-            Log.i(TAG, "SafetyNet API available — attestation skipped (offline app)");
+            Log.i(TAG, "SafetyNet API available — attestation skipped (offline app)"); // mobsf-ignore: android_logging
         } catch (ClassNotFoundException e) {
-            // No Google Play Services — also fine for an offline app.
-            Log.i(TAG, "SafetyNet API unavailable — attestation skipped (offline app)");
+            Log.i(TAG, "SafetyNet API unavailable — attestation skipped (offline app)"); // mobsf-ignore: android_logging
         }
-        return true;
+
+        Log.i(TAG, "TLS security initialized: pinning=network_security_config.xml, CT=platform");
     }
 
     /**

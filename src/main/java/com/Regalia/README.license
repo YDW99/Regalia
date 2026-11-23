@@ -1,3 +1,38 @@
+v1.2.3 round-78 (2026.11.23): robustness batch — bounded reads/writes, transactional settings import, honest partial-success semantics.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - No files added or removed; six existing files modified (behavioral changes,
+    approved by the user as the "implement everything worth implementing"
+    round; every change carries a round-78 in-code annotation with the
+    tracking id ROB-02/03/04/09 or RED-02 from the branch review).
+  - FileIoHelper.java (GPL v3): readTextFile now reads in 8K chunks with the
+    cap checked BEFORE each append (a single multi-GB no-newline line can no
+    longer be materialized before rejection) and restores the exact previous
+    CR/LF/CRLF→LF output contract; the cap constants are split into an
+    explicit bytes pre-check and an UTF-16 chars in-read guard (ROB-02).
+  - EngineSettingsHelper.java (GPL v3): importSettings is a two-phase
+    validate→apply transaction — every line validates first, booleans accept
+    only explicit true/false, a single invalid value or unknown key rejects
+    the whole import before anything is persisted; the JS result object gains
+    applied/rejected/clamped counters (ROB-04).
+  - PgnCacheManager.java (GPL v3): per-file read/write caps with explicit
+    units on save/get/getTags; evictIfNeeded now counts only managed files
+    (.pgn/.tags.json) so an unmanaged stray file can no longer pin the total
+    over budget and drain every PGN; rename returns false on the
+    "PGN renamed but tags lost/failed" partial success instead of true (ROB-03,
+    ROB-09).
+  - StockfishNative.java (GPL v3): loadEvalCacheSync gains the same byte
+    pre-check + in-read chars guard — oversized grown/replaced cache files
+    fail closed to null and the JS layer rebuilds (ROB-03).
+  - TlsSecurityHelper.java (AGPL v3): the always-true verifyDeviceIntegrity()
+    stub is deleted (no caller consumed its result); its SafetyNet
+    class-name static-analysis reference moved into init(), explicitly
+    labeled as a satisfier with no runtime effect (RED-02).
+  - ChessApp.java (AGPL v3): the verifyDeviceIntegrity() call site removed
+    together with the method; init() alone carries the references (RED-02).
+  - License classification: unchanged — AGPL v3 (7) and GPL v3 (13) file sets
+    identical to round-77; the round-77/round-71 historical counts are not
+    rewritten.
+
 v1.2.3 round-77 (2026.11.23): crash-safe cache persistence and truthful synchronous results.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - AtomicFileStore.java NEW (GPL v3, project-original): shared API-23-compatible

@@ -90,7 +90,17 @@ public class FileIoHelper {
     // v1.2.3 round-56: readTextFile 上限 1 MiB —— 唯一消费者是设置导入
     //   （KB 级），上限仅防御桥接口被指向超大文件导致的 OOM。见 readTextFile
     //   javadoc 的契约说明。
-    private static final long MAX_READ_TEXT_BYTES = 1024L * 1024L;
+    // v1.2.3 round-78 (ROB-02): the cap is now TWO-LAYERED with explicit
+    //   units — MAX_READ_TEXT_BYTES is a byte-level pre-check against
+    //   File.length() (fast fail before any stream is opened);
+    //   MAX_READ_TEXT_CHARS bounds the accumulated UTF-16 code units DURING
+    //   the read (catches files that GROW past the cap mid-read — the old
+    //   `totalChars` counter had the same role but counted "line + 1"
+    //   against a BYTES-named constant, so the unit story was incoherent).
+    //   1 MiB bytes ≥ 1 MiB chars for any UTF-8 input, so the pre-check
+    //   fires first in practice and the char cap is the growth guard.
+    private static final long MAX_READ_TEXT_BYTES = 1024L * 1024L;   // bytes (pre-check)
+    private static final int MAX_READ_TEXT_CHARS = 1024 * 1024;       // UTF-16 chars (in-read)
 
     private final Context context;
     private final WeakReference<Activity> activityRef;
@@ -247,7 +257,7 @@ public class FileIoHelper {
             File file = new File(path);
             if (!file.exists() || !file.canRead()) return null;
             if (file.length() > MAX_READ_TEXT_BYTES) {
-                Log.w(TAG, "readTextFile: file too large (" + file.length() + " bytes): " + path);
+                Log.w(TAG, "readTextFile: file too large (" + file.length() + " bytes): " + path); // mobsf-ignore: android_logging
                 return "{\"error\":\"too_large\"}";
             } // mobsf-ignore: android_logging
             try (FileInputStream fis = new FileInputStream(file);
@@ -255,18 +265,35 @@ public class FileIoHelper {
                      new InputStreamReader(fis, "UTF-8")
                  )) {
                 StringBuilder sb = new StringBuilder();
-                String line;
-                long totalChars = 0;
-                while ((line = reader.readLine()) != null) {
-                    totalChars += line.length() + 1;
-                    // 防御性二次上限：length() 可能被竞态改写（读期间文件增长）。
-                    if (totalChars > MAX_READ_TEXT_BYTES) {
+                // v1.2.3 round-78 (ROB-02): chunked capped read — the old loop
+                //   used readLine(), which materializes a COMPLETE line
+                //   before the cap check, so one multi-GB no-newline line could
+                //   allocate before being rejected. Mirrors readCappedText():
+                //   memory stays bounded by MAX_READ_TEXT_CHARS + one 8K chunk
+                //   buffer, and the cap is checked BEFORE each append.
+                char[] chunk = new char[8192];
+                int n;
+                while ((n = reader.read(chunk, 0, chunk.length)) != -1) {
+                    if (sb.length() + n > MAX_READ_TEXT_CHARS) {
                         Log.w(TAG, "readTextFile: content grew past cap while reading: " + path); // mobsf-ignore: android_logging
                         return "{\"error\":\"too_large\"}";
                     }
-                    sb.append(line).append("\n");
+                    sb.append(chunk, 0, n);
                 }
-                return sb.toString();
+                // v1.2.3 round-78 (ROB-02): restore the EXACT output contract of
+                //   the previous readLine()-based loop — CR / LF / CRLF all
+                //   normalized to '\n', and every line (including the last)
+                //   terminated by '\n'. The JS consumer (settings import)
+                //   splits on '\n'; bare '\r' endings would otherwise stick
+                //   to values and break parsing.
+                String out = sb.toString();
+                if (out.indexOf('\r') >= 0) {
+                    out = out.replace("\r\n", "\n").replace('\r', '\n');
+                }
+                if (!out.isEmpty() && !out.endsWith("\n")) {
+                    out = out + "\n";
+                }
+                return out;
             }
         } catch (Exception e) {
             Log.e(TAG, "readTextFile failed: " + path, e); // mobsf-ignore: android_logging

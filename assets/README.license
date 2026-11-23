@@ -1,3 +1,17 @@
+v1.2.3 round-78 (2026.11.23): screenshot.png description corrected (RED-01).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - No asset FILES changed — bytes of screenshot.jpg / screenshot.png are
+    untouched. This entry corrects a misleading ledger description only:
+    the round-28 "Files" list claimed screenshot.png was a "Same screenshot
+    in PNG format as a fallback" — factually wrong. The two screenshots
+    are byte-identical (single SHA-256) and the content is JPEG despite
+    the .png extension, as the root README.md tree entry already states.
+    The stale wording has been corrected in place below with a round-78
+    annotation (the historical fact of the round-28 wording is preserved
+    in this entry, not rewritten out of history).
+  - License classification: all files unchanged (both screenshots AGPL v3,
+    original works; not packaged into the APK).
+
 v1.2.3 round-56 (2026.10.5): no changes to files in this directory.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - License classification: all files unchanged.
@@ -221,8 +235,13 @@ v1.2.3 round-13 (2026.7.16) — README.license created:
   - Files:
     * screenshot.jpg (AGPL v3): Gameplay screenshot shown at the top of
       README.md. Original work of the Regalia project.
-    * screenshot.png (AGPL v3): Same screenshot in PNG format as a fallback
-      for environments that don't render JPG inline. Original work.
+    * screenshot.png (AGPL v3): byte-identical copy of screenshot.jpg —
+      the file content is JPEG despite the .png extension (the two files
+      share one SHA-256). v1.2.3 round-78 (RED-01) correction: this entry
+      used to claim "Same screenshot in PNG format as a fallback for
+      environments that don't render JPG inline", which was factually
+      wrong; wording now matches the root README.md tree description.
+      Original work.
   - License classification: both files are AGPL v3 (original works of the
     Regalia project). They are NOT packaged into the APK — they exist solely
     for README.md display on GitHub/F-Droid/source code browsers.

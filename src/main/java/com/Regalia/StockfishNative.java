@@ -4343,22 +4343,46 @@ public class StockfishNative {
     // write (tmp + rename) for crash safety.
     private static final String EVAL_CACHE_FILE = "eval_cache.json";
 
+    // v1.2.3 round-78 (ROB-03): eval cache read caps, explicit units. The
+    //   cache is written by saveEvalCacheSync from JS-side JSON (normal
+    //   range ~100KB–12MB per the comment above), so a read cap just above
+    //   that range is the fail-closed guard against a replaced/abnormally
+    //   grown file being pulled into memory whole. MAX_EVAL_CACHE_READ_
+    //   BYTES is the byte-level pre-check (File.length()); MAX_EVAL_
+    //   CACHE_READ_CHARS bounds accumulated UTF-16 units DURING the read
+    //   (files that grow past the cap mid-read — the read side twin of the
+    //   same guard readTextFile has carried since round-56).
+    private static final long MAX_EVAL_CACHE_READ_BYTES = 16L * 1024 * 1024; // bytes (pre-check)
+    private static final int MAX_EVAL_CACHE_READ_CHARS = 16 * 1024 * 1024;  // UTF-16 chars (in-read)
+
     /**
      * Synchronously read the eval cache file. Returns the raw JSON string,
      * or null if the file doesn't exist / can't be read.
      * Called at JS module construction — must be fast. Reads ~100KB-12MB.
+     * v1.2.3 round-78 (ROB-03): oversized (grown/replaced) files fail closed
+     * to null — JS treats null as "no cache" and rebuilds, instead of the
+     * previous behavior of materializing whatever is on disk whole.
      */
     @JavascriptInterface
     public String loadEvalCacheSync() {
         try {
             File file = new File(context.getFilesDir(), EVAL_CACHE_FILE);
             if (!file.exists() || !file.isFile()) return null;
+            if (file.length() > MAX_EVAL_CACHE_READ_BYTES) {
+                Log.w(TAG, "loadEvalCacheSync: eval cache oversized ("
+                        + file.length() + " bytes) — refusing to read"); // mobsf-ignore: android_logging
+                return null;
+            }
             try (java.io.FileInputStream fis = new java.io.FileInputStream(file);
                  java.io.InputStreamReader reader = new java.io.InputStreamReader(fis, "UTF-8");
                  java.io.StringWriter sw = new java.io.StringWriter()) {
                 char[] buf = new char[16384];
                 int n;
                 while ((n = reader.read(buf)) > 0) {
+                    if (sw.size() + n > MAX_EVAL_CACHE_READ_CHARS) {
+                        Log.w(TAG, "loadEvalCacheSync: content grew past cap while reading"); // mobsf-ignore: android_logging
+                        return null;
+                    }
                     sw.write(buf, 0, n);
                 }
                 return sw.toString();
