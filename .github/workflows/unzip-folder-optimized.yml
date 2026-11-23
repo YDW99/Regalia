@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'upload.zip'
+      - '.github/workflows/unzip-folder-optimized.yml'
     branches:
       - upload
       - main
@@ -21,6 +22,12 @@ on:
 permissions:
   contents: write
 
+# v1.2.3 round-79 (ROB-06): serialize runs per ref — two overlapping runs on the
+#   same ref would race their staging scope.
+concurrency:
+  group: unzip-folder-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   unzip_and_commit:
     runs-on: ubuntu-latest
@@ -28,6 +35,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          # v1.2.3 round-80.1 (hotfix): check out the BRANCH (not the triggering
+          #   SHA as a detached HEAD) so the pull/push below operate on the
+          #   branch with normal semantics.
+          ref: ${{ github.ref_name }}
           fetch-depth: 1
 
       - name: Check if upload.zip exists
@@ -38,10 +49,10 @@ jobs:
             echo "✅ Found upload.zip"
           else
             echo "exists=false" >> $GITHUB_OUTPUT
-            echo "❌ upload.zip not found"
+            echo "ℹ️ upload.zip not found (no-op smoke check)"
           fi
 
-      - name: Validate ZIP file
+      - name: Validate ZIP file (structural preflight)
         if: steps.check_zip.outputs.exists == 'true'
         id: validate
         run: |
@@ -55,22 +66,103 @@ jobs:
             exit 1
           fi
 
-          # Check for path traversal attacks
-          if unzip -l "upload.zip" | grep -E '\.\./|\.\\\.\\'; then
-            echo "::error::Path traversal detected in ZIP contents. Aborting."
-            exit 1
+          # v1.2.3 round-79 (ROB-06): structural, entry-by-entry preflight BEFORE
+          #   anything is written to disk. Every member name is normalized and
+          #   checked at ANY depth: traversal/absolute/encrypted/budget violations
+          #   fail the run immediately; protected components at any depth are
+          #   listed and structurally skipped during extraction (the channel
+          #   itself keeps working for zips that merely carry such entries).
+          # v1.2.3 round-80.1 (hotfix): directory members no longer enter the
+          #   staging manifest — git never tracks empty directories, and an
+          #   empty-directory pathspec makes `git add --pathspec-from-file`
+          #   abort the whole run. Parent directories are created implicitly by
+          #   the file members during extraction. The staging file is written
+          #   with the `:(literal)` pathspec magic so member names containing
+          #   glob characters (e.g. `*`, `?`) are staged by their literal name.
+          python3 - <<'PY'
+          import re
+          import sys
+          import zipfile
+
+          PROTECTED_DIR_COMPONENTS = {".git", ".github", "gradle"}
+          PROTECTED_BASENAMES = {"gradlew", "gradlew.bat", "local.properties",
+                                 "keystore.properties", "keystore-info.txt"}
+          PROTECTED_SUFFIXES = (".keystore", ".jks", ".p12", ".pfx", ".idsig", ".so")
+          MAX_MEMBERS = 20000
+          MAX_MEMBER_BYTES = 128 * 1024 * 1024
+          MAX_TOTAL_BYTES = 512 * 1024 * 1024
+
+          def fail(reason: str) -> None:
+              print(f"::error::upload.zip rejected: {reason}")
+              sys.exit(1)
+
+          with zipfile.ZipFile("upload.zip") as archive:
+              infos = archive.infolist()
+              names = [info.filename for info in infos]
+              if len(names) != len(set(names)):
+                  fail("duplicate member names")
+              if len(infos) > MAX_MEMBERS:
+                  fail(f"member count {len(infos)} exceeds {MAX_MEMBERS}")
+              total = 0
+              skipped = []
+              manifest = []
+              for info in infos:
+                  name = info.filename
+                  if any(ch in name for ch in "\n\r\x00"):
+                      fail(f"member name contains control characters: {name!r}")
+                  if name.startswith("/") or "\\" in name:
+                      fail(f"absolute or backslash member path: {name!r}")
+                  if re.match(r"^[A-Za-z]:", name):
+                      fail(f"drive-letter member path: {name!r}")
+                  parts = [part for part in name.split("/")]
+                  if any(part == ".." for part in parts):
+                      fail(f"path traversal member: {name!r}")
+                  if name.endswith("upload.zip") or "/upload.zip" in name:
+                      fail("member named upload.zip would overwrite the channel input")
+                  if info.flag_bits & 0x1:
+                      fail(f"encrypted member: {name!r}")
+                  if info.file_size < 0 or info.file_size > MAX_MEMBER_BYTES:
+                      fail(f"member exceeds per-member budget: {name!r}")
+                  total += info.file_size
+                  if total > MAX_TOTAL_BYTES:
+                      fail(f"decompressed total exceeds {MAX_TOTAL_BYTES} bytes")
+                  protected = False
+                  for part in parts[:-1]:
+                      if part.lower() in PROTECTED_DIR_COMPONENTS:
+                          protected = True
+                          break
+                  basename = parts[-1].lower() if parts[-1] else ""
+                  if basename in PROTECTED_BASENAMES or basename.endswith(PROTECTED_SUFFIXES):
+                      protected = True
+                  if basename.startswith((":", "!", "^")):
+                      fail(f"member basename starts with a pathspec magic character: {name!r}")
+                  if protected:
+                      skipped.append(name)
+                      continue
+                  if name.endswith("/") or info.is_dir():
+                      # Directory members carry no content; git tracks no empty
+                      # directories, and an empty-dir pathspec would abort
+                      # `git add --pathspec-from-file`. Skip them from staging.
+                      continue
+                  manifest.append(name)
+              with open("/tmp/protected-members.txt", "w", encoding="utf-8") as out:
+                  out.write("\n".join(skipped) + ("\n" if skipped else ""))
+              with open("/tmp/extracted-manifest.txt", "w", encoding="utf-8") as out:
+                  out.write("\n".join(manifest) + ("\n" if manifest else ""))
+              with open("/tmp/add-pathspecs.txt", "w", encoding="utf-8") as out:
+                  out.write("".join(f":(literal){name}\n" for name in manifest))
+              print(f"📋 ZIP members: {len(infos)} (protected skipped: {len(skipped)})")
+              print(f"📦 Decompressed total: {total} bytes")
+          PY
+
+          if [ -s /tmp/protected-members.txt ]; then
+            echo "::warning::Protected paths skipped (will NOT land in the repository, at any nesting depth):"
+            sed 's/^/  /' /tmp/protected-members.txt
           fi
 
           # List contents for review
           echo "📋 ZIP contents:"
-          unzip -l "upload.zip" | tail -n +4 | head -n -2
-
-          # Check for protected paths
-          PROTECTED_PATHS='\.github/workflows/|\.git/|gradlew|gradle/|local\.properties|.*\.keystore|.*\.jks'
-          if unzip -l "upload.zip" | grep -iE "$PROTECTED_PATHS"; then
-            echo "::warning::ZIP contains files in protected paths (workflows, .git, gradle, keystores)."
-            echo "These files will be skipped to prevent accidental overwrites."
-          fi
+          unzip -l "upload.zip" | tail -n +4 | head -n -2 || true
 
           echo "valid=true" >> $GITHUB_OUTPUT
 
@@ -78,17 +170,20 @@ jobs:
         if: steps.check_zip.outputs.exists == 'true' && steps.validate.outputs.valid == 'true'
         id: unzip
         run: |
+          # v1.2.3 round-79 (ROB-06): structured extraction — only members that
+          #   passed the preflight are written; protected entries are skipped by
+          #   name (any nesting depth), not by post-hoc `find` deletion. The
+          #   manifest of extracted members is what the commit step stages.
           mkdir -p ./extracted
-          unzip -o -q upload.zip -d ./extracted
-
-          # Remove protected paths from extraction
-          find ./extracted -path './extracted/.github/workflows/*' -delete 2>/dev/null || true
-          find ./extracted -path './extracted/.git/*' -delete 2>/dev/null || true
-          find ./extracted -name 'gradlew' -delete 2>/dev/null || true
-          find ./extracted -path './extracted/gradle/*' -delete 2>/dev/null || true
-          find ./extracted -name 'local.properties' -delete 2>/dev/null || true
-          find ./extracted -name '*.keystore' -delete 2>/dev/null || true
-          find ./extracted -name '*.jks' -delete 2>/dev/null || true
+          python3 - <<'PY'
+          import zipfile
+          with open("/tmp/extracted-manifest.txt", encoding="utf-8") as source:
+              members = [line.rstrip("\n") for line in source if line.strip()]
+          with zipfile.ZipFile("upload.zip") as archive:
+              for member in members:
+                  archive.extract(member, "./extracted")
+          print(f"📁 Extracted {len(members)} members")
+          PY
 
           echo "📁 Files to be added:"
           find ./extracted -type f | sed 's|^./extracted/||' | sort
@@ -99,27 +194,49 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Stash local changes
-          git stash push -m "temp-unzip-$(date +%s)" || true
-
-          # Pull remote updates
-          git pull origin ${{ github.ref_name }} --ff-only || \
-          git pull origin ${{ github.ref_name }} --rebase
-
-          # Restore stashed changes
-          git stash pop --index || true
+          # v1.2.3 round-80.1 (hotfix): the round-79 rewrite removed the old
+          #   `|| true` error-swallowers but kept the stash/pull/pop sequence
+          #   itself — and that sequence cannot run on an Actions runner: the
+          #   checkout tree is clean and ./extracted is untracked, so
+          #   `git stash push` creates NO stash entry ("No local changes to
+          #   save"), and the immediately following `git stash pop --index`
+          #   fails with "No stash entries found" (exit 1). Every run of the
+          #   round-79 file aborted at this step (observed: run 45127110278,
+          #   2026-11-23 06:52 UTC — steps 1-5 green, step 6 red). The old
+          #   round-76 version only ever "worked" because two `|| true` masked
+          #   exactly this failure. Actions runners are ephemeral: there is no
+          #   local state worth stashing, so the sequence is removed outright.
+          #   Remote-side concurrency (a queued push landing after checkout) is
+          #   absorbed by a single fail-closed `--ff-only` pull.
+          if ! git pull origin ${{ github.ref_name }} --ff-only; then
+            echo "::error::git pull --ff-only failed — the remote branch diverged from this checkout; resolve manually, then re-upload upload.zip to re-run"
+            exit 1
+          fi
 
           # Copy extracted files to root
           cp -a ./extracted/. ./
           rm -rf ./extracted
           rm -f upload.zip
 
-          # Stage only the extracted files (not git add -A)
-          git add -A
+          # Stage exactly the extracted members (manifest-driven staging):
+          #   `-f` lets explicitly uploaded members that happen to match a
+          #   .gitignore pattern (build outputs, *.hprof, ...) still land —
+          #   protected/sensitive paths were already structurally skipped by
+          #   the preflight, so -f never resurrects those.
+          if [ -s /tmp/add-pathspecs.txt ]; then
+            git add -f --pathspec-from-file=/tmp/add-pathspecs.txt
+          else
+            echo "::warning::every member of upload.zip was a protected path — nothing to stage; upload.zip will be consumed without content changes"
+          fi
+
+          git rm -q --ignore-unmatch upload.zip
 
           if ! git diff --cached --quiet; then
             git commit -m "chore: auto unzip files to root [skip ci]"
-            git push origin ${{ github.ref_name }}
+            if ! git push origin ${{ github.ref_name }}; then
+              echo "::error::git push rejected (remote moved after the pull) — re-upload upload.zip to re-run this workflow"
+              exit 1
+            fi
             echo "✅ Changes pushed successfully"
           else
             echo "ℹ️ No changes to commit"

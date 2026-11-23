@@ -42,15 +42,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        # round-70 (T-e): c-cpp removed — this repo has NO C/C++ sources (the
-        #   engine is a prebuilt libstockfish.so fetched at build time behind
-        #   the git-ignored src/main/jniLibs/), so the c-cpp extractor could
-        #   never process any code ("Finalizing cpp ... could not process any
-        #   code"). java-kotlin switched to manual build-mode with the exact
-        #   recipe the green android-ci code-checks job uses; js/ts + python
-        #   keep their previous (green) configuration.
+        # round-71 (CR-2): restore c-cpp in no-build mode. The engine remains a
+        #   prebuilt, git-ignored binary, but the JNI bridge and CMake recipe ARE
+        #   tracked native sources: src/main/cpp/engine_jni.cpp and CMakeLists.txt.
+        #   build-mode:none extracts those sources without requiring the engine.
+        #   java-kotlin keeps the green android-ci compile-only recipe; js/ts and
+        #   python remain no-build.
         - language: java-kotlin
           build-mode: manual
+        - language: c-cpp
+          build-mode: none
         - language: javascript-typescript
           build-mode: none
         - language: python
@@ -59,6 +60,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        persist-credentials: false
 
     # round-70 (T-e): JDK 17 + exec bit for the manual Java build — the zip
     #   overlay channel cannot carry the git exec bit, so chmod is the same
