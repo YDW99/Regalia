@@ -58,14 +58,14 @@ jobs:
         # CodeQL supports the following values keywords for 'language': 'actions', 'c-cpp', 'csharp', 'go', 'java-kotlin', 'javascript-typescript', 'python', 'ruby', 'rust', 'swift'
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     # round-70 (T-e): JDK 17 + exec bit for the manual Java build — the zip
     #   overlay channel cannot carry the git exec bit, so chmod is the same
     #   belt-and-suspenders android-ci uses.
     - name: Set up JDK 17
       if: matrix.language == 'java-kotlin'
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v6
       with:
         java-version: '17'
         distribution: 'temurin'
