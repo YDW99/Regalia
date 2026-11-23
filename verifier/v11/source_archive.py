@@ -22,7 +22,11 @@ from archive_scan import ArchiveLimits, Budget, safe_member_name, scan_archive
 PREFIX = "Regalia-v1.2.3-round72/"
 ENGINE_SHA256 = "ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8"
 KEYSTORE_SHA256 = "6a44f6607f4ed90fa6f4c52bedb8626d22ef285ba4127b68dd26975aaa522ccc"
-BUNDLE_SHA256 = "cc69b869077a72dc1367461c6567a47fea159d292fd5e3d207a2afef84f167b5"
+# v1.2.3 round-81: bundle pin realigned with the current chess.html — the
+#   round-80 tree rebuild left the v11 copy on the round-71 pin (cc69b869...)
+#   while v13 already carried ff703692..., so every v11 verify since failed
+#   "source bundle hash mismatch". Same bytes as verifier/v13.
+BUNDLE_SHA256 = "ff7036920da6e33f7502464dfd5372f5500f8408f1c499d8279913560ae01cf2"
 EXCLUDED_DIRS = {".git", ".gradle", ".cxx", "build", ".idea", "__pycache__", "node_modules"}
 EXCLUDED_FILES = {"local.properties", "keystore.properties", "keystore-info.txt", "regalia-signing.env"}
 FORBIDDEN_SUFFIXES = (".jks", ".keystore", ".p12", ".pfx", ".apk", ".aab", ".idsig", ".so")

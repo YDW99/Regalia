@@ -1,0 +1,14 @@
+timestamp_start=2026-11-23T16:10:10Z
+timestamp_end=2026-11-23T16:10:10Z
+cwd=/home/z/my-project/work/r81/repo
+command=python3 verifier/v13/source_archive.py verify /home/z/my-project/work/r81/Regalia-v1.2.3-round81-源代码.zip 
+exit_code=1
+--- output ---
+Traceback (most recent call last):
+  File "/home/z/my-project/work/r81/repo/verifier/v13/source_archive.py", line 406, in <module>
+    main()
+  File "/home/z/my-project/work/r81/repo/verifier/v13/source_archive.py", line 402, in main
+    verify(root, args.archive)
+  File "/home/z/my-project/work/r81/repo/verifier/v13/source_archive.py", line 340, in verify
+    raise AssertionError(
+AssertionError: complete source manifest mismatch: missing=1 unexpected=0

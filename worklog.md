@@ -430,3 +430,31 @@ src/main/java/com/Regalia/README.license、chess.src/README.license、assets/REA
 ### 本轮沙盒验证
 
 12 个改动 Python 文件 py_compile 通过；v11/v13 run-and-log.sh bash -n + 真实运行（退出码/日志/历史三元正确）通过；ai-bridge.js node --check 通过；chess.html 两次重建字节一致；archive_scan 预检对普通 ZIP/合法 ZIP64/经典字段+敌意 EOCD64/不可确定四类夹具功能验证通过（敌意组合正确拒绝、普通与合法 ZIP64 通过）；v13 集成 test_archives 全绿（含树内自测产物双重 pack——round-79 起即失败的场景、pack 统计发布前计算、hexdigest、新 BUNDLE pin）；v9/v10/v11/v13 source_archive 打包流程功能运行通过；mobsf.yml / unzip-folder-optimized.yml YAML 解析通过。APK 未重建（全部为源码/脚本/配置变更，versionCode/引擎身份/八项权限/protected zip/APK 均不动）；v13 门禁全量重跑、v1/v2/v3 与 r62/r67 回归、v11 负测与 APK 重建重签由仓库侧按惯例执行。push/merge 前须取得用户确认；`LICENSE&NOTICE.zip` 永不回退。
+
+## v1.2.3 round-81 (2026.11.23)：APK 重建重签 + 遗留门禁全量补齐 + CodeRabbit 三条 Major 落地
+
+### 基线与范围
+
+权威基线为本沙盒 round-80 交付树（`work/round80/staging`，即远端 upload 分支 05:45 快照内容）+ round-80.1 解压工作流热修复；固定源码比较基线仍为 `f78317919818a02c1fa169a99b85cad6ebf8a1fe`（经 api.github.com tarball 内容一致导入；上游对象离线不可得，本地导入提交不冒充上游哈希）。本轮授权：交付 round-81 完整源码 zip 与重签 release APK（用户上传 keystore，v1/v2/v3 齐全），Stockfish 19 引擎改由官方 sf_19 发布页 `stockfish-android-arm64-universal.tar.gz` 渠道获取（资产 SHA-256 `ebb24051aa4a222b4daaf049b882ecf1163d370c128fe02316602643f4d5e426`，80,233,187 字节；引擎成员与既有 pin 逐字节一致——引擎身份不变，仅获取渠道变更，per 项目所有者指令）。明信片：不改 versionCode（10203）、minSdk 23、target/compile 35、arm64-v8a only、八项权限、Stockfish 引擎身份、根 `LICENSE&NOTICE.zip`（远端当前字节 `f5dc2788…`，本轮核实并保持）；不执行远端写操作。
+
+### 实施内容
+
+**CodeRabbit PR#60 复审（15:40 邮件，3 条 Major + 2 条 outside-diff Minor）：**
+
+- v10+v9 secret_scan.py：`file()` 的 open/读取 OSError 纳入不透明诊断边界——未包装的 PermissionError 在 str(e) 中携带原始路径，路径含密码子串时秘密随诊断泄漏；现仅输出内部 scope 标识，`from None` 抑制异常链；正常读取与密码命中行为不变。
+- v11+v13 archive_scan.py：EOCD64 改在解析器实际采用的位置读取（locator 固定于 EOCD-20、EOCD64 固定于 EOCD-76），不再全尾 rfind——注释中的诱饵 `PK\x06\x06`（带小 size 字段）此前赢得 rfind 竞争使预检读到诱饵而解析器按固定位置读真实超大 EOCD64，内存边界被绕过；配套 v11 负测新增注释诱饵用例（断言拒绝发生且 ZipFile 从未被调用）与合法 ZIP64 正控制。
+- v13 source-gate.py：properties 有效形态比较按逻辑行识别注释——`org.gradle.jvmargs` 的反斜杠续行使后续自然行并入属性值（即使以 `#` 开头），round-80 的逐自然行过滤把续行内的 `# note` 行删掉、两侧有效形态相同而实际配置已变；现续行内自然行原样保留，`#`/`!` 判定仅作用于逻辑行首自然行，独立注释修改仍通过。
+- unzip-folder-optimized.yml（outside-diff Minor）：解压步骤保留上传脚本可执行位——Windows/GitHub 网页生成的 zip 不记录 Unix 权限位，`.sh` 落地 0644 丢失执行位；现对 manifest 中 `.sh` 成员解压后无任何执行位时显式 chmod 0755 并逐项记录（已记录权限原样保留、不弱化）。
+- PgnCacheManager.java（outside-diff Minor）：evictIfNeeded 两处 `List.sort()` 回退为 `Collections.sort()`——`List.sort` 为 API 24 新增的接口默认方法，minSdk 23 设备上抛 NoSuchMethodError；S9412 在 minSdk 23 约束下按故意误报处理并注释说明。
+
+**round-80 组装事故修复（本轮全树 diff 对照发现）：**
+
+- codeql.yml 恢复 round-79 交付版（c-cpp `build-mode: none` + `persist-credentials: false`）——round-80 staging 组装时该文件回退到 round-70 状态，两项已修复内容被静默丢失。
+- v11 source_archive.py 的 BUNDLE_SHA256 由 round-71 值（`cc69b869…`）对齐当前 chess.html（`ff703692…`，v13 已在 round-80 更新而 v11 漏更新）——此后每次 v11 verify 必报 "source bundle hash mismatch"。
+- v11 source-gate.py 同步 round-80~81 语义：build 文件有效形态比较（内联 v13 的 effective_gradle_script/effective_properties）、diff 收集改 `-G.` 内容差异（round-77 起源码 zip 全 0755 与 GitHub 基线 0644 的纯 mode 变化淹没差异列表）、allowed_java/allowed_exact/allowed_prefixes 对齐 v13 边界（round-77~81 审过的文件集）；v11 integration 负测"受保护构建配置编辑"更新为有效语义（纯注释行通过、minSdk 23→24 仍拒），检查数 18→19。
+- v13 source-gate 演进：允许集补齐 round-78~81 审过文件（ChessApp/EngineSettingsHelper/FileIoHelper/TlsSecurityHelper/assets README.license/PATCH-NOTES.md）；EXPECTED_LICENSE_SHA256 更新为远端当前字节 `f5dc2788…`（A02 "current remote bytes" 语义；旧值注释留痕）；stage-engine.py 改官方 sf_19 资产渠道（tar.gz 整体 SHA pin + 引擎成员 pin 不变）；source_archive PREFIX → round-81。
+- Java 账本：src/main/java/com/Regalia/README.license 顶部追加 round-81 条目（PgnCacheManager API-23 排序兼容；许可分类不变，不改写历史计数）。
+
+### 本轮沙盒验证（run-and-log 留痕，verifier/runs 与外部 evidence 根）
+
+完整工具链就地重建：SDK platform-35/build-tools 35.0.0（aapt/aapt2/apksigner）/platform-tools/CMake 3.31.6 + 官方 NDK r27c zip（663,987,688 字节，SHA-256 `59c2f6dc…`，ndk-check 全 CRC 门禁通过）+ Gradle 8.11.1 + OpenJDK 21（含 javac）。**APK 重建**：gradle assembleRelease 成功（51 任务全执行，含 R8 minify/shrink、CMake native build、lintVital）；**v13 verify-apk 全绿**：v1/v2/v3 全 true、单签名者、证书 SHA-256 `45bc6d36…`（与上传 keystore-info 一致）、versionCode 10203/1.2.3、min/target SDK 23/35、八项权限基线、arm64-v8a only、三个 native 库齐全、引擎 `ffd8fc20…`/100,695,968 字节逐字节、chess.html bundle `ff703692…` 与源码一致、签名块 v2/v3 结构有效、34 zip 条目 CRC 全过——新 APK SHA-256 `b77fb2f5cf43e8951a262fd9423507163702d330a12fe6a38a95bbee833079b6`（81,554,761 字节）。HyperOS 3 兼容为静态口径（A11）。**遗留事务补齐**：v1/v2/v3 node 回归、r62 十三门负测、r67 bench、v11 负测 32/32、v11 集成 19/19、v13 syntax/source-checks/source-gate 38 项（含固定 f783179 基线）/ndk-check/engine 证据门禁全部通过；源码 zip 经 pack+verify 门禁（504 条目 manifest exact、gradlew 0755、LICENSE zip 远端当前字节、无引擎/签名材料），v9+v10 secret_scan 对 APK 与源码 zip 零密码命中（222,763,900 字节扫描）。hyperos-claims：仅静态。push/merge 前须取得用户确认；`LICENSE&NOTICE.zip` 永不回退。

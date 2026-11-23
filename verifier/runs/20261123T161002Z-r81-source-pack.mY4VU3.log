@@ -1,0 +1,13 @@
+timestamp_start=2026-11-23T16:10:02Z
+timestamp_end=2026-11-23T16:10:03Z
+cwd=/home/z/my-project/work/r81/repo
+command=python3 verifier/v13/source_archive.py pack /home/z/my-project/work/r81/Regalia-v1.2.3-round81-源代码.zip 
+exit_code=0
+--- output ---
+source_entries=503
+source_uncompressed_bytes=14465270
+protected_license_archive_bytes=56011
+protected_license_archive_sha256=f5dc2788e2c02f38e7df358dea0e020c486a38be9b79c1c131df69d3096e2fa5
+source_zip_bytes=6011553
+source_zip_sha256=631693c4d51115694e297ffba029ccf162875f2099540e0861619cb905fda573
+SOURCE-PACK-V13 OK: /home/z/my-project/work/r81/Regalia-v1.2.3-round81-源代码.zip

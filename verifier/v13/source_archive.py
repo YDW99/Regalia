@@ -19,7 +19,9 @@ import zipfile
 
 from archive_scan import ArchiveLimits, Budget, safe_member_name, scan_archive
 
-PREFIX = "Regalia-v1.2.3-round77/"
+# v1.2.3 round-81: delivery prefix follows the current round; the pack/verify
+#   contract (A12) requires a single-round root prefix on the final source ZIP.
+PREFIX = "Regalia-v1.2.3-round81/"
 ENGINE_SHA256 = "ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8"
 KEYSTORE_SHA256 = "6a44f6607f4ed90fa6f4c52bedb8626d22ef285ba4127b68dd26975aaa522ccc"
 BUNDLE_SHA256 = "ff7036920da6e33f7502464dfd5372f5500f8408f1c499d8279913560ae01cf2"

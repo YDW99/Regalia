@@ -1,0 +1,31 @@
+timestamp_start=2026-11-23T16:08:42Z
+timestamp_end=2026-11-23T16:08:55Z
+cwd=/home/z/my-project/work/r81/repo
+command=python3 verifier/v11/integration-tests.py 
+exit_code=1
+--- output ---
+PASS V11-I01: complete current source payload packs and verifies
+PASS V11-I02: unexpected archive member is rejected by exact manifest comparison
+PASS V11-I03: missing archive member is rejected by exact manifest comparison
+PASS V11-I04: same-name modified content is rejected by per-member SHA-256
+PASS V11-I05: pack detects actual ZIP content and rejects nested ELF before publication
+PASS V11-I06: source-ZIP member budget rejects before digest or CRC decompression
+PASS V11-I07: required-entry gate rejects removal of build.gradle
+PASS V11-I08: required-entry gate rejects removal of gradlew
+PASS V11-I09: required-entry gate rejects removal of src/main/java/com/Regalia/MainActivity.java
+PASS V11-I10: required-entry gate rejects removal of verifier/v11/secret_scan.py
+PASS V11-I11: required-entry gate rejects removal of verifier/v11/verify-apk.py
+PASS V11-I12: valid manually updated license archive passes without historical size/hash lock
+PASS V11-I13: in-tree repack excludes previous ZIP, lock and temporary artifacts
+PASS V11-I14: preexisting output lock fails closed without touching output or owner lock
+Preparing worktree (detached HEAD 764fc0f)
+PASS V11-I15: clean committed checkout passes with a base independent of HEAD
+PASS V11-I16: uncommitted and committed out-of-scope Java edits both fail
+Traceback (most recent call last):
+  File "/home/z/my-project/work/r81/repo/verifier/v11/integration-tests.py", line 251, in <module>
+    main()
+  File "/home/z/my-project/work/r81/repo/verifier/v11/integration-tests.py", line 245, in main
+    test_git_baseline()
+  File "/home/z/my-project/work/r81/repo/verifier/v11/integration-tests.py", line 225, in test_git_baseline
+    raise AssertionError("protected build configuration edit was accepted")
+AssertionError: protected build configuration edit was accepted

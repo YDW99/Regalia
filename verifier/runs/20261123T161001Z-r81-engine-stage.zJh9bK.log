@@ -1,0 +1,10 @@
+timestamp_start=2026-11-23T16:10:01Z
+timestamp_end=2026-11-23T16:10:02Z
+cwd=/home/z/my-project/work/r81/repo
+command=python3 /home/z/my-project/scripts/r81-engine-stage-gate.py 
+exit_code=0
+--- output ---
+OFFICIAL_ASSET bytes=80233187 sha256=ebb24051aa4a222b4daaf049b882ecf1163d370c128fe02316602643f4d5e426
+ENGINE_MEMBER=stockfish/stockfish-android-arm64-universal bytes=100695968 sha256=ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8
+STAGED_ENGINE=src/main/jniLibs/arm64-v8a/libstockfish.so bytes=100695968 sha256=ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8 mode=0755
+ENGINE-STAGE-R81 OK: official sf_19 asset, member and staged engine are byte-identical to the v13 pin

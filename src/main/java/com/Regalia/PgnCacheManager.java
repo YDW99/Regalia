@@ -41,6 +41,7 @@ import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.regex.Pattern;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -512,9 +513,17 @@ public class PgnCacheManager {
                     }
                 }
             }
-            // v1.2.3 round-80 (SonarCloud S9412): sort the lists in place via
-            //   List.sort() instead of the Collections.sort() indirection.
-            pgns.sort((a, b) -> Long.compare(a.lastModified(), b.lastModified()));
+            // v1.2.3 round-81 (CodeRabbit PR#60 outside-diff Minor): sort via
+            //   Collections.sort() — List.sort() is a java.util.List DEFAULT
+            //   interface method added in API 24; on minSdk 23 devices the call
+            //   raises NoSuchMethodError at runtime. The round-80 S9412 cleanup
+            //   swapped Collections.sort for List.sort here, silently raising
+            //   the floor above minSdk. Collections.sort works on every API
+            //   level; the S9412 "modernize" advice does not apply while
+            //   minSdk is 23 (bootclasspath default methods are never
+            //   desugared), so the S9412 finding is accepted as a deliberate
+            //   false positive for this project.
+            Collections.sort(pgns, (a, b) -> Long.compare(a.lastModified(), b.lastModified()));
             for (File f : pgns) {
                 if (total <= MAX_CACHE_BYTES) break;
                 String fn = f.getName();
@@ -540,7 +549,10 @@ public class PgnCacheManager {
             if (total > MAX_CACHE_BYTES) {
                 // v1.2.3 round-79 (ROB-03): 受管 PGN 已排空仍超限 —— 淘汰最旧
                 //   的孤儿标签（其 .pgn 已不存在的残留）。
-                orphanTags.sort((a, b) -> Long.compare(a.lastModified(), b.lastModified()));
+                // v1.2.3 round-81 (CodeRabbit PR#60 outside-diff Minor): same
+                //   Collections.sort() reasoning as the pgns sort above —
+                //   List.sort() needs API 24, minSdk is 23.
+                Collections.sort(orphanTags, (a, b) -> Long.compare(a.lastModified(), b.lastModified()));
                 for (File tags : orphanTags) {
                     if (total <= MAX_CACHE_BYTES) break;
                     long tagsLen = tags.length();

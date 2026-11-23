@@ -10,6 +10,7 @@ from pathlib import Path
 import signal
 import shutil
 import stat
+import struct
 import subprocess
 import sys
 import tempfile
@@ -677,6 +678,55 @@ def test_archive_member_preflights() -> None:
         raise AssertionError("central-directory rejection happened after zipfile parsing")
     passed("oversized central directory is rejected before zipfile parses it")
 
+    # v1.2.3 round-81 (CodeRabbit PR#60 #2): a decoy `PK\\x06\\x06` record inside
+    #   the ZIP COMMENT — which sits AFTER the real EOCD64 and therefore won the
+    #   round-80 tail.rfind race — must not feed the preflight a small size while
+    #   the parser reads the real (oversized) EOCD64 at its fixed position
+    #   (EOCD-76). The fixture carries a genuinely oversized EOCD64 plus a decoy
+    #   whose size field claims 16 bytes; the rejection must come from the real
+    #   record, and ZipFile must never run.
+    def build_zip64_tail(dirsize: int | None, decoy_size: int | None) -> bytes:
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            archive.writestr("member.txt", b"x" * 64)
+        base = buffer.getvalue()
+        eocd_off = base.rfind(b"PK\x05\x06")
+        classic = bytearray(base[eocd_off:])
+        cd_start = struct.unpack_from("<I", classic, 16)[0]
+        if dirsize is None:
+            dirsize = eocd_off - cd_start  # the genuine, self-consistent size
+        eocd64 = struct.pack("<4sQ2H2L4Q", b"PK\x06\x06", 44, 45, 45, 0, 0, 1, 1,
+                             dirsize, cd_start)
+        locator = struct.pack("<4sLQL", b"PK\x06\x07", 0, eocd_off, 1)
+        comment = b""
+        if decoy_size is not None:
+            comment = struct.pack("<4sQ2H2L4Q", b"PK\x06\x06", 44, 45, 45, 0, 0, 1, 1,
+                                  decoy_size, 0) + b"decoy comment padding"
+        struct.pack_into("<H", classic, 20, len(comment))
+        return base[:eocd_off] + eocd64 + locator + bytes(classic) + comment
+
+    hostile = build_zip64_tail(4 * 1024 * 1024 * 1024, 16)
+    zip_spy = mock.Mock(
+        side_effect=AssertionError("zipfile.ZipFile must not run for a preflight rejection"))
+    with mock.patch.object(archive_scan.zipfile, "ZipFile", zip_spy):
+        expect_failure(lambda: scan_archive(io.BytesIO(hostile), consume_all, "opaque.cd-decoy",
+                                            limits=ArchiveLimits(max_central_directory_bytes=16)),
+                       expected="central directory size limit")
+    if zip_spy.call_count != 0:
+        raise AssertionError("comment-decoy rejection happened after zipfile parsing")
+    passed("comment-decoy EOCD64 cannot bypass the central-directory bound")
+
+    # Positive control: the same fixed-position logic must still accept a valid
+    #   ZIP64 archive (real, small, self-consistent dirsize), so the tightened
+    #   preflight did not simply start rejecting every ZIP64.
+    honest = build_zip64_tail(None, None)
+    with zipfile.ZipFile(io.BytesIO(honest)) as archive:
+        honest_size = len(archive.namelist())
+    scan_archive(io.BytesIO(honest), consume_all, "opaque.cd-zip64")
+    if honest_size != 1:
+        raise AssertionError("valid ZIP64 fixture lost its member")
+    passed("valid ZIP64 archives still pass the fixed-position preflight")
+
     # v1.2.3 round-79 (CodeRabbit PR#60 #11): duplicate DIRECTORY entries are
     #   rejected exactly like duplicate files.
     duplicate = io.BytesIO()
@@ -744,7 +794,7 @@ def main() -> None:
     test_directory_member_budget()
     test_license_budget_order()
     test_walk_errors()
-    assert checks == 30, checks
+    assert checks == 32, checks
     print(f"V11-NEGATIVE-PRIMITIVES OK: {checks}/{checks}")
 
 

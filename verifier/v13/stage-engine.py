@@ -1,16 +1,30 @@
 #!/usr/bin/env python3
-"""Extract only the pinned Stockfish member from the verified inherited APK."""
+"""Stage the pinned Stockfish 19 engine from the OFFICIAL sf_19 release asset.
+
+v1.2.3 round-81: the engine acquisition channel moves from the inherited
+round-72 APK to the official Stockfish GitHub release page, per the project
+owner's instruction. The inherited round-72 APK is no longer publicly
+retrievable, while the embedded engine binary is byte-identical to the
+`stockfish-android-arm64-universal` asset of the official sf_19 release
+(https://github.com/official-stockfish/Stockfish/releases/tag/sf_19,
+asset id 545567324): 100,695,968 bytes,
+sha256 ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8.
+The ENGINE pins are unchanged — engine identity is preserved exactly; only
+the channel that delivers the bytes is different. The whole .tar.gz is
+digest-pinned as well, so a tampered or partial download cannot stage.
+"""
 from pathlib import Path
 import hashlib
 import os
 import sys
+import tarfile
 import tempfile
-import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
-APK_SIZE = 81_552_289
-APK_SHA256 = "644919d57c690b54c56b26ed0ce91ec785d67a68e8e58eeaa6aed2946a5533fb"
-MEMBER = "lib/arm64-v8a/libstockfish.so"
+ASSET_SIZE = 80_233_187
+ASSET_SHA256 = "ebb24051aa4a222b4daaf049b882ecf1163d370c128fe02316602643f4d5e426"
+ASSET_URL = "https://github.com/official-stockfish/Stockfish/releases/download/sf_19/stockfish-android-arm64-universal.tar.gz"
+MEMBER = "stockfish/stockfish-android-arm64-universal"
 ENGINE_SIZE = 100_695_968
 ENGINE_SHA256 = "ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8"
 
@@ -25,15 +39,18 @@ def file_digest(path: Path) -> str:
 
 def main() -> None:
     if len(sys.argv) != 2:
-        raise SystemExit("usage: stage-engine.py INHERITED_ROUND72_APK")
+        raise SystemExit("usage: stage-engine.py SF19_ANDROID_ARM64_UNIVERSAL_TAR_GZ")
     source = Path(sys.argv[1])
-    assert source.stat().st_size == APK_SIZE, "inherited APK size mismatch"
-    actual_apk_digest = file_digest(source)
-    assert actual_apk_digest == APK_SHA256, "inherited APK identity mismatch"
-    with zipfile.ZipFile(source) as archive:
-        info = archive.getinfo(MEMBER)
-        assert info.file_size == ENGINE_SIZE, "engine member size mismatch"
-        payload = archive.read(MEMBER)
+    assert source.stat().st_size == ASSET_SIZE, "official sf_19 asset size mismatch"
+    actual_asset_digest = file_digest(source)
+    assert actual_asset_digest == ASSET_SHA256, "official sf_19 asset identity mismatch"
+    with tarfile.open(source, "r:gz") as archive:
+        member = archive.getmember(MEMBER)
+        assert member.isfile(), "engine member is not a regular file"
+        assert member.size == ENGINE_SIZE, "engine member size mismatch"
+        extracted = archive.extractfile(member)
+        assert extracted is not None, "engine member could not be extracted"
+        payload = extracted.read()
     actual_engine_digest = hashlib.sha256(payload).hexdigest()
     assert len(payload) == ENGINE_SIZE and actual_engine_digest == ENGINE_SHA256, "engine payload identity mismatch"
     target = ROOT / "src/main/jniLibs/arm64-v8a/libstockfish.so"
@@ -54,10 +71,7 @@ def main() -> None:
                 os.remove(temporary)
             except FileNotFoundError:
                 pass
-    print(f"INHERITED_APK bytes={APK_SIZE} sha256={actual_apk_digest}")
+    print(f"OFFICIAL_ASSET bytes={ASSET_SIZE} sha256={actual_asset_digest}")
+    print(f"ASSET_URL={ASSET_URL}")
     print(f"ENGINE_MEMBER={MEMBER} bytes={len(payload)} sha256={actual_engine_digest}")
-    print("ENGINE-STAGE-V13 OK: exactly one pinned member extracted")
-
-
-if __name__ == "__main__":
-    main()
+    print("ENGINE-STAGE-V13 OK: official sf_19 arm64-v8a universal engine staged byte-identically")

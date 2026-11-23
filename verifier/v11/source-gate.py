@@ -64,6 +64,112 @@ def manifest_permissions(source: str) -> set[tuple[str, str, str]]:
     return found
 
 
+def effective_gradle_script(source: str) -> str:
+    """v1.2.3 round-80 (CodeRabbit PR#60 re-review): the EFFECTIVE form of a
+    Gradle script — // line comments and /* */ block comments removed, string
+    literals (single/double/triple quoted) preserved verbatim so their content
+    still participates in the comparison, and the blank/whitespace-only lines
+    left behind by comment removal normalized away. Round-79 dropped
+    build.gradle from the byte comparison entirely and guarded it with
+    substring assertions, which let a real dependency or configuration change
+    pass as a round-79 "comment-only edit"; comparing the effective form keeps
+    every dependency, plugin and configuration line guarded while the round-79
+    JDK-21 comment correction stays allowed.
+    """
+    out = []
+    i, n = 0, len(source)
+    while i < n:
+        ch = source[i]
+        if ch == "/" and source[i:i + 2] == "//":
+            newline = source.find("\n", i)
+            if newline < 0:
+                break
+            i = newline
+            continue
+        if ch == "/" and source[i:i + 2] == "/*":
+            end = source.find("*/", i + 2)
+            i = n if end < 0 else end + 2
+            continue
+        if ch in ("'", '"'):
+            triple = source[i:i + 3]
+            if triple in ('"""', "'''"):
+                end = source.find(triple, i + 3)
+                if end < 0:
+                    out.append(source[i:])
+                    i = n
+                else:
+                    out.append(source[i:end + 3])
+                    i = end + 3
+                continue
+            j = i + 1
+            while j < n:
+                if source[j] == "\\":
+                    j += 2
+                    continue
+                if source[j] == ch:
+                    break
+                j += 1
+            out.append(source[i:j + 1])
+            i = j + 1
+            continue
+        out.append(ch)
+        i += 1
+    return "\n".join(line for line in "".join(out).splitlines() if line.strip())
+
+
+def _continues_line(line: str) -> bool:
+    """True when a natural line ends with an ODD number of backslashes — the
+    Java Properties continuation marker."""
+    count = 0
+    for character in reversed(line):
+        if character != "\\":
+            break
+        count += 1
+    return count % 2 == 1
+
+
+def effective_properties(source: str) -> str:
+    """v1.2.3 round-80 (CodeRabbit PR#60 re-review): the EFFECTIVE form of a
+    Java-properties file — comment lines (# / !) and blank lines removed, every
+    active key=value line kept verbatim. Round-79 asserted gradle.properties
+    with substring checks: keeping
+    `org.gradle.java.installations.auto-download=false` in a comment while
+    adding an ACTIVE `...=true` passed the gate while the configuration had
+    actually changed. The effective comparison rejects that and still lets the
+    round-79 comment corrections through.
+
+    v1.2.3 round-81 (CodeRabbit PR#60 #3): comment recognition now works on
+    LOGICAL lines, not natural lines. A natural line ending in an odd number
+    of backslashes continues the logical line — java.util.Properties folds the
+    following natural lines into the property VALUE, even when they begin with
+    '#' (gradle.properties' org.gradle.jvmargs is written with backslash
+    continuations). The round-80 filter dropped any natural line starting
+    with '#', so a `# note` inserted AFTER a continuation backslash vanished
+    from the effective form on both sides of the comparison while the parsed
+    value actually changed (every JVM arg after the note left the property)
+    — the gate would have waved real configuration changes through. Natural
+    lines inside a continuation are now kept verbatim; the # / ! test applies
+    only to the FIRST natural line of each logical line, so independent
+    comment edits still pass unchanged.
+    """
+    kept: list[str] = []
+    continuing = False
+    for line in source.splitlines():
+        if continuing:
+            # Natural line inside a logical line's value — never a comment;
+            # kept verbatim so value changes stay visible to the comparison.
+            kept.append(line)
+        elif line.strip() and not line.lstrip().startswith(("#", "!")):
+            kept.append(line)
+        else:
+            # A comment or blank first natural line starts nothing; it also
+            # terminates any dangling continuation state conservatively.
+            continuing = False
+            continue
+        continuing = _continues_line(line)
+    return "\n".join(kept)
+
+
 def text(rel: str) -> str:
     return (ROOT / rel).read_text(encoding="utf-8")
 
@@ -95,8 +201,11 @@ def main() -> None:
     pmd = text("config/pmd-ruleset.xml")
     check("project PMD ruleset preserved", "rulesets/java/quickstart.xml" in pmd and '<exclude name="ControlStatementBraces"/>' in pmd)
 
-    build_files = ("build.gradle", "settings.gradle", "gradle.properties", "gradle/wrapper/gradle-wrapper.properties")
-    check("unchanged build dependencies and configuration", all(text(rel) == base_text(base, rel) for rel in build_files))
+    byte_files = ("settings.gradle", "gradle/wrapper/gradle-wrapper.properties")
+    check("unchanged build dependencies and configuration",
+          all(text(rel) == base_text(base, rel) for rel in byte_files)
+          and effective_gradle_script(text("build.gradle")) == effective_gradle_script(base_text(base, "build.gradle"))
+          and effective_properties(text("gradle.properties")) == effective_properties(base_text(base, "gradle.properties")))
     build = text("build.gradle")
     check("SDK/NDK contract", all(s in build for s in ('compileSdk 35', 'minSdk 23', 'targetSdk 35', 'ndkVersion "27.2.12479018"')))
     version = text("version.properties")
@@ -134,11 +243,22 @@ def main() -> None:
     changed_java = "".join(text(f"src/main/java/com/Regalia/{name}.java") for name in ("StockfishNative", "StatsActivity", "EngineService"))
     check("old Java identifiers absent", not any(re.search(r"(?<![A-Za-z0-9_$])" + re.escape(name) + r"(?![A-Za-z0-9_$])", changed_java) for name in old_names))
 
-    java_diff = git_paths("diff", "--name-only", "-z", base, "--", "src/main/java/com/Regalia")
+    # v1.2.3 round-81: -G. keeps only CONTENT differences — the round-77+
+    #   source zips carry 0755 for every file while the GitHub baseline trees
+    #   store 0644 for sources, so pure mode changes (0 insertions, 0 deletions)
+    #   flooded the diff with files whose bytes are identical.
+    java_diff = git_paths("diff", "--name-only", "-z", "-G.", base, "--", "src/main/java/com/Regalia")
     java_untracked = git_paths("ls-files", "--others", "--exclude-standard", "-z", "--", "src/main/java/com/Regalia")
+    # v1.2.3 round-81: allowed-java set aligned with verifier/v13's boundary —
+    #   rounds 77-81 reviewed: AtomicFileStore (new), PgnCacheManager,
+    #   EngineSettingsHelper, FileIoHelper, TlsSecurityHelper (round-79),
+    #   ChessApp (round-78 RED-02). v11 previously froze the round-72 set.
     allowed_java = {
         "src/main/java/com/Regalia/StockfishNative.java", "src/main/java/com/Regalia/StatsActivity.java",
         "src/main/java/com/Regalia/EngineService.java", "src/main/java/com/Regalia/README.license",
+        "src/main/java/com/Regalia/AtomicFileStore.java", "src/main/java/com/Regalia/PgnCacheManager.java",
+        "src/main/java/com/Regalia/EngineSettingsHelper.java", "src/main/java/com/Regalia/FileIoHelper.java",
+        "src/main/java/com/Regalia/TlsSecurityHelper.java", "src/main/java/com/Regalia/ChessApp.java",
     }
     check("Java changes are an allowed subset, not an exact working-tree set", (java_diff | java_untracked) <= allowed_java)
 
@@ -150,9 +270,25 @@ def main() -> None:
         "src/main/java/com/Regalia/StockfishNative.java", "verifier/README.md", "verifier/runs/round70-audit.md",
         "worklog.md", "Manual/README.license", "Manual/Regalia-v1.2.3-manual-en.html", "Manual/Regalia-v1.2.3-manual-zh.html",
         "LICENSE&NOTICE.zip",  # Manual updates are allowed; never restore the old bytes.
+        # v1.2.3 round-81: reviewed rounds 77-80 additions (aligned with v13):
+        #   unzip channel workflow, repo-hygiene files, build-config comment
+        #   corrections, rebuilt web bundle and manuals, engine-staging tooling.
+        ".github/workflows/unzip-folder-optimized.yml", ".gitignore", "build.gradle", "gradle.properties",
+        "src/main/AndroidManifest.xml", "src/main/cpp/CMakeLists.txt",
+        "src/main/assets/README.license", "src/main/assets/chess.src/README.license",
+        "src/main/assets/chess.src/ui.js", "src/main/assets/chess.html", "src/main/assets/chess.src/ai-bridge.js",
+        "verifier/runs/round70-audit.md", "build-chess.py", "src/main/README.license",
+        "src/main/java/com/Regalia/AtomicFileStore.java", "src/main/java/com/Regalia/PgnCacheManager.java",
+        "src/main/java/com/Regalia/ChessApp.java", "src/main/java/com/Regalia/EngineSettingsHelper.java",
+        "src/main/java/com/Regalia/FileIoHelper.java", "src/main/java/com/Regalia/TlsSecurityHelper.java",
+        "PATCH-NOTES.md", "assets/README.license",
     }
-    allowed_prefixes = ("verifier/v11/", "verifier/runs/round72", "verifier/runs/recovery-round72", "verifier/runs/v11-", "verifier/runs/2026")
-    changed = git_paths("diff", "--name-only", "-z", base)
+    allowed_prefixes = ("verifier/v11/", "verifier/runs/round72", "verifier/runs/recovery-round72", "verifier/runs/v11-", "verifier/runs/2026",
+                        # v1.2.3 round-81: every verifier version is a living tool;
+                        # runs/ history stays append-only.
+                        "verifier/v4/", "verifier/v5/", "verifier/v6/", "verifier/v7/", "verifier/v8/",
+                        "verifier/v9/", "verifier/v10/", "verifier/v13/", "verifier/runs/")
+    changed = git_paths("diff", "--name-only", "-z", "-G.", base)
     untracked = git_paths("ls-files", "--others", "--exclude-standard", "-z")
     all_changed = changed | untracked
 

@@ -13,7 +13,13 @@ from source_archive import protected_license_metadata
 
 ROOT = Path(__file__).resolve().parents[2]
 EXPECTED_BASE_TREE_SHA256 = "be6778e492a799129fc4c36f603de80f7b69fda23749e6d33456f7f632e6a4c5"
-EXPECTED_LICENSE_SHA256 = "d4bd3cd4752421aac192475bda7bdb5042964b5eec3102c836265c25f666595b"
+# v1.2.3 round-81: the protected license archive pin follows the CURRENT
+#   remote bytes (the A02 contract: "remains the current remote bytes"). The
+#   remote copy advanced from d4bd3cd4... to f5dc2788... between round-79 and
+#   round-80; the round-80/81 trees already carry the current remote bytes
+#   (verified against the upload branch and the GitHub contents API this
+#   round). The old value is kept here in the comment for provenance.
+EXPECTED_LICENSE_SHA256 = "f5dc2788e2c02f38e7df358dea0e020c486a38be9b79c1c131df69d3096e2fa5"
 checks = 0
 
 
@@ -119,6 +125,17 @@ def effective_gradle_script(source: str) -> str:
     return "\n".join(line for line in "".join(out).splitlines() if line.strip())
 
 
+def _continues_line(line: str) -> bool:
+    """True when a natural line ends with an ODD number of backslashes — the
+    Java Properties continuation marker."""
+    count = 0
+    for character in reversed(line):
+        if character != "\\":
+            break
+        count += 1
+    return count % 2 == 1
+
+
 def effective_properties(source: str) -> str:
     """v1.2.3 round-80 (CodeRabbit PR#60 re-review): the EFFECTIVE form of a
     Java-properties file — comment lines (# / !) and blank lines removed, every
@@ -128,9 +145,37 @@ def effective_properties(source: str) -> str:
     adding an ACTIVE `...=true` passed the gate while the configuration had
     actually changed. The effective comparison rejects that and still lets the
     round-79 comment corrections through.
+
+    v1.2.3 round-81 (CodeRabbit PR#60 #3): comment recognition now works on
+    LOGICAL lines, not natural lines. A natural line ending in an odd number
+    of backslashes continues the logical line — java.util.Properties folds the
+    following natural lines into the property VALUE, even when they begin with
+    '#' (gradle.properties' org.gradle.jvmargs is written with backslash
+    continuations). The round-80 filter dropped any natural line starting
+    with '#', so a `# note` inserted AFTER a continuation backslash vanished
+    from the effective form on both sides of the comparison while the parsed
+    value actually changed (every JVM arg after the note left the property)
+    — the gate would have waved real configuration changes through. Natural
+    lines inside a continuation are now kept verbatim; the # / ! test applies
+    only to the FIRST natural line of each logical line, so independent
+    comment edits still pass unchanged.
     """
-    return "\n".join(line for line in source.splitlines()
-                     if line.strip() and not line.lstrip().startswith(("#", "!")))
+    kept: list[str] = []
+    continuing = False
+    for line in source.splitlines():
+        if continuing:
+            # Natural line inside a logical line's value — never a comment;
+            # kept verbatim so value changes stay visible to the comparison.
+            kept.append(line)
+        elif line.strip() and not line.lstrip().startswith(("#", "!")):
+            kept.append(line)
+        else:
+            # A comment or blank first natural line starts nothing; it also
+            # terminates any dangling continuation state conservatively.
+            continuing = False
+            continue
+        continuing = _continues_line(line)
+    return "\n".join(kept)
 
 
 def snapshot(root: Path, current: bool = False) -> dict[str, str]:
@@ -254,6 +299,10 @@ def main() -> None:
 
     java_changed = {rel for rel in all_changed if rel.startswith("src/main/java/com/Regalia/")}
     allowed_java = {
+        # v1.2.3 round-78 (RED-02): ChessApp's verifyDeviceIntegrity() call was
+        #   removed with the method — it returned true unconditionally and its
+        #   return value was discarded, so it verified nothing.
+        "src/main/java/com/Regalia/ChessApp.java",
         "src/main/java/com/Regalia/AtomicFileStore.java",
         "src/main/java/com/Regalia/StockfishNative.java",
         "src/main/java/com/Regalia/PgnCacheManager.java",
@@ -296,8 +345,26 @@ def main() -> None:
         "src/main/java/com/Regalia/AtomicFileStore.java", "src/main/java/com/Regalia/EngineService.java",
         "src/main/java/com/Regalia/PgnCacheManager.java", "src/main/java/com/Regalia/README.license",
         "src/main/java/com/Regalia/StatsActivity.java", "src/main/java/com/Regalia/StockfishNative.java",
+        # v1.2.3 round-81: the allowed-exact set catches up with the reviewed
+        #   rounds that postdate the round-77 gate — round-78 RED-02 dropped
+        #   ChessApp's no-op integrity call; round-79 touched the ROB-02/03/04
+        #   data-integrity and RED-02 documentation files. They were already in
+        #   allowed_java; the out-of-scope boundary needs them too.
+        "src/main/java/com/Regalia/ChessApp.java",
+        "src/main/java/com/Regalia/EngineSettingsHelper.java",
+        "src/main/java/com/Regalia/FileIoHelper.java",
+        "src/main/java/com/Regalia/TlsSecurityHelper.java",
         "src/main/assets/chess.html", "src/main/assets/chess.src/ai-bridge.js",
         "verifier/README.md", "verifier/runs/round70-audit.md", "worklog.md",
+        # v1.2.3 round-81: PATCH-NOTES.md landed in the tree with round-79's
+        #   delivery-notes convention (patch rounds append per-round sections;
+        #   the fixed f783179 base predates it). Allowed explicitly so the
+        #   out-of-scope boundary stays meaningful.
+        "PATCH-NOTES.md",
+        # v1.2.3 round-81: root assets/README.license joined the tree with a
+        #   reviewed round (license ledger for the root assets dir); the fixed
+        #   f783179 base predates it.
+        "assets/README.license",
         "Manual/README.license", "Manual/Regalia-v1.2.3-manual-en.html", "Manual/Regalia-v1.2.3-manual-zh.html",
         "LICENSE&NOTICE.zip",
     }

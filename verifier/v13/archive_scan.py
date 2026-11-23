@@ -107,16 +107,37 @@ def _central_directory_size(tail: bytes) -> int | None:
     the classic value is used. Anything ambiguous (missing/truncated EOCD,
     locator without a complete EOCD64 in the tail) returns None and the
     caller fails closed.
+
+    v1.2.3 round-81 (CodeRabbit PR#60 #2): the EOCD64 is now read at the
+    position the parser actually uses — a FIXED offset relative to the EOCD
+    (the locator is read at EOCD-20 and the EOCD64 record at EOCD-76; the
+    parser never searches the tail for the signature). The round-80 form
+    used tail.rfind(b"PK\x06\x06"), so a decoy signature with a small size
+    field placed inside the ZIP COMMENT — which sits after the real EOCD64
+    and therefore wins the rfind race — made the preflight read the decoy
+    while the parser followed the real locator at the fixed position to the
+    real (oversized) EOCD64 and materialized the huge central directory,
+    bypassing the memory bound. The parser additionally cross-checks
+    diroffset+dirsize==reloff, so comment bytes can never be adopted as the
+    EOCD64 when a genuine locator is present; mirroring the fixed positions
+    keeps the preflight on the same record the parser will use. The size
+    field (structEndArchive64 = "<4sQ2H2L4Q": dirsize at byte offset +40,
+    after 4+8+2+2+4+4 bytes of header and two 8-byte entry-count fields) is
+    unchanged from round-80.
     """
     index = tail.rfind(b"PK\x05\x06")
     if index < 0 or len(tail) - index < 22:
         return None
     locator = index - 20
     if locator >= 0 and tail[locator:locator + 4] == b"PK\x06\x07":
-        index64 = tail.rfind(b"PK\x06\x06")
-        if index64 < 0 or len(tail) - index64 < 48:
+        # Parser layout: [EOCD64 (56)][locator (20)][EOCD (22)][comment].
+        index64 = locator - 56
+        if index64 < 0 or len(tail) - index64 < 56:
             return None
-        return struct.unpack_from("<Q", tail, index64 + 40)[0]
+        record = tail[index64:index64 + 56]
+        if not record.startswith(b"PK\x06\x06"):
+            return None
+        return struct.unpack_from("<Q", record, 40)[0]
     return struct.unpack_from("<I", tail, index + 12)[0]
 
 

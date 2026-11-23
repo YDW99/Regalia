@@ -1,3 +1,11 @@
+v1.2.3 round-81 (2026.11.23): API-23 sort compatibility restored in PgnCacheManager.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - PgnCacheManager.java (GPL v3): evictIfNeeded's two round-80 List.sort()
+    calls (S9412 cleanup) reverted to Collections.sort — List.sort is a
+    java.util.List DEFAULT interface method added in API 24 and minSdk is 23,
+    so the calls raised NoSuchMethodError on Android 6.x at cache eviction
+    (CodeRabbit PR#60 outside-diff Minor). S9412 is accepted as a deliberate
+    false positive for this project while minSdk is 23.
 v1.2.3 round-80 (2026.11.23): import clamp floor restored, bare-CR settings parser, cap-log constants, List.sort.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - EngineSettingsHelper.java (GPL v3): the round-79 threads refactor lost the

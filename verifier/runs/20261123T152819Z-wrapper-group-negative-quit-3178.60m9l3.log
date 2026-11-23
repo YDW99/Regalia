@@ -1,0 +1,8 @@
+timestamp_start=2026-11-23T15:28:19Z
+timestamp_end=2026-11-23T15:28:21Z
+cwd=/home/z/my-project/work/r81/repo
+command=sh -c printf\ \'child-before-QUIT\\n\'\;\ printf\ \'%s\'\ \"\$\$\"\ \>\ \"\$1\"\;\ printf\ ready\ \>\ \"\$2\"\;\ exec\ sleep\ 30 sh /tmp/v11-group-quit-puyszfr8/child.pid /tmp/v11-group-quit-puyszfr8/ready 
+exit_code=131
+interrupted_by=QUIT
+--- output ---
+child-before-QUIT
