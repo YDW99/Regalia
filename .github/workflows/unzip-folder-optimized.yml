@@ -177,36 +177,49 @@ jobs:
           mkdir -p ./extracted
           python3 - <<'PY'
           import os
-          import stat
           import zipfile
           with open("/tmp/extracted-manifest.txt", encoding="utf-8") as source:
               members = [line.rstrip("\n") for line in source if line.strip()]
           with zipfile.ZipFile("upload.zip") as archive:
               for member in members:
                   archive.extract(member, "./extracted")
-          # v1.2.3 round-81 (CodeRabbit PR#60 outside-diff Minor, yml:184):
-          #   preserve the executable bit of uploaded scripts. zipfile.extract
-          #   applies the ZIP-recorded Unix mode when the archive carries one,
-          #   but zips produced on Windows / via GitHub web upload record NO
-          #   permission bits, so .sh scripts land non-executable and the
-          #   committed tree silently loses the mode. For members that look
-          #   like scripts (suffix .sh) whose extracted mode lacks ALL execute
-          #   bits, restore 0755 explicitly (recorded permissions are honored
-          #   as-is and never weakened; only the permission-less case is
-          #   repaired, and each repair is logged).
+          # v1.2.3 round-82 (CodeRabbit PR#60 Minor): file modes are restored
+          #   from the ZIP metadata for EVERY extracted member, not just .sh
+          #   scripts. python 3.12 zipfile.extract() applies NO archive-
+          #   recorded Unix mode — every member lands at the umask default —
+          #   so a build-chess.py uploaded with mode 0755 lost its execute
+          #   bits in the committed tree and running it later failed with
+          #   Permission denied. Normal Unix permission bits are restored from
+          #   ZipInfo.external_attr with the special bits masked off
+          #   (setuid/setgid/sticky and the S_IFMT file-type field — & 0o777);
+          #   a recorded mode is honored as-is. Only a .sh member whose
+          #   archive carries NO valid Unix permission metadata (DOS-made zips:
+          #   Windows / GitHub web uploads) falls back to 0755 so scripts stay
+          #   executable. Each restoration is logged.
           restored = []
+          with zipfile.ZipFile("upload.zip") as archive:
+              metadata = {info.filename: info for info in archive.infolist()}
           for member in members:
-              if not member.endswith(".sh"):
-                  continue
               extracted = os.path.join("./extracted", member)
-              mode = os.stat(extracted).st_mode
-              if not (mode & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)):
-                  os.chmod(extracted, 0o755)
-                  restored.append(member)
+              info = metadata.get(member)
+              mode = None
+              if info is not None and info.create_system == 3:
+                  recorded = (info.external_attr >> 16) & 0o777
+                  if recorded:
+                      mode = recorded
+              if mode is None and member.endswith(".sh"):
+                  # Permission-less scripts only — never fabricate bits for
+                  # non-.sh members without Unix metadata.
+                  mode = 0o755
+              if mode is None:
+                  continue
+              if (os.stat(extracted).st_mode & 0o777) != mode:
+                  os.chmod(extracted, mode)
+                  restored.append((member, oct(mode)[2:]))
           if restored:
-              print("🔧 Executable bit restored for scripts (zip carried no execute bits):")
-              for name in restored:
-                  print(f"  {name}")
+              print("🔧 File modes restored from ZIP metadata (extract applies no recorded modes):")
+              for name, mode_bits in restored:
+                  print(f"  {name} -> {mode_bits}")
           print(f"📁 Extracted {len(members)} members")
           PY
 
