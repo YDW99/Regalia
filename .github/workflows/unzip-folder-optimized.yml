@@ -176,50 +176,12 @@ jobs:
           #   manifest of extracted members is what the commit step stages.
           mkdir -p ./extracted
           python3 - <<'PY'
-          import os
           import zipfile
           with open("/tmp/extracted-manifest.txt", encoding="utf-8") as source:
               members = [line.rstrip("\n") for line in source if line.strip()]
           with zipfile.ZipFile("upload.zip") as archive:
               for member in members:
                   archive.extract(member, "./extracted")
-          # v1.2.3 round-82 (CodeRabbit PR#60 Minor): file modes are restored
-          #   from the ZIP metadata for EVERY extracted member, not just .sh
-          #   scripts. python 3.12 zipfile.extract() applies NO archive-
-          #   recorded Unix mode — every member lands at the umask default —
-          #   so a build-chess.py uploaded with mode 0755 lost its execute
-          #   bits in the committed tree and running it later failed with
-          #   Permission denied. Normal Unix permission bits are restored from
-          #   ZipInfo.external_attr with the special bits masked off
-          #   (setuid/setgid/sticky and the S_IFMT file-type field — & 0o777);
-          #   a recorded mode is honored as-is. Only a .sh member whose
-          #   archive carries NO valid Unix permission metadata (DOS-made zips:
-          #   Windows / GitHub web uploads) falls back to 0755 so scripts stay
-          #   executable. Each restoration is logged.
-          restored = []
-          with zipfile.ZipFile("upload.zip") as archive:
-              metadata = {info.filename: info for info in archive.infolist()}
-          for member in members:
-              extracted = os.path.join("./extracted", member)
-              info = metadata.get(member)
-              mode = None
-              if info is not None and info.create_system == 3:
-                  recorded = (info.external_attr >> 16) & 0o777
-                  if recorded:
-                      mode = recorded
-              if mode is None and member.endswith(".sh"):
-                  # Permission-less scripts only — never fabricate bits for
-                  # non-.sh members without Unix metadata.
-                  mode = 0o755
-              if mode is None:
-                  continue
-              if (os.stat(extracted).st_mode & 0o777) != mode:
-                  os.chmod(extracted, mode)
-                  restored.append((member, oct(mode)[2:]))
-          if restored:
-              print("🔧 File modes restored from ZIP metadata (extract applies no recorded modes):")
-              for name, mode_bits in restored:
-                  print(f"  {name} -> {mode_bits}")
           print(f"📁 Extracted {len(members)} members")
           PY
 
