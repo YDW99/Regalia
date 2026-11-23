@@ -1,3 +1,17 @@
+v1.2.3 round-77 (2026.11.23): durable cache writes and failure propagation.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - java/com/Regalia/AtomicFileStore.java NEW (GPL v3): one shared atomic UTF-8
+    file-replacement primitive for eval, PGN and tags persistence.
+  - StockfishNative.java and PgnCacheManager.java now preserve the previous file
+    on write/rename failure; synchronous preference commits report their result.
+  - assets/chess.src/ai-bridge.js clears the eval dirty flag only after the
+    dedicated file or synchronous SharedPreferences fallback reports success;
+    localStorage alone remains best-effort and does not count as that result.
+  - Root build-chess.py uses per-process unique same-directory temporary files,
+    fsync and os.replace, removing the shared chess.html.tmp race.
+  - java/*.java (16 files, Mixed AGPL v3 and GPL v3; see per-file ledger).
+  - No engine lifecycle, UI, Binder transport, permission or dependency changes.
+
 v1.2.3 round-71 (2026.11.22): PR#59 follow-up — PMD naming, scanner boundaries and CI repair.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - CR-1: twelve actually present underscore-prefixed Java methods renamed

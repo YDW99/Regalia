@@ -219,11 +219,20 @@ def test_git_baseline() -> None:
 
             build = worktree / "build.gradle"
             original_build = build.read_bytes()
-            build.write_bytes(original_build + b"\n// protected configuration negative test\n")
+            # v1.2.3 round-81: the gate compares build files in EFFECTIVE form,
+            #   so an independent comment-only line is legal (round-80 semantics
+            #   — reviewed comment corrections must pass) while an ACTIVE
+            #   configuration change must still fail.
+            build.write_bytes(original_build + b"\n// comment-only edit must pass the effective-form gate\n")
+            comment_only = run_source_gate(worktree)
+            if comment_only.returncode != 0 or "SOURCE-V11-GATE OK (27 checks)" not in comment_only.stdout:
+                raise AssertionError("comment-only build edit was rejected by the effective-form comparison")
+            passed("comment-only build edit passes the effective-form gate")
+            build.write_bytes(original_build.replace(b"minSdk 23", b"minSdk 24"))
             protected = run_source_gate(worktree)
             if protected.returncode == 0 or "unchanged build dependencies and configuration" not in protected.stdout:
                 raise AssertionError("protected build configuration edit was accepted")
-            passed("protected build configuration edit fails against fixed base")
+            passed("active build configuration edit fails against fixed base")
             build.write_bytes(original_build)
 
             license_path = worktree / "LICENSE&NOTICE.zip"
@@ -243,7 +252,7 @@ def test_git_baseline() -> None:
 def main() -> None:
     test_archives()
     test_git_baseline()
-    assert checks == 18, checks
+    assert checks == 19, checks
     print(f"V11-INTEGRATION OK: {checks}/{checks}")
 
 

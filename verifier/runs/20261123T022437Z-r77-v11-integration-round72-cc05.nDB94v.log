@@ -1,0 +1,23 @@
+timestamp_start=2026-11-23T02:24:37Z
+timestamp_end=2026-11-23T02:24:38Z
+cwd=/tmp/regalia-r77/repo
+command=python3 /tmp/regalia-r77/round72-cc05/verifier/v11/integration-tests.py 
+exit_code=1
+--- output ---
+Traceback (most recent call last):
+  File "/tmp/regalia-r77/round72-cc05/verifier/v11/integration-tests.py", line 209, in <module>
+    main()
+  File "/tmp/regalia-r77/round72-cc05/verifier/v11/integration-tests.py", line 202, in main
+    test_archives()
+  File "/tmp/regalia-r77/round72-cc05/verifier/v11/integration-tests.py", line 76, in test_archives
+    _, output = quiet(lambda: verify(source, baseline_zip))
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/regalia-r77/round72-cc05/verifier/v11/integration-tests.py", line 30, in quiet
+    result = call()
+             ^^^^^^
+  File "/tmp/regalia-r77/round72-cc05/verifier/v11/integration-tests.py", line 76, in <lambda>
+    _, output = quiet(lambda: verify(source, baseline_zip))
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/regalia-r77/round72-cc05/verifier/v11/source_archive.py", line 279, in verify
+    raise AssertionError(f"missing required source entries: {len(missing)}")
+AssertionError: missing required source entries: 1

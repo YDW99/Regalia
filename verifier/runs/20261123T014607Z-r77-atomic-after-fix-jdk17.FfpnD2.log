@@ -1,0 +1,21 @@
+timestamp_start=2026-11-23T01:46:07Z
+timestamp_end=2026-11-23T01:46:39Z
+cwd=/tmp/regalia-r77/repo
+command=env PATH=/mnt/agents/buildenv/jdk17/bin:/usr/local/bin:/usr/bin:/bin python3 verifier/v13/atomic-file-store-test.py 
+exit_code=1
+--- output ---
+PASS new file
+PASS overwrite
+PASS Unicode UTF-8 round trip
+PASS injected rename failure surfaces
+PASS failed replacement preserves old bytes
+PASS failed replacement cleans owned temporary file
+Exception in thread "main" java.lang.AssertionError: 96 concurrent writes all succeed
+	at com.Regalia.AtomicFileStoreHarness.check(AtomicFileStoreHarness.java:14)
+	at com.Regalia.AtomicFileStoreHarness.main(AtomicFileStoreHarness.java:34)
+Traceback (most recent call last):
+  File "/tmp/regalia-r77/repo/verifier/v13/atomic-file-store-test.py", line 81, in <module>
+    subprocess.run(['java','-cp',str(classes),'com.Regalia.AtomicFileStoreHarness',str(work)],check=True)
+  File "/usr/local/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['java', '-cp', '/tmp/regalia-r77-atomic-ypk5s6qt/classes', 'com.Regalia.AtomicFileStoreHarness', '/tmp/regalia-r77-atomic-ypk5s6qt/work']' returned non-zero exit status 1.

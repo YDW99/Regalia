@@ -90,7 +90,14 @@ public class FileIoHelper {
     // v1.2.3 round-56: readTextFile 上限 1 MiB —— 唯一消费者是设置导入
     //   （KB 级），上限仅防御桥接口被指向超大文件导致的 OOM。见 readTextFile
     //   javadoc 的契约说明。
+    // v1.2.3 round-79 (ROB-02): 口径拆分 —— 文件级检查用字节上限（
+    //   MAX_READ_TEXT_BYTES，File.length() 是字节数）；读取循环内的累计
+    //   检查用字符上限（MAX_READ_TEXT_CHARS，Java String 的 length()/字符
+    //   计数是 UTF-16 单元）。UTF-8 解码后字符数 ≤ 字节数，因此两者取同值
+    //   时循环级检查保守有效；旧实现用字节常量直接对比字符计数，语义
+    //   混用（同名常量实计 char）。
     private static final long MAX_READ_TEXT_BYTES = 1024L * 1024L;
+    private static final int MAX_READ_TEXT_CHARS = 1024 * 1024;
 
     private final Context context;
     private final WeakReference<Activity> activityRef;
@@ -251,20 +258,31 @@ public class FileIoHelper {
                 return "{\"error\":\"too_large\"}";
             } // mobsf-ignore: android_logging
             try (FileInputStream fis = new FileInputStream(file);
-                 BufferedReader reader = new BufferedReader(
-                     new InputStreamReader(fis, "UTF-8")
-                 )) {
+                 InputStreamReader charReader = new InputStreamReader(fis, "UTF-8")) {
+                // v1.2.3 round-79 (ROB-02): 弃用 BufferedReader.readLine 逐行物化 ——
+                //   readLine 对无换行的超长行会先把整行缓冲进堆，上限检查落在
+                //   物化之后（"先物化后检查"）。改为 8KB char[] 流式读：每块
+                //   追加前判限，超限立即返回哨兵，任何时刻内存占用不超过
+                //   上限+一块。
+                // v1.2.3 round-80 (CodeRabbit PR#60 re-review): round-79 声称"流式读
+                //   保留原始换行形态（CRLF 不再规范化为 LF）不影响解析"——该论断
+                //   对裸 CR 文件不成立（validateSettings 的 split("\\r?\\n") 不拆
+                //   裸 CR 行，整份导入被拒绝）。设置解析器已改为同时接受
+                //   CR/LF/CRLF（split("\\r\\n|\\r|\\n")，见 EngineSettingsHelper
+                //   round-80）；本方法保持字节忠实的流式读不变。
                 StringBuilder sb = new StringBuilder();
-                String line;
+                char[] buf = new char[8192];
+                int n;
                 long totalChars = 0;
-                while ((line = reader.readLine()) != null) {
-                    totalChars += line.length() + 1;
+                while ((n = charReader.read(buf)) > 0) {
+                    totalChars += n;
                     // 防御性二次上限：length() 可能被竞态改写（读期间文件增长）。
-                    if (totalChars > MAX_READ_TEXT_BYTES) {
+                    // v1.2.3 round-79 (ROB-02): 字符口径常量对比字符计数（口径统一）。
+                    if (totalChars > MAX_READ_TEXT_CHARS) {
                         Log.w(TAG, "readTextFile: content grew past cap while reading: " + path); // mobsf-ignore: android_logging
                         return "{\"error\":\"too_large\"}";
                     }
-                    sb.append(line).append("\n");
+                    sb.append(buf, 0, n);
                 }
                 return sb.toString();
             }

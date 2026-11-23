@@ -1,0 +1,8 @@
+timestamp_start=2026-11-23T01:48:43Z
+timestamp_end=2026-11-23T01:48:45Z
+cwd=/tmp/regalia-r77/repo
+command=sh -c printf\ \'child-before-TERM\\n\'\;\ printf\ \'%s\'\ \"\$\$\"\ \>\ \"\$1\"\;\ printf\ ready\ \>\ \"\$2\"\;\ exec\ sleep\ 30 sh /tmp/v11-wrapper-only-term-s7r9n38q/child.pid /tmp/v11-wrapper-only-term-s7r9n38q/ready 
+exit_code=143
+interrupted_by=TERM
+--- output ---
+child-before-TERM

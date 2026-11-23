@@ -1,0 +1,8 @@
+timestamp_start=2026-11-23T02:32:59Z
+timestamp_end=2026-11-23T02:33:17Z
+cwd=/tmp/regalia-r77/repo
+command=bash -c set\ -e\;\ NDK=/mnt/agents/buildenv/sdk/ndk/27.2.12479018\;\ test\ -f\ \"\$NDK/build/cmake/android.toolchain.cmake\"\;\ grep\ -q\ \"Pkg.Revision\ =\ 27.2.12479018\"\ \"\$NDK/source.properties\"\;\ test\ -x\ \"\$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang\"\;\ test\ \"\$\(stat\ -c\ %s\ \"\$NDK/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so\"\)\"\ =\ 1794776\;\ \"\$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang\"\ --version\ \|\ head\ -1\;\ test\ \"\$\(find\ \"\$NDK/build\"\ -type\ f\ \|\ wc\ -l\)\"\ =\ 88\;\ echo\ NDK-LAYOUT-V13-OK 
+exit_code=0
+--- output ---
+Android (12470979, +pgo, +bolt, +lto, +mlgo, based on r522817c) clang version 18.0.3 (https://android.googlesource.com/toolchain/llvm-project d8003a456d14a3deb8054cdaa529ffbf02d9b262)
+NDK-LAYOUT-V13-OK

@@ -1,0 +1,6 @@
+timestamp_start=2026-11-23T15:27:46Z
+timestamp_end=2026-11-23T15:27:46Z
+cwd=/home/z/my-project/work/r81/repo
+command=sh -c exit\ 7 
+exit_code=7
+--- output ---

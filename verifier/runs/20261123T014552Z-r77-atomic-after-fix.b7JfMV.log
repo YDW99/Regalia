@@ -1,0 +1,17 @@
+timestamp_start=2026-11-23T01:45:52Z
+timestamp_end=2026-11-23T01:45:52Z
+cwd=/tmp/regalia-r77/repo
+command=python3 verifier/v13/atomic-file-store-test.py 
+exit_code=1
+--- output ---
+Traceback (most recent call last):
+  File "/tmp/regalia-r77/repo/verifier/v13/atomic-file-store-test.py", line 80, in <module>
+    subprocess.run(['javac','-encoding','UTF-8','-d',str(classes),*sources],check=True)
+  File "/usr/local/lib/python3.12/subprocess.py", line 548, in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/subprocess.py", line 1026, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "/usr/local/lib/python3.12/subprocess.py", line 1955, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+FileNotFoundError: [Errno 2] No such file or directory: 'javac'

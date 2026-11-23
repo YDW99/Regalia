@@ -1,0 +1,8 @@
+timestamp_start=2026-11-23T01:48:53Z
+timestamp_end=2026-11-23T01:48:55Z
+cwd=/tmp/regalia-r77/repo
+command=sh -c printf\ \'child-before-QUIT\\n\'\;\ printf\ \'%s\'\ \"\$\$\"\ \>\ \"\$1\"\;\ printf\ ready\ \>\ \"\$2\"\;\ exec\ sleep\ 30 sh /tmp/v11-group-quit-nyy47bxx/child.pid /tmp/v11-group-quit-nyy47bxx/ready 
+exit_code=131
+interrupted_by=QUIT
+--- output ---
+child-before-QUIT

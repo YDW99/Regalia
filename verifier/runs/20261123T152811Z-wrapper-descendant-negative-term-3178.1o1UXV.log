@@ -1,0 +1,8 @@
+timestamp_start=2026-11-23T15:28:11Z
+timestamp_end=2026-11-23T15:28:13Z
+cwd=/home/z/my-project/work/r81/repo
+command=bash -c printf\ \'child-before-TERM\\n\'\;\ printf\ \'%s\'\ \"\$\$\"\ \>\ \"\$1\"\;\ sleep\ 30\ \&\ descendant=\$\!\;\ printf\ \'%s\'\ \"\$descendant\"\ \>\ \"\$2\"\;\ printf\ ready\ \>\ \"\$3\"\;\ wait bash /tmp/v11-descendant-term-xu0ae907/child.pid /tmp/v11-descendant-term-xu0ae907/descendant.pid /tmp/v11-descendant-term-xu0ae907/ready 
+exit_code=143
+interrupted_by=TERM
+--- output ---
+child-before-TERM

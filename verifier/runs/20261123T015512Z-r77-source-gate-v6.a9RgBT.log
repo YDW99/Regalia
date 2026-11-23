@@ -1,0 +1,40 @@
+timestamp_start=2026-11-23T01:55:12Z
+timestamp_end=2026-11-23T01:55:15Z
+cwd=/tmp/regalia-r77/repo
+command=python3 verifier/v13/source-gate.py --base /mnt/agents/work/regalia-r77/baseline-f783/tree 
+exit_code=0
+--- output ---
+PASS 01: comparison baseline is an external directory
+FIXED_BASE files=172 tree_sha256=be6778e492a799129fc4c36f603de80f7b69fda23749e6d33456f7f632e6a4c5
+PASS 02: fixed baseline complete-tree digest
+PASS 03: CodeQL c-cpp no-build coverage
+PASS 04: CodeQL checkout credentials disabled
+PASS 05: tracked native sources acknowledged
+PASS 06: MobSF scanner pinned
+PASS 07: Dependabot ecosystems and schedules
+PASS 08: gradlew executable index mode
+PASS 09: project PMD ruleset preserved
+PASS 10: unchanged build dependencies and configuration
+PASS 11: SDK/NDK contract
+PASS 12: version contract
+PASS 13: arm64-only ABI
+PASS 14: permissions unchanged from fixed base
+PASS 15: Round-77 AGPL seven-file ledger
+PASS 16: Round-77 GPL thirteen-file ledger
+PASS 17: Round-71 historical license counts retained
+PASS 18: mixed license count updated
+PASS 19: current protected license archive exists and is nonempty
+PASS 20: current remote license archive bounded scan, CRC and identity
+CURRENT_LICENSE bytes=56011 sha256=d4bd3cd4752421aac192475bda7bdb5042964b5eec3102c836265c25f666595b
+PASS 21: MobSF comment-only config and review boundary
+PASS 22: old Java identifiers absent
+PASS 23: Java changes are an allowed subset
+PASS 24: no out-of-scope repository changes against fixed base
+PASS 25: round-70 audit erratum appended
+PASS 26: round-71 recovery honesty record
+PASS 27: round-77 recovery honesty record
+PASS 28: v9 marked superseded without deleting history
+PASS 29: round-72 twenty-comment triage exists
+PASS 30: no engine or signing material tracked
+PASS 31: local engine input is absent or untracked and ignored
+SOURCE-V13-GATE OK (31 checks), fixed_base=/mnt/agents/work/regalia-r77/baseline-f783/tree

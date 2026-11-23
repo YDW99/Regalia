@@ -141,6 +141,14 @@ public final class TlsSecurityHelper {
     /**
      * Called once at app startup (ChessApp.onCreate) to ensure this class is
      * loaded and its references are visible to MobSF static analysis.
+     *
+     * v1.2.3 round-79 (RED-02, documentation honesty): the Class.forName calls
+     *   below are MobSF static-analysis satisfiers — they make pinning / CT
+     *   awareness visible to the scanner and are NOT a runtime defense: no
+     *   OkHttp is bundled, no instance is created, and no TLS decision is made
+     *   here. The actual runtime enforcement is the platform's network_security_
+     *   config.xml pin-set (see validatePin for the programmatic fallback).
+     *   Do not cite this method as evidence of active pinning/CT checks.
      */
     public static void init(Context context) {
         try {
@@ -175,7 +183,15 @@ public final class TlsSecurityHelper {
      *   2. Document the architectural decision (offline app → attestation N/A)
      *   3. Provide a hook point if a future version adds server-side features
      *
-     * @return true always (device integrity is not gating for an offline app)
+     * v1.2.3 round-79 (RED-02, explicit non-applicability): the constant true
+     *   return is a deliberate "not applicable" outcome, NOT a verification
+     *   result — no attestation is performed, no evidence is gathered, and no
+     *   caller may use this return value as authorization or integrity
+     *   evidence. Any future caller needing real attestation must implement
+     *   it here (and will then have a backend to verify tokens against).
+     *
+     * @return true always — device integrity is NOT gating for an offline app;
+     *         the value carries no verification meaning (see note above)
      */
     public static boolean verifyDeviceIntegrity(Context context) {
         try {

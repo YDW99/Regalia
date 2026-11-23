@@ -6708,6 +6708,13 @@ function _pgnCacheRename(oldName){
     try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     render();
   }else{
+    // v1.2.3 round-79 (ROB-09, CodeRabbit PR#60): rename may be a PARTIAL
+    //   success — the Java side renames the PGN but loses the tags and then
+    //   returns false. The old-name entry no longer exists on disk, so the
+    //   list MUST be refreshed here; otherwise it keeps the old name and
+    //   opening it from the list fails until the next manual refresh.
+    _refreshPGNCacheList();
+    render();
     showToast(T('pgn_cache_rename_failed'),3750);
   }
   _pgnCacheOpInProgress=false;

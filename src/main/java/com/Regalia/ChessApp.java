@@ -149,9 +149,12 @@ public class ChessApp extends Application {
         // actual security enforcement is via res/xml/network_security_config.xml
         // (pinning + CT) and the documented non-applicability of SafetyNet for
         // an offline app. See TlsSecurityHelper.java for the full rationale.
+        // v1.2.3 round-78 (RED-02): the verifyDeviceIntegrity() call was
+        //   removed together with the method — it returned true unconditionally
+        //   and its return value was discarded here, so it verified nothing.
+        //   init() alone carries the static-analysis references now.
         try {
             TlsSecurityHelper.init(getApplicationContext());
-            TlsSecurityHelper.verifyDeviceIntegrity(getApplicationContext());
         } catch (Throwable e) {
             Log.w(TAG, "TLS security helper init failed", e);
         }

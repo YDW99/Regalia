@@ -1,0 +1,8 @@
+timestamp_start=2026-11-23T15:26:59Z
+timestamp_end=2026-11-23T15:27:01Z
+cwd=/home/z/my-project/work/r81/repo
+command=/home/z/.venv/bin/python3 /tmp/v11-orphan-stubborn-term-lfpc0oeu/parent.py /tmp/v11-orphan-stubborn-term-lfpc0oeu/stubborn.py /tmp/v11-orphan-stubborn-term-lfpc0oeu/child.pid /tmp/v11-orphan-stubborn-term-lfpc0oeu/descendant.pid /tmp/v11-orphan-stubborn-term-lfpc0oeu/ready 
+exit_code=143
+interrupted_by=TERM
+--- output ---
+child-before-TERM

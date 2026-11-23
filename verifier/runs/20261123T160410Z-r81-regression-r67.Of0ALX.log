@@ -1,0 +1,19 @@
+timestamp_start=2026-11-23T16:04:10Z
+timestamp_end=2026-11-23T16:04:11Z
+cwd=/home/z/my-project/work/r81/repo
+command=node verifier/runs/r67-bench.js 
+exit_code=0
+--- output ---
+ok: twin _pgnFirstGameSplit bodies byte-identical (1293 chars)
+ok: monotonic-cache scanner block extracted verbatim from stats.html
+ok: bench split: 100k space-blank pairs, no [: 9.0ms (bound 1000ms)
+ok: bench split: 1M newlines: 53.8ms (bound 1000ms)
+ok: bench split: 10MB single line: 0.5ms (bound 1000ms)
+ok: bench split: 50k real games: 20.9ms (bound 1000ms)
+ok: bench scan: [Event x x200000 (no ]): 43.6ms (bound 1000ms)
+ok: bench scan: [Event x\n x200000 + ]: 47.2ms (bound 1000ms)
+ok: bench scan: [A x200000 + \n + 1M spaces + ]: 25.8ms (bound 1000ms)
+ok: bench scan: quote-heavy x200000: 33.2ms (bound 1000ms)
+ok: bench scan: [FEN + 10MB spaces (no ]): 220.4ms (bound 1000ms)
+ok: bench scan: 10MB single-line mixed tags: 140.2ms (bound 1000ms)
+R67-BENCH OK

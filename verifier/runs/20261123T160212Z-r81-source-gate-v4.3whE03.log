@@ -1,0 +1,41 @@
+timestamp_start=2026-11-23T16:02:12Z
+timestamp_end=2026-11-23T16:02:12Z
+cwd=/home/z/my-project/work/r81/repo
+command=python3 verifier/v13/source-gate.py --base /home/z/my-project/work/r81/f783179-tree/YDW99-Regalia-f783179 
+exit_code=1
+--- output ---
+PASS 01: comparison baseline is an external directory
+FIXED_BASE files=172 tree_sha256=be6778e492a799129fc4c36f603de80f7b69fda23749e6d33456f7f632e6a4c5
+PASS 02: fixed baseline complete-tree digest
+PASS 03: CodeQL c-cpp no-build coverage
+PASS 04: CodeQL checkout credentials disabled
+PASS 05: tracked native sources acknowledged
+PASS 06: MobSF scanner pinned
+PASS 07: Dependabot ecosystems and schedules
+PASS 08: gradlew executable index mode
+PASS 09: tracked entries keep regular file modes
+PASS 10: project PMD ruleset preserved
+PASS 11: unchanged build dependencies and configuration
+PASS 12: build.gradle effective dependencies and configuration unchanged
+PASS 13: gradle.properties effective configuration unchanged
+PASS 14: SDK/NDK contract
+PASS 15: version contract
+PASS 16: arm64-only ABI
+PASS 17: permissions unchanged from fixed base
+PASS 18: Round-77 AGPL seven-file ledger
+PASS 19: Round-77 GPL thirteen-file ledger
+PASS 20: Round-71 historical license counts retained
+PASS 21: mixed license count updated
+PASS 22: current protected license archive exists and is nonempty
+PASS 23: current remote license archive bounded scan, CRC and identity
+CURRENT_LICENSE bytes=56011 sha256=f5dc2788e2c02f38e7df358dea0e020c486a38be9b79c1c131df69d3096e2fa5
+PASS 24: MobSF comment-only config and review boundary
+PASS 25: old Java identifiers absent
+Traceback (most recent call last):
+  File "/home/z/my-project/work/r81/repo/verifier/v13/source-gate.py", line 392, in <module>
+    main()
+  File "/home/z/my-project/work/r81/repo/verifier/v13/source-gate.py", line 314, in main
+    check("Java changes are an allowed subset", java_changed <= allowed_java)
+  File "/home/z/my-project/work/r81/repo/verifier/v13/source-gate.py", line 30, in check
+    raise AssertionError(name)
+AssertionError: Java changes are an allowed subset

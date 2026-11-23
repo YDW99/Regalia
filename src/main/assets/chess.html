@@ -7015,30 +7015,17 @@ let _reviewEvalCache=new function(){
       }
     }
   }catch(e){_warnEvalCache('constructor load',e);}
-  // v1.0.4 Round-5 Rev20: Save to disk. Strategy:
-  //   - Debounced 150ms write using saveEvalCacheSync (atomic file write).
-  //   - _flushSync() forces immediate write — called from critical event handlers.
-  // v1.0.4 Round-5 Rev21: set() now triggers SYNCHRONOUS write immediately
-  //   (no debounce). Rationale: HyperOS 3 can SIGKILL the app at any moment;
-  //   debouncing introduces a window where new eval data could be lost. Since
-  //   each set() is followed by an onEngineEval callback (relatively rare —
-  //   max ~1 per second per review step), the cost of synchronous write is
-  //   acceptable. For rapid batch operations (clear, analyze-all advancing
-  //   through steps), the JS event loop is single-threaded so writes are
-  //   naturally serialized — no risk of concurrent writes corrupting the file.
-  //   clear() and delete() also use synchronous writes for the same reason.
-  // v1.0.4 Round-5 Rev23 (this round): Reintroduced a HYBRID write strategy:
-  //   set() uses a 150ms debounce (coalescing rapid batch analyze-all writes),
-  //   while _flushSync() (called from lifecycle/visibility handlers) forces an
-  //   immediate synchronous write. This restores the Rev20 debounce that Rev21
-  //   removed — the Rev21 rationale (HyperOS 3 SIGKILL mid-debounce) is fully
-  //   addressed by the Rev22 onDestroy flush + the pagehide/visibilitychange
-  //   JS handlers, so the debounce window is now covered by multiple flush
-  //   triggers. Performance win: for a 60k-entry cache (~12MB JSON), set()
-  //   previously serialized the ENTIRE Map on every eval callback (~1/sec) —
-  //   now rapid navigations during analyze-all coalesce into one write per
-  //   150ms. The debounce is also cleared (forced immediate write) when
-  //   _flushSync() is called, so no data is lost on app backgrounding.
+  // v1.0.4 Round-5 Rev20/21/23 — consolidated v1.2.3 round-79 (RED-01): the
+  //   write strategy is the Rev23 HYBRID and nothing else — set() marks the
+  //   map dirty and schedules a 150ms debounce (coalescing rapid analyze-all
+  //   navigation writes into one disk write), while _flushSync() (the Rev22
+  //   onDestroy flush plus the pagehide/visibilitychange JS handlers) forces
+  //   an immediate synchronous write and clears the pending debounce, so a
+  //   HyperOS 3 SIGKILL can at most lose the 150ms coalescing window.
+  //   The Rev21 "synchronous-only" interlude and its 60k-entry (~12MB)
+  //   scale figures are history: the cache is now capped at MAX_ENTRIES=2000
+  //   (~800KB JSON, see PHASE 18 / _evictIfOverCap below), and the stale
+  //   numbers are not restated as if current.
   let _saveTimer=null;
   let _dirty=false;
   const DEBOUNCE_MS=150;
@@ -7050,8 +7037,7 @@ let _reviewEvalCache=new function(){
     if(_saveTimer){clearTimeout(_saveTimer);_saveTimer=null;}
     if(forceSync){
       // Synchronous write — blocks until fsync + rename complete
-      _writeToDiskNow();
-      _dirty=false;
+      if(_writeToDiskNow())_dirty=false; else _dirty=true;
       return;
     }
     // Debounced write — coalesces rapid set() calls into one disk write.
@@ -7059,8 +7045,7 @@ let _reviewEvalCache=new function(){
     _saveTimer=setTimeout(function(){
       _saveTimer=null;
       if(_dirty){
-        _writeToDiskNow();
-        _dirty=false;
+        if(_writeToDiskNow())_dirty=false;
       }
     },DEBOUNCE_MS);
   }
@@ -7068,25 +7053,25 @@ let _reviewEvalCache=new function(){
     const arr=Array.from(m.entries());
     const json=JSON.stringify(arr);
     // Primary: dedicated eval cache file (atomic write, fsync, never cleared by HyperOS)
-    let fileOk=false;
+    let fileOk=false,legacyOk=false;
     try{
       if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveEvalCacheSync){
-        fileOk=!!AndroidBridge.saveEvalCacheSync(json);
+        fileOk=AndroidBridge.saveEvalCacheSync(json)===true;
       }
     }catch(e){_warnEvalCache('save (file path)',e);}
     // Always write to localStorage as a fast in-memory read cache (best-effort)
     try{localStorage.setItem(STORAGE_KEY,json);}catch(e){_warnEvalCache('save (localStorage path)',e);}
     // Also write to SharedPreferences persistentGet backing store (legacy compat)
     if(!fileOk){
-      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSetSync)AndroidBridge.persistentSetSync(STORAGE_KEY,json);}catch(e){_warnEvalCache('save (legacy path)',e);}
+      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSetSync)legacyOk=AndroidBridge.persistentSetSync(STORAGE_KEY,json)===true;}catch(e){_warnEvalCache('save (legacy path)',e);}
     }
+    return fileOk||legacyOk;
   }
   // Public flush method — called from Java onPause/onStop/onUserLeaveHint
   // and from JS pagehide/visibilitychange/beforeunload handlers.
   this._flushSync=function(){
     if(_saveTimer){clearTimeout(_saveTimer);_saveTimer=null;}
-    if(_dirty)_writeToDiskNow();
-    _dirty=false;
+    if(_dirty&&_writeToDiskNow())_dirty=false;
   };
   this.get=function(k){if(m.has(k)){const v=m.get(k);m.delete(k);m.set(k,v);return v;}return undefined;};
   // v1.0.2 PERF: peek() reads without refreshing LRU order. Use this in
@@ -10571,14 +10556,32 @@ function renderEngineConfigAndUpdate(){
     }
   }
 }
+// v1.2.3 round-80 (SonarCloud S3776): shared best-effort bridge query helper —
+//   round-79's S2486 fix put both try/catch + fallback-ternary pairs inline in
+//   openEngineConfig and pushed its cognitive complexity to 16 (> the 15
+//   threshold). Behavior is unchanged: falsy bridge returns stay null, an
+//   exception is logged (never silently swallowed) and the caller's fallback
+//   value applies.
+function _bridgeJsonQuery(query,fallback){
+  try{
+    const raw=query();
+    return raw?JSON.parse(raw):null;
+  }catch(e){
+    console.warn('[Engine]',e?.message?e.message:e);
+    return fallback;
+  }
+}
 function openEngineConfig(){
   showEngineConfig=true;
   engineConfigData=null;
   engineSettingsData=null;
   // No engine scanning/import — only built-in engine info
   if(typeof AndroidBridge!=='undefined'){
-    try{const info=AndroidBridge.getEngineInfo();if(info)engineConfigData=JSON.parse(info);}catch(e){engineConfigData={name:'Stockfish 19',author:'T. Romstad, M. Costalba, J. Kiiski, G. Linscott'};}
-    try{const settings=AndroidBridge.getEngineSettings();if(settings)engineSettingsData=JSON.parse(settings);}catch(e){engineSettingsData=null;}
+    // v1.2.3 round-79 (SonarCloud S2486): best-effort bridge query — on failure
+    //   we fall back to the built-in engine metadata; the exception is logged
+    //   (not silently swallowed) so bridge failures remain diagnosable.
+    engineConfigData=_bridgeJsonQuery(()=>AndroidBridge.getEngineInfo(),{name:'Stockfish 19',author:'T. Romstad, M. Costalba, J. Kiiski, G. Linscott'});
+    engineSettingsData=_bridgeJsonQuery(()=>AndroidBridge.getEngineSettings(),null);
   }
   if(!engineSettingsData){
     engineSettingsData={threads:2,hash:128,moveOverhead:60,multiPV:1,ponder:false,showWDL:true,skillLevel:20,limitStrength:false,elo:2800,autoConfig:true};
@@ -24020,6 +24023,13 @@ function _pgnCacheRename(oldName){
     try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     render();
   }else{
+    // v1.2.3 round-79 (ROB-09, CodeRabbit PR#60): rename may be a PARTIAL
+    //   success — the Java side renames the PGN but loses the tags and then
+    //   returns false. The old-name entry no longer exists on disk, so the
+    //   list MUST be refreshed here; otherwise it keeps the old name and
+    //   opening it from the list fails until the next manual refresh.
+    _refreshPGNCacheList();
+    render();
     showToast(T('pgn_cache_rename_failed'),3750);
   }
   _pgnCacheOpInProgress=false;

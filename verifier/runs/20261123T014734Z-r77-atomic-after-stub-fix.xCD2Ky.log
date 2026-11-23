@@ -1,0 +1,18 @@
+timestamp_start=2026-11-23T01:47:34Z
+timestamp_end=2026-11-23T01:47:35Z
+cwd=/tmp/regalia-r77/repo
+command=env PATH=/mnt/agents/buildenv/jdk17/bin:/usr/local/bin:/usr/bin:/bin python3 verifier/v13/atomic-file-store-test.py 
+exit_code=0
+--- output ---
+PASS new file
+PASS overwrite
+PASS Unicode UTF-8 round trip
+PASS injected rename failure surfaces
+PASS failed replacement preserves old bytes
+PASS failed replacement cleans owned temporary file
+PASS 96 concurrent writes all succeed
+PASS concurrent result is one complete payload
+PASS concurrent writes leave no temporary files
+PASS null input rejected without damage
+PASS missing parent rejected without damage
+atomic-checks passed=11 total=11 concurrent_writes=96

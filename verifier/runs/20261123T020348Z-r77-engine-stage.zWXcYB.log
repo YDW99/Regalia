@@ -1,0 +1,9 @@
+timestamp_start=2026-11-23T02:03:48Z
+timestamp_end=2026-11-23T02:04:20Z
+cwd=/tmp/regalia-r77/repo
+command=python3 verifier/v13/stage-engine.py /mnt/agents/work/regalia-r72/recovery/final/Regalia-v1.2.3-round72-release.payload.bin 
+exit_code=0
+--- output ---
+INHERITED_APK bytes=81552289 sha256=644919d57c690b54c56b26ed0ce91ec785d67a68e8e58eeaa6aed2946a5533fb
+ENGINE_MEMBER=lib/arm64-v8a/libstockfish.so bytes=100695968 sha256=ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8
+ENGINE-STAGE-V13 OK: exactly one pinned member extracted

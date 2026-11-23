@@ -25,8 +25,10 @@ add_library(engine_bridge SHARED
 
 # v1.0.2 REDUNDANCY (audit): removed `dl` link — the dlopen/dlsym engine-loading
 # code was deleted from engine_jni.cpp in v1.0.2 (dead since v18.5.0 removed
-# engine import). Only nativeChmod and nativeRenice remain, which use only
-# libc (sys/stat.h, sys/resource.h) and liblog.
+# engine import). v1.2.3 round-79 (RED-01③) correction: nativeRenice was since
+# deleted as well (engine_jni.cpp dropped its JNI binding; StockfishNative
+# dropped the declaration) — only nativeChmod remains, which uses only libc
+# (sys/stat.h) and liblog. sys/resource.h is no longer included.
 target_link_libraries(engine_bridge
     android
     log

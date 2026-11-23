@@ -1,0 +1,19 @@
+timestamp_start=2026-11-23T01:48:41Z
+timestamp_end=2026-11-23T01:48:42Z
+cwd=/tmp/regalia-r77/repo
+command=node verifier/runs/r67-bench.js 
+exit_code=0
+--- output ---
+ok: twin _pgnFirstGameSplit bodies byte-identical (1293 chars)
+ok: monotonic-cache scanner block extracted verbatim from stats.html
+ok: bench split: 100k space-blank pairs, no [: 49.3ms (bound 1000ms)
+ok: bench split: 1M newlines: 63.4ms (bound 1000ms)
+ok: bench split: 10MB single line: 0.1ms (bound 1000ms)
+ok: bench split: 50k real games: 29.1ms (bound 1000ms)
+ok: bench scan: [Event x x200000 (no ]): 32.3ms (bound 1000ms)
+ok: bench scan: [Event x\n x200000 + ]: 38.6ms (bound 1000ms)
+ok: bench scan: [A x200000 + \n + 1M spaces + ]: 17.1ms (bound 1000ms)
+ok: bench scan: quote-heavy x200000: 25.4ms (bound 1000ms)
+ok: bench scan: [FEN + 10MB spaces (no ]): 142.4ms (bound 1000ms)
+ok: bench scan: 10MB single-line mixed tags: 104.9ms (bound 1000ms)
+R67-BENCH OK

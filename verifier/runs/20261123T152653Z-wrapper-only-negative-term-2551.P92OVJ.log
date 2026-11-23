@@ -1,0 +1,8 @@
+timestamp_start=2026-11-23T15:26:53Z
+timestamp_end=2026-11-23T15:26:55Z
+cwd=/home/z/my-project/work/r81/repo
+command=sh -c printf\ \'child-before-TERM\\n\'\;\ printf\ \'%s\'\ \"\$\$\"\ \>\ \"\$1\"\;\ printf\ ready\ \>\ \"\$2\"\;\ exec\ sleep\ 30 sh /tmp/v11-wrapper-only-term-oe8_st7x/child.pid /tmp/v11-wrapper-only-term-oe8_st7x/ready 
+exit_code=143
+interrupted_by=TERM
+--- output ---
+child-before-TERM

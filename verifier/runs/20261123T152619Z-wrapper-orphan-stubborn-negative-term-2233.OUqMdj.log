@@ -1,0 +1,8 @@
+timestamp_start=2026-11-23T15:26:19Z
+timestamp_end=2026-11-23T15:26:21Z
+cwd=/home/z/my-project/work/r81/repo
+command=/home/z/.venv/bin/python3 /tmp/v11-orphan-stubborn-term-yyq3oaxd/parent.py /tmp/v11-orphan-stubborn-term-yyq3oaxd/stubborn.py /tmp/v11-orphan-stubborn-term-yyq3oaxd/child.pid /tmp/v11-orphan-stubborn-term-yyq3oaxd/descendant.pid /tmp/v11-orphan-stubborn-term-yyq3oaxd/ready 
+exit_code=143
+interrupted_by=TERM
+--- output ---
+child-before-TERM

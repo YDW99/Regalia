@@ -1,0 +1,8 @@
+timestamp_start=2026-11-23T01:48:49Z
+timestamp_end=2026-11-23T01:48:51Z
+cwd=/tmp/regalia-r77/repo
+command=/usr/local/bin/python3 /tmp/v11-orphan-stubborn-term-23gyuxcb/parent.py /tmp/v11-orphan-stubborn-term-23gyuxcb/stubborn.py /tmp/v11-orphan-stubborn-term-23gyuxcb/child.pid /tmp/v11-orphan-stubborn-term-23gyuxcb/descendant.pid /tmp/v11-orphan-stubborn-term-23gyuxcb/ready 
+exit_code=143
+interrupted_by=TERM
+--- output ---
+child-before-TERM

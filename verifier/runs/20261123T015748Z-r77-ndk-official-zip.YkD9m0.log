@@ -1,0 +1,8 @@
+timestamp_start=2026-11-23T01:57:48Z
+timestamp_end=2026-11-23T02:03:17Z
+cwd=/tmp/regalia-r77/repo
+command=python3 verifier/v13/ndk-check.py /mnt/agents/work/regalia-r77/android-ndk-r27c-linux.zip
+exit_code=NOT_CAPTURED
+interrupted_by=outer-tool-deadline
+--- output ---
+Outer execution channel exceeded its deadline; no child result or numeric exit code was captured. No CRC success is inferred from this record.

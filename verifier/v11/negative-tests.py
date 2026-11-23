@@ -10,6 +10,7 @@ from pathlib import Path
 import signal
 import shutil
 import stat
+import struct
 import subprocess
 import sys
 import tempfile
@@ -33,7 +34,13 @@ def passed(name: str) -> None:
     print(f"PASS V11-N{checks:02d}: {name}")
 
 
-def expect_failure(call, forbidden: tuple[str, ...] = ()) -> str:
+def expect_failure(call, forbidden: tuple[str, ...] = (), expected: str | None = None) -> str:
+    """v1.2.3 round-79 (CodeRabbit PR#60 #14): fail for the EXPECTED reason.
+
+    Any OSError / BadZipFile / AssertionError used to count as a pass — an I/O
+    error reading the fixture would still report "digest rejected" /
+    "depth exceeded". Callers now pass the expected diagnostic fragment; a
+    failure whose message lacks it fails the test."""
     try:
         call()
     except (AssertionError, zipfile.BadZipFile, OSError) as exc:
@@ -41,6 +48,8 @@ def expect_failure(call, forbidden: tuple[str, ...] = ()) -> str:
         for value in forbidden:
             if value in message:
                 raise AssertionError("sensitive text leaked in a negative-test diagnostic")
+        if expected is not None and expected not in message:
+            raise AssertionError(f"negative fixture failed for an unexpected reason: {message}")
         return message
     raise AssertionError("negative fixture was accepted")
 
@@ -127,7 +136,7 @@ def test_recursive_secrets() -> None:
         scanner = SecretScanner()
         message = expect_failure(
             lambda: scanner.archive(io.BytesIO(deep), "opaque.fixture.secret"),
-            forbidden=(first, second),
+            forbidden=(first, second), expected="uploaded password match",
         )
         if "opaque.fixture.secret" not in message:
             raise AssertionError("opaque failure identifier missing")
@@ -136,12 +145,12 @@ def test_recursive_secrets() -> None:
         for codec in ("utf-16le", "utf-16be"):
             scanner = SecretScanner()
             deep = nested_archive("wide.bin", second.encode(codec))
-            expect_failure(lambda: scanner.archive(io.BytesIO(deep), "opaque.fixture.wide"), forbidden=(first, second))
+            expect_failure(lambda: scanner.archive(io.BytesIO(deep), "opaque.fixture.wide"), forbidden=(first, second), expected="uploaded password match")
         passed("nested UTF-16LE/BE secret forms fail closed")
 
         secret_path = Path(ROOT) / f"uncreated-{first}.zip"
         scanner = SecretScanner()
-        message = expect_failure(lambda: scanner.file(secret_path, "opaque.fixture.path"), forbidden=(first, second))
+        message = expect_failure(lambda: scanner.file(secret_path, "opaque.fixture.path"), forbidden=(first, second), expected="file read failed")
         if first in message:
             raise AssertionError("secret-bearing source path leaked")
         passed("file-open diagnostics do not copy secret-bearing paths")
@@ -155,15 +164,16 @@ def test_recursive_binaries() -> None:
         for label, payload in (("engine", engine), ("keystore", keystore)):
             inspector = BinaryInspector()
             deep = nested_archive("payload.dat", payload)
-            expect_failure(lambda: inspector.archive(io.BytesIO(deep), f"opaque.{label}"))
+            expect_failure(lambda: inspector.archive(io.BytesIO(deep), f"opaque.{label}"),
+                            expected=f"{label} content detected")
             passed(f"five-level nested {label} digest is rejected")
     inspector = BinaryInspector()
     deep = nested_archive("payload.bin", b"\x7fELF" + b"\x00" * 31)
-    expect_failure(lambda: inspector.archive(io.BytesIO(deep), "opaque.elf"))
+    expect_failure(lambda: inspector.archive(io.BytesIO(deep), "opaque.elf"), expected="ELF content detected")
     passed("five-level nested ELF magic is rejected")
     inspector = BinaryInspector()
     deep = nested_archive("src/main/jniLibs/README.txt", b"not an ELF and no forbidden suffix")
-    expect_failure(lambda: inspector.archive(io.BytesIO(deep), "opaque.jnilibs"))
+    expect_failure(lambda: inspector.archive(io.BytesIO(deep), "opaque.jnilibs"), expected="forbidden nested archive member")
     passed("nested src/main/jniLibs content is rejected independent of suffix")
     for name in ("src/main/jniLibs/file.dat", "SRC/MAIN/JNILIBS/file.txt", "x/src/main/JniLibs/nested/file"):
         if not forbidden_name(Path(name)):
@@ -174,23 +184,28 @@ def test_recursive_binaries() -> None:
 def test_archive_limits() -> None:
     deep = nested_archive("payload.txt", b"A" * 64, depth=5)
     expect_failure(lambda: scan_archive(io.BytesIO(deep), consume_all, "opaque.depth",
-                                        limits=ArchiveLimits(max_depth=2)))
+                                        limits=ArchiveLimits(max_depth=2)),
+                    expected="archive depth limit exceeded")
     passed("archive depth overflow fails closed")
     expect_failure(lambda: scan_archive(io.BytesIO(deep), consume_all, "opaque.member-size",
-                                        limits=ArchiveLimits(max_member_bytes=16)))
+                                        limits=ArchiveLimits(max_member_bytes=16)),
+                    expected="archive member size limit exceeded")
     passed("member-size limit fails closed")
     expect_failure(lambda: scan_archive(io.BytesIO(deep), consume_all, "opaque.total-size",
-                                        limits=ArchiveLimits(max_total_bytes=128)))
+                                        limits=ArchiveLimits(max_total_bytes=128)),
+                    expected="archive cumulative size limit exceeded")
     passed("cumulative decompressed-size limit fails closed")
     expect_failure(lambda: scan_archive(io.BytesIO(deep), consume_all, "opaque.members",
-                                        limits=ArchiveLimits(max_members=2)))
+                                        limits=ArchiveLimits(max_members=2)),
+                    expected="archive member limit exceeded")
     passed("archive member-count limit fails closed")
 
     corrupt = io.BytesIO()
     with zipfile.ZipFile(corrupt, "w") as archive:
         archive.writestr("broken.zip", b"PK-not-a-real-archive")
     corrupt.seek(0)
-    expect_failure(lambda: scan_archive(corrupt, consume_all, "opaque.corrupt"))
+    expect_failure(lambda: scan_archive(corrupt, consume_all, "opaque.corrupt"),
+                    expected="invalid nested archive")
     passed("corrupt archive-shaped nested member fails closed")
 
 
@@ -202,7 +217,7 @@ def test_walk_errors() -> None:
         return iter(())
 
     with mock.patch.object(source_archive.os, "walk", failing_walk):
-        expect_failure(lambda: payload_files(ROOT))
+        expect_failure(lambda: payload_files(ROOT), expected="simulated unreadable directory")
     passed("directory traversal errors invoke onerror and abort payload enumeration")
 
 
@@ -224,10 +239,18 @@ def assert_interrupt_run(label: str, before_logs: set[Path], before_history: set
     if f"exit_code={expected_status}" not in content or marker not in content:
         raise AssertionError("interrupt log lacks status or pre-signal output")
     history = runs / "v11-history.tsv"
-    after_history = set(history.read_text(encoding="utf-8").splitlines())
-    new_history = after_history - before_history
+    # v1.2.3 round-80 (CodeRabbit PR#60 re-review): history rows are counted AS
+    #   WRITTEN — the round-79 set comprehension folded two IDENTICAL appended
+    #   rows into one element, so a wrapper that double-recorded this run still
+    #   passed the ==1 uniqueness check. Rows are kept as a list (duplicates
+    #   preserved), and only THIS case's rows are selected — by the FULL label
+    #   field (TSV column 2), so other labels' concurrent rows stay ignored.
+    after_lines = history.read_text(encoding="utf-8").splitlines() if history.is_file() else []
+    new_rows = [line for line in after_lines if line not in before_history]
+    label_rows = [line for line in new_rows
+                  if len(line.split("\t")) >= 2 and line.split("\t")[1] == label]
     expected = f"\t{label}\t{expected_status}\t{log.relative_to(ROOT).as_posix()}"
-    if len(new_history) != 1 or expected not in next(iter(new_history)):
+    if len(label_rows) != 1 or expected not in label_rows[0]:
         raise AssertionError(f"interrupt history lacks the {expected_status} status or retained log path")
 
 
@@ -627,10 +650,101 @@ def test_leading_data_nested_secret() -> None:
         message = expect_failure(
             lambda: scanner.archive(io.BytesIO(outer.getvalue()), "opaque.fixture.shebang"),
             forbidden=(secret, "payload.dat", "compressed-note.txt"),
+            expected="uploaded password match",
         )
     if "uploaded password match" not in message:
         raise AssertionError("leading-data nested ZIP did not reach the secret scanner")
     passed("non-ZIP suffix and leading data cannot hide a compressed password")
+
+
+def test_archive_member_preflights() -> None:
+    # v1.2.3 round-79 (CodeRabbit PR#60 #10) + round-80 (re-review): the
+    #   central directory is bounded BEFORE zipfile parses it. The fixture is
+    #   built FIRST, then the module's ZipFile constructor is watched: a scan
+    #   that parses the directory before rejecting would materialize it
+    #   first, so the rejection must fire with the constructor never called.
+    #   The error-text assertion is retained so another early failure is not
+    #   mistaken for the pass.
+    data = io.BytesIO()
+    with zipfile.ZipFile(data, "w") as archive:
+        archive.writestr("member.txt", b"x" * 64)
+    zip_spy = mock.Mock(
+        side_effect=AssertionError("zipfile.ZipFile must not run for a preflight rejection"))
+    with mock.patch.object(archive_scan.zipfile, "ZipFile", zip_spy):
+        expect_failure(lambda: scan_archive(io.BytesIO(data.getvalue()), consume_all, "opaque.cd",
+                                            limits=ArchiveLimits(max_central_directory_bytes=16)),
+                       expected="central directory size limit")
+    if zip_spy.call_count != 0:
+        raise AssertionError("central-directory rejection happened after zipfile parsing")
+    passed("oversized central directory is rejected before zipfile parses it")
+
+    # v1.2.3 round-81 (CodeRabbit PR#60 #2): a decoy `PK\\x06\\x06` record inside
+    #   the ZIP COMMENT — which sits AFTER the real EOCD64 and therefore won the
+    #   round-80 tail.rfind race — must not feed the preflight a small size while
+    #   the parser reads the real (oversized) EOCD64 at its fixed position
+    #   (EOCD-76). The fixture carries a genuinely oversized EOCD64 plus a decoy
+    #   whose size field claims 16 bytes; the rejection must come from the real
+    #   record, and ZipFile must never run.
+    def build_zip64_tail(dirsize: int | None, decoy_size: int | None) -> bytes:
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            archive.writestr("member.txt", b"x" * 64)
+        base = buffer.getvalue()
+        eocd_off = base.rfind(b"PK\x05\x06")
+        classic = bytearray(base[eocd_off:])
+        cd_start = struct.unpack_from("<I", classic, 16)[0]
+        if dirsize is None:
+            dirsize = eocd_off - cd_start  # the genuine, self-consistent size
+        eocd64 = struct.pack("<4sQ2H2L4Q", b"PK\x06\x06", 44, 45, 45, 0, 0, 1, 1,
+                             dirsize, cd_start)
+        locator = struct.pack("<4sLQL", b"PK\x06\x07", 0, eocd_off, 1)
+        comment = b""
+        if decoy_size is not None:
+            comment = struct.pack("<4sQ2H2L4Q", b"PK\x06\x06", 44, 45, 45, 0, 0, 1, 1,
+                                  decoy_size, 0) + b"decoy comment padding"
+        struct.pack_into("<H", classic, 20, len(comment))
+        return base[:eocd_off] + eocd64 + locator + bytes(classic) + comment
+
+    hostile = build_zip64_tail(4 * 1024 * 1024 * 1024, 16)
+    zip_spy = mock.Mock(
+        side_effect=AssertionError("zipfile.ZipFile must not run for a preflight rejection"))
+    with mock.patch.object(archive_scan.zipfile, "ZipFile", zip_spy):
+        expect_failure(lambda: scan_archive(io.BytesIO(hostile), consume_all, "opaque.cd-decoy",
+                                            limits=ArchiveLimits(max_central_directory_bytes=16)),
+                       expected="central directory size limit")
+    if zip_spy.call_count != 0:
+        raise AssertionError("comment-decoy rejection happened after zipfile parsing")
+    passed("comment-decoy EOCD64 cannot bypass the central-directory bound")
+
+    # Positive control: the same fixed-position logic must still accept a valid
+    #   ZIP64 archive (real, small, self-consistent dirsize), so the tightened
+    #   preflight did not simply start rejecting every ZIP64.
+    honest = build_zip64_tail(None, None)
+    with zipfile.ZipFile(io.BytesIO(honest)) as archive:
+        honest_size = len(archive.namelist())
+    scan_archive(io.BytesIO(honest), consume_all, "opaque.cd-zip64")
+    if honest_size != 1:
+        raise AssertionError("valid ZIP64 fixture lost its member")
+    passed("valid ZIP64 archives still pass the fixed-position preflight")
+
+    # v1.2.3 round-79 (CodeRabbit PR#60 #11): duplicate DIRECTORY entries are
+    #   rejected exactly like duplicate files.
+    duplicate = io.BytesIO()
+    with zipfile.ZipFile(duplicate, "w") as archive:
+        archive.writestr("dup/", b"")
+        archive.writestr("dup/", b"")
+    expect_failure(lambda: scan_archive(io.BytesIO(duplicate.getvalue()), consume_all, "opaque.duplicate-dir"),
+                    expected="duplicate archive member")
+    passed("duplicate directory entries are rejected like files")
+
+    # v1.2.3 round-79 (CodeRabbit PR#60 #12): a directory entry that carries
+    #   payload bytes is rejected after path/encryption validation.
+    weird = io.BytesIO()
+    with zipfile.ZipFile(weird, "w") as archive:
+        archive.writestr("payload-dir/", b"payload")
+    expect_failure(lambda: scan_archive(io.BytesIO(weird.getvalue()), consume_all, "opaque.directory-payload"),
+                    expected="directory member with payload")
+    passed("directory entries carrying payload bytes are rejected")
 
 
 def test_directory_member_budget() -> None:
@@ -639,7 +753,8 @@ def test_directory_member_budget() -> None:
         for name in ("a/", "b/", "c/"):
             archive.writestr(name, b"")
     expect_failure(lambda: scan_archive(io.BytesIO(directories.getvalue()), consume_all,
-                                        "opaque.directories", limits=ArchiveLimits(max_members=2)))
+                                        "opaque.directories", limits=ArchiveLimits(max_members=2)),
+                    expected="archive member count")
     budget = scan_archive(io.BytesIO(directories.getvalue()), consume_all,
                           "opaque.directories", limits=ArchiveLimits(max_members=3))
     if budget.members != 3 or budget.bytes != 0:
@@ -655,7 +770,8 @@ def test_license_budget_order() -> None:
         with mock.patch.object(source_archive.BinaryInspector, "archive",
                                side_effect=AssertionError("bounded license sentinel")) as bounded, \
              mock.patch.object(source_archive.zipfile.ZipFile, "testzip") as crc:
-            message = expect_failure(lambda: source_archive.protected_license_metadata(root))
+            message = expect_failure(lambda: source_archive.protected_license_metadata(root),
+                                    expected="bounded license sentinel")
         if "bounded license sentinel" not in message or not bounded.called or crc.called:
             raise AssertionError("license CRC decompression ran before the bounded scanner")
     passed("protected license budget scan precedes CRC decompression")
@@ -674,10 +790,11 @@ def main() -> None:
     test_leading_data_nested_secret()
     test_recursive_binaries()
     test_archive_limits()
+    test_archive_member_preflights()
     test_directory_member_budget()
     test_license_budget_order()
     test_walk_errors()
-    assert checks == 27, checks
+    assert checks == 32, checks
     print(f"V11-NEGATIVE-PRIMITIVES OK: {checks}/{checks}")
 
 

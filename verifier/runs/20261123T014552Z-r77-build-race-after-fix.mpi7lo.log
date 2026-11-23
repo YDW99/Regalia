@@ -1,0 +1,10 @@
+timestamp_start=2026-11-23T01:45:52Z
+timestamp_end=2026-11-23T01:45:55Z
+cwd=/tmp/regalia-r77/repo
+command=python3 verifier/v13/build-concurrency.py 
+exit_code=0
+--- output ---
+concurrent_pairs=40 processes=80 failures=0
+bundle_sha256=ae15d2b699624e549745582b5835d35418ff77b51a08ae704915a0d643e6c9e0 deterministic=True
+temporary_residuals=0
+BUILD-CONCURRENCY-V13 OK

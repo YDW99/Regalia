@@ -1,0 +1,8 @@
+timestamp_start=2026-11-23T15:27:52Z
+timestamp_end=2026-11-23T15:27:54Z
+cwd=/home/z/my-project/work/r81/repo
+command=bash -c trap\ \'\'\ TERM\;\ printf\ \'child-before-TERM\\n\'\;\ printf\ \'%s\'\ \"\$\$\"\ \>\ \"\$1\"\;\ printf\ ready\ \>\ \"\$2\"\;\ while\ :\;\ do\ sleep\ 1\;\ done bash /tmp/v11-stubborn-term-4dpgrugd/child.pid /tmp/v11-stubborn-term-4dpgrugd/ready 
+exit_code=143
+interrupted_by=TERM
+--- output ---
+child-before-TERM

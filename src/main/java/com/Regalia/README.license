@@ -1,3 +1,90 @@
+v1.2.3 round-81 (2026.11.23): API-23 sort compatibility restored in PgnCacheManager.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - PgnCacheManager.java (GPL v3): evictIfNeeded's two round-80 List.sort()
+    calls (S9412 cleanup) reverted to Collections.sort — List.sort is a
+    java.util.List DEFAULT interface method added in API 24 and minSdk is 23,
+    so the calls raised NoSuchMethodError on Android 6.x at cache eviction
+    (CodeRabbit PR#60 outside-diff Minor). S9412 is accepted as a deliberate
+    false positive for this project while minSdk is 23.
+v1.2.3 round-80 (2026.11.23): import clamp floor restored, bare-CR settings parser, cap-log constants, List.sort.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - EngineSettingsHelper.java (GPL v3): the round-79 threads refactor lost the
+    lower bound — an imported engine.threads=0/negative value passed the
+    upper-bound check only and was saved verbatim (applySetting's raw field
+    callback never goes through the clamping setter); the Math.max(1, ...) floor
+    is restored and lower clamping counts into the clamped summary (CodeRabbit
+    PR#60 re-review). The settings parser now splits on CR/LF/CRLF
+    (split("\\r\\n|\\r|\\n")) — round-79's byte-faithful chunked read kept
+    bare \r while split("\\r?\\n") did not split it, so a bare-CR settings
+    file failed integer parsing and rejected the whole import (CodeRabbit
+    PR#60 re-review). The "importSettings: " log prefix extracted to a
+    constant (SonarCloud S1192); the validateSettings loop keeps a single
+    continue — the metadata skip is an if/else branch (SonarCloud S135).
+  - FileIoHelper.java (GPL v3): the round-79 comment claiming the raw-newline
+    stream "does not affect parsing" is corrected in place (cross-references
+    the round-80 parser fix); no behavior change.
+  - PgnCacheManager.java (GPL v3): the " bytes): " cap-refusal suffix
+    extracted to a constant (SonarCloud S1192); evictIfNeeded sorts via
+    List.sort() instead of Collections.sort() (SonarCloud S9412).
+
+v1.2.3 round-79 (2026.11.23): read/write caps, strict settings import, truthful partial-failure returns.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - EngineSettingsHelper.java (GPL v3): two-phase validate->apply import
+    (ROB-04). Unknown keys, non-integer values, non-boolean values and
+    valueless lines now reject the WHOLE file with "line N: reason" before any
+    setting is applied; the read-only metadata keys engine.name / engine.path
+    produced by exportSettings() are recognized and skipped (CodeRabbit
+    PR#60: the round-78 strictness rejected the app's own exports); booleans
+    accept only explicit true/false; zero applicable keys no longer report
+    success. Import diagnostics and key names extracted to constants
+    (SonarCloud S1192 x4); the validator returns String, never Boolean-null
+    (S2447).
+  - PgnCacheManager.java (GPL v3): per-file caps — PGN write 32MB (UTF-8
+    bytes, pre-write), PGN read 64M chars, tags 1 MiB symmetric cap (getTags
+    file-level + read-loop; setTags serialized-bytes pre-write, over-limit
+    keeps the old file and returns false — CodeRabbit PR#60). Read loops
+    measure length via sw.getBuffer().length() (StringWriter has no size();
+    the round-78 variant used it and does not compile). rename(): "PGN
+    renamed but tags lost/failed" now returns false (ROB-09) and the JS
+    failure branch refreshes the list. evictIfNeeded(): the budget counts
+    only managed files (.pgn + .tags.json), orphan tags become
+    second-priority eviction candidates, stray files are ignored by policy;
+    a still-over-budget drain logs a warning. setTags nested try extracted
+    (SonarCloud S1141).
+  - StockfishNative.java (GPL v3): loadEvalCacheSync enforces a 16M-char
+    read cap (loop, pre-append) and a 16MB file-level cap; saveEvalCacheSync
+    a 16MB pre-write cap (ROB-03; returns null/false beyond the caps).
+  - FileIoHelper.java (GPL v3): readTextFile streams 8KB char chunks with the
+    cap checked BEFORE each append (ROB-02: readLine materialized whole
+    lines before the check); byte-cap (file-level) and char-cap (loop-level)
+    constants now carry matched semantics.
+  - AtomicFileStore.java (GPL v3): failed-write cleanup now reports a failed
+    temporary-file delete instead of discarding the boolean (SonarCloud S899).
+  - TlsSecurityHelper.java (AGPL v3): documentation honesty only (RED-02) —
+    the MobSF satisfiers and the not-applicable integrity result are now
+    labeled as non-runtime, non-authorization; no behavioral change.
+  - License classification: unchanged — AGPL v3 (7) / GPL v3 (13).
+
+v1.2.3 round-77 (2026.11.23): crash-safe cache persistence and truthful synchronous results.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - AtomicFileStore.java NEW (GPL v3, project-original): shared API-23-compatible
+    UTF-8 writer using a unique same-directory temporary file, complete write,
+    flush, file-descriptor sync and Os.rename replacement. The previous target
+    remains in place unless replacement succeeds; failed calls clean up only
+    their own temporary file.
+  - StockfishNative.java (GPL v3): saveEvalCacheSync delegates to the shared
+    writer; persistentSetSync now returns the actual SharedPreferences.commit()
+    result instead of discarding it.
+  - PgnCacheManager.java (GPL v3): PGN saves and both empty/nonempty tags writes
+    delegate to the same writer. Rename, copy-delete, LRU and read logic unchanged.
+  - License classification: AGPL v3 (7) unchanged — ChessApp,
+    ChessWebViewClient, EngineService, MainActivity, RootDetector,
+    StabilizationHelper, TlsSecurityHelper. GPL v3 (13): AtomicFileStore,
+    EngineConfigHelper, EngineHealthMonitor, EngineProcessManager,
+    EngineSettingsHelper, FileIoHelper, HapticManager, JsBridgeGateway,
+    PermissionHelper, PgnCacheManager, SafPickerHelper, StatsActivity,
+    StockfishNative.
+
 v1.2.3 round-71 (2026.11.22): mechanical PMD MethodNamingConventions remediation.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - Twelve methods renamed, with every declaration/call site updated and no

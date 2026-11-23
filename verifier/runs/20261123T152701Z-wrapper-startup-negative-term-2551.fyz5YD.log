@@ -1,0 +1,8 @@
+timestamp_start=2026-11-23T15:27:01Z
+timestamp_end=2026-11-23T15:27:03Z
+cwd=/home/z/my-project/work/r81/repo
+command=bash -c exec\ sleep\ 30 
+exit_code=143
+interrupted_by=TERM
+--- output ---
+child-before-TERM

@@ -260,7 +260,10 @@ android {
         }
     }
 
-    // 升级到 Java 17，利用 JDK 21 编译器的完整特性
+    // v1.2.3 round-79 (RED-01①): Java 17 language level on a JDK 17 toolchain —
+    //   CI builds use setup-java 17 (codeql/android-ci) and local builds resolve
+    //   JDK via JAVA_HOME (see gradle.properties). The earlier "利用 JDK 21 编译器
+    //   的完整特性" wording contradicted the actual VERSION_17 bytecode target.
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17

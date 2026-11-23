@@ -1,0 +1,18 @@
+timestamp_start=2026-11-23T01:37:35Z
+timestamp_end=2026-11-23T01:37:38Z
+cwd=/tmp/regalia-r77/repo
+command=python3 /tmp/regalia-r77/repo/verifier/v13/build-concurrency.py 
+exit_code=1
+--- output ---
+FAILED_PAIR (1, 1, "ERROR: cannot write output /tmp/regalia-r77/repo/src/main/assets/chess.html: [Errno 2] No such file or directory: '/tmp/regalia-r77/repo/src/main/assets/chess.html.tmp' -> '/tmp/regalia-r77/repo/src/main/assets/chess.html'\n")
+FAILED_PAIR (2, 1, "ERROR: cannot write output /tmp/regalia-r77/repo/src/main/assets/chess.html: [Errno 2] No such file or directory: '/tmp/regalia-r77/repo/src/main/assets/chess.html.tmp' -> '/tmp/regalia-r77/repo/src/main/assets/chess.html'\n")
+FAILED_PAIR (3, 1, "ERROR: cannot write output /tmp/regalia-r77/repo/src/main/assets/chess.html: [Errno 2] No such file or directory: '/tmp/regalia-r77/repo/src/main/assets/chess.html.tmp' -> '/tmp/regalia-r77/repo/src/main/assets/chess.html'\n")
+FAILED_PAIR (4, 1, "ERROR: cannot write output /tmp/regalia-r77/repo/src/main/assets/chess.html: [Errno 2] No such file or directory: '/tmp/regalia-r77/repo/src/main/assets/chess.html.tmp' -> '/tmp/regalia-r77/repo/src/main/assets/chess.html'\n")
+FAILED_PAIR (5, 1, "ERROR: cannot write output /tmp/regalia-r77/repo/src/main/assets/chess.html: [Errno 2] No such file or directory: '/tmp/regalia-r77/repo/src/main/assets/chess.html.tmp' -> '/tmp/regalia-r77/repo/src/main/assets/chess.html'\n")
+FAILED_PAIR (6, 1, "ERROR: cannot write output /tmp/regalia-r77/repo/src/main/assets/chess.html: [Errno 2] No such file or directory: '/tmp/regalia-r77/repo/src/main/assets/chess.html.tmp' -> '/tmp/regalia-r77/repo/src/main/assets/chess.html'\n")
+FAILED_PAIR (8, 1, "ERROR: cannot write output /tmp/regalia-r77/repo/src/main/assets/chess.html: [Errno 2] No such file or directory: '/tmp/regalia-r77/repo/src/main/assets/chess.html.tmp' -> '/tmp/regalia-r77/repo/src/main/assets/chess.html'\n")
+FAILED_PAIR (10, 1, "ERROR: cannot write output /tmp/regalia-r77/repo/src/main/assets/chess.html: [Errno 2] No such file or directory: '/tmp/regalia-r77/repo/src/main/assets/chess.html.tmp' -> '/tmp/regalia-r77/repo/src/main/assets/chess.html'\n")
+concurrent_pairs=40 processes=80 failures=29
+bundle_sha256=cc69b869077a72dc1367461c6567a47fea159d292fd5e3d207a2afef84f167b5 deterministic=True
+temporary_residuals=0
+BUILD-CONCURRENCY-V13 FAIL

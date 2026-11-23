@@ -1,0 +1,8 @@
+timestamp_start=2026-11-23T16:04:11Z
+timestamp_end=2026-11-23T16:04:13Z
+cwd=/home/z/my-project/work/r81/repo
+command=sh -c printf\ \'child-before-TERM\\n\'\;\ printf\ ready\ \>\ \"\$1\"\;\ sleep\ 30 sh /tmp/v11-term-lugf7nvg/ready 
+exit_code=143
+interrupted_by=TERM
+--- output ---
+child-before-TERM

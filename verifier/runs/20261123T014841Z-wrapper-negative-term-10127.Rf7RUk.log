@@ -1,0 +1,8 @@
+timestamp_start=2026-11-23T01:48:41Z
+timestamp_end=2026-11-23T01:48:43Z
+cwd=/tmp/regalia-r77/repo
+command=sh -c printf\ \'child-before-TERM\\n\'\;\ printf\ ready\ \>\ \"\$1\"\;\ sleep\ 30 sh /tmp/v11-term-94kh1qox/ready 
+exit_code=143
+interrupted_by=TERM
+--- output ---
+child-before-TERM
